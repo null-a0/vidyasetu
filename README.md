@@ -18,7 +18,7 @@ All commands below are written for Windows PowerShell.
 Copy/paste (quotes are important because the path contains spaces):
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2'
+cd '<PATH TO>\Merging Try 2'
 ```
 
 
@@ -56,7 +56,7 @@ If you previously had random/dummy data, reset the DB and load known demo data.
 3.2 Delete the local SQLite DB file (safe for local dev)
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\backend'
+cd .\backend
 if (Test-Path .\vidyasetu.db) { Remove-Item -Force .\vidyasetu.db }
 ```
 
@@ -64,7 +64,7 @@ if (Test-Path .\vidyasetu.db) { Remove-Item -Force .\vidyasetu.db }
 IMPORTANT: use the venv python, not the system python.
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\backend'
+cd .\backend
 .\.venv\Scripts\python -m scripts.test_data
 ```
 
@@ -79,7 +79,7 @@ Demo logins created by the seed script:
 Run this in one PowerShell window:
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\backend'
+cd .\backend
 .\.venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -91,14 +91,14 @@ Backend will be at:
 Run in a separate PowerShell window:
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\frontend'
+cd .\frontend
 npm install
 ```
 
 5.1 Create frontend `.env` from example (required so the frontend knows where the backend is)
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\frontend'
+cd .\frontend
 if (!(Test-Path .\.env)) { Copy-Item .\.env.example .\.env }
 ```
 
@@ -111,7 +111,7 @@ The important frontend variable:
 Run in the frontend PowerShell window:
 
 ```powershell
-cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\frontend'
+cd .\frontend
 npm run dev
 ```
 
