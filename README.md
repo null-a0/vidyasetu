@@ -1,0 +1,138 @@
+VidyaSetu (FastAPI backend + React/Vite frontend)
+
+This repo has two projects:
+- `backend/` = FastAPI + SQLAlchemy (async) + SQLite (default)
+- `frontend/` = React + Vite
+
+The root folder does NOT have a `package.json`, so you must run npm commands inside `frontend/`.
+
+
+Prerequisites (Windows)
+- Node.js (for frontend)
+- Python 3.11+ (for backend; recommended 3.11/3.12)
+
+All commands below are written for Windows PowerShell.
+
+
+1) Open PowerShell and cd into the repo
+Copy/paste (quotes are important because the path contains spaces):
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2'
+```
+
+
+2) Backend setup (one-time)
+2.1 Create a virtual environment (if it does not exist yet)
+
+```powershell
+cd .\backend\
+if (!(Test-Path .\.venv)) { python -m venv .venv }
+```
+
+2.2 Install backend dependencies (always use the venv python)
+
+```powershell
+.\.venv\Scripts\python -m pip install -U pip
+.\.venv\Scripts\python -m pip install -e ".[dev]"
+```
+
+2.3 Create backend `.env` from example (optional but recommended)
+
+```powershell
+if (!(Test-Path .\.env)) { Copy-Item .\.env.example .\.env }
+```
+
+Notes:
+- Default DB is SQLite: `backend\vidyasetu.db` (controlled by `DATABASE_URL` in `backend\.env`).
+- CORS origins are controlled by `FRONTEND_ORIGINS` in `backend\.env`.
+
+
+3) (Recommended) Reset DB and seed demo data
+If you previously had random/dummy data, reset the DB and load known demo data.
+
+3.1 Stop the backend server if it is running (Ctrl+C). SQLite can stay locked while the server is running.
+
+3.2 Delete the local SQLite DB file (safe for local dev)
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\backend'
+if (Test-Path .\vidyasetu.db) { Remove-Item -Force .\vidyasetu.db }
+```
+
+3.3 Seed demo data (this recreates tables and inserts demo records)
+IMPORTANT: use the venv python, not the system python.
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\backend'
+.\.venv\Scripts\python -m scripts.test_data
+```
+
+Demo logins created by the seed script:
+- admin: `admin@vidyasetu.edu` / `admin123`
+- institution admin: `institution.admin@vidyasetu.edu` / `institution123`
+- educator: `educator@vidyasetu.edu` / `educator123`
+- student: `student@vidyasetu.edu` / `student123`
+
+
+4) Run the backend (FastAPI)
+Run this in one PowerShell window:
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\backend'
+.\.venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Backend will be at:
+- http://127.0.0.1:8000
+
+
+5) Frontend setup (one-time)
+Run in a separate PowerShell window:
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\frontend'
+npm install
+```
+
+5.1 Create frontend `.env` from example (required so the frontend knows where the backend is)
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\frontend'
+if (!(Test-Path .\.env)) { Copy-Item .\.env.example .\.env }
+```
+
+The important frontend variable:
+- `VITE_API_BASE_URL=http://localhost:8000`
+  (no `/api/v1` here; the frontend appends `/api/v1` internally)
+
+
+6) Run the frontend (Vite dev server)
+Run in the frontend PowerShell window:
+
+```powershell
+cd 'E:\IITM BS Diploma\BSc LEVEL\SE\Merging Try 2\frontend'
+npm run dev
+```
+
+Frontend will be at:
+- http://localhost:8080
+
+
+7) Quick verification (manual)
+1. Open http://localhost:8080
+2. Login (try institution admin):
+   - `institution.admin@vidyasetu.edu` / `institution123`
+3. Admin portal checks:
+   - Reports page should load real analytics (sampled from backend data).
+   - Manage Students/Educators/Institutes should load real data (no mock lists).
+   - Approvals should load real requests and approve/reject should work.
+   - Salaries (admin only) should load and allow "Pay".
+4. Certificate flow (institution admin):
+   - Go to Certificates page and generate/issue a certificate (calls backend).
+
+
+Troubleshooting
+- If `npm run dev` fails at repo root: you are in the wrong folder. Run it inside `frontend/`.
+- If backend errors like `No module named 'jose'`: you are using system python. Use `backend\.venv\Scripts\python`.
+- If seeding fails with SQLite "database is locked": stop uvicorn (Ctrl+C) and retry seed after deleting `backend\vidyasetu.db`.
