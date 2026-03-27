@@ -46,3 +46,10 @@ Thumbs.db
 .deps/
 media/
 openapi.json
+
+
+
+
+.pytest_cache/
+pytest-cache-files-*
+**/pytest-cache-files-*
