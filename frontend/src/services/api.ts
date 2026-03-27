@@ -8,6 +8,10 @@ import {
   adaptAdminStats,
   adaptStudentStats,
   adaptDashboardStats,
+  adaptStudentAnalytics,
+  adaptWorkshopAnalytics,
+  type StudentAnalyticsView,
+  type WorkshopAnalyticsView,
 } from '@/api/adapters';
 import type {
   ApiPage,
@@ -26,6 +30,8 @@ import type {
   AdminStatsResponse,
   StudentStatsResponse,
   DashboardStatsResponse,
+  BackendStudentAnalytics,
+  BackendWorkshopAnalytics,
 } from '@/api/types';
 import type {
   Workshop,
@@ -35,9 +41,7 @@ import type {
   Notification,
   DashboardStats,
   Submission,
-  Question,
 } from '@/mock/mockData';
-import { sampleQuestions } from '@/mock/mockData';
 
 const WORKSHOP_LIMIT = 25;
 
@@ -116,9 +120,60 @@ export const fetchAssessments = async (): Promise<Assessment[]> => {
   return adaptAssessments(assessments, workshopLookup);
 };
 
-export const fetchQuestions = async (): Promise<Question[]> => {
-  // The app does not yet select an assessment id; keep the current UI working.
-  return sampleQuestions;
+export interface AttemptQuestionOption {
+  id: string;
+  text: string;
+}
+
+export interface AttemptQuestion {
+  id: string;
+  assessment_id?: string | null;
+  text?: string | null;
+  type?: string | null;
+  marks?: number | null;
+  options: AttemptQuestionOption[];
+}
+
+export interface StartAttemptResponse {
+  submission_id: string;
+  assessment_id: string;
+  title: string;
+  total_marks: number;
+  questions: AttemptQuestion[];
+}
+
+export interface GradeAttemptResponse {
+  submission_id: string;
+  score: number;
+  total_marks: number;
+  percentage: number;
+  pass_fail: boolean;
+  per_question: Array<{ question_id: string; earned: number; max: number }>;
+}
+
+export const startAssessmentAttempt = async (assessmentId: string): Promise<StartAttemptResponse> => {
+  return apiPost<StartAttemptResponse>(`/tests/${assessmentId}/start`);
+};
+
+export const saveAssessmentAnswers = async (
+  submissionId: string,
+  answers: Array<{ questionId: string; selectedOptionIds: string[] }>
+) => {
+  return apiPost(`/submissions/${submissionId}/answers`, {
+    answers: answers.map((answer) => ({
+      question_id: answer.questionId,
+      selected_option_ids: answer.selectedOptionIds,
+    })),
+  });
+};
+
+export const submitAssessmentAttempt = async (
+  assessmentId: string,
+  submissionId: string
+): Promise<GradeAttemptResponse> => {
+  return apiPost<GradeAttemptResponse>(`/tests/${assessmentId}/submit`, null, {
+    params: { submission_id: submissionId },
+  });
 };
 
 export const fetchWorkshopModules = async (workshopId: string): Promise<BackendModule[]> => {
@@ -135,6 +190,79 @@ export const fetchEnrollments = async (studentId: string): Promise<ApiPage<Backe
   return apiGet<ApiPage<BackendEnrollment>>('/enrollments/student/' + studentId, { params: { limit: 200 } });
 };
 
+export interface StudentLearningMaterial {
+  id: string;
+  title: string;
+  type: string;
+  content: string;
+}
+
+export interface StudentLearningModule {
+  id: string;
+  title: string;
+  orderIndex: number;
+  materials: StudentLearningMaterial[];
+}
+
+export interface StudentLearningCourse {
+  workshopId: string;
+  workshopName: string;
+  workshopDescription: string;
+  institution: string;
+  startDate: string;
+  endDate: string;
+  status: Workshop['status'];
+  modules: StudentLearningModule[];
+}
+
+export const fetchStudentLearningCourses = async (studentId: string): Promise<StudentLearningCourse[]> => {
+  const [enrollmentPage, workshops] = await Promise.all([
+    fetchEnrollments(studentId),
+    fetchWorkshops(),
+  ]);
+
+  const enrolledWorkshopIds = Array.from(
+    new Set((enrollmentPage.items ?? []).map((item) => item.workshop_id).filter(Boolean) as string[])
+  );
+
+  const enrolledWorkshops = workshops.filter((workshop) => enrolledWorkshopIds.includes(workshop.id));
+  const modulePages = await Promise.all(
+    enrolledWorkshops.map(async (workshop) => ({
+      workshopId: workshop.id,
+      modules: await fetchWorkshopModules(workshop.id),
+    }))
+  );
+
+  const moduleMap = Object.fromEntries(modulePages.map((entry) => [entry.workshopId, entry.modules]));
+
+  return enrolledWorkshops.map((workshop) => {
+    const modules = (moduleMap[workshop.id] ?? [])
+      .slice()
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+      .map((module, idx) => ({
+        id: module.id,
+        title: module.title ?? `Module ${idx + 1}`,
+        orderIndex: module.order_index ?? idx,
+        materials: (module.materials ?? []).map((material) => ({
+          id: material.id,
+          title: material.title,
+          type: material.type,
+          content: material.content,
+        })),
+      }));
+
+    return {
+      workshopId: workshop.id,
+      workshopName: workshop.name,
+      workshopDescription: workshop.description,
+      institution: workshop.institution,
+      startDate: workshop.startDate,
+      endDate: workshop.endDate,
+      status: workshop.status,
+      modules,
+    };
+  });
+};
 export const enrollInWorkshop = async (studentId: string, workshopId: string): Promise<BackendEnrollment> => {
   return apiPost<BackendEnrollment>('/enrollments/', { student_id: studentId, workshop_id: workshopId });
 };
@@ -231,6 +359,7 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
   return adaptDashboardStats(data);
 };
 
+
 export const fetchCurrentUser = async () => {
   return apiGet<BackendUser>('/users/me');
 };
@@ -302,7 +431,7 @@ export const fetchApprovalRequests = async (options: { status?: string; limit?: 
   });
 };
 
-export const createApprovalRequest = async (payload: { request_type: string; payload: Record<string, any> }) => {
+export const createApprovalRequest = async (payload: { request_type: string; payload: Record<string, unknown> }) => {
   return apiPost<BackendApprovalRequest>('/approvals/requests', {
     request_type: payload.request_type,
     payload: payload.payload,
@@ -331,10 +460,20 @@ export const paySalary = async (payload: { educatorId: string; month: string; am
   });
 };
 
-export const fetchWorkshopAnalytics = async (workshopId: string) => {
-  return apiGet<Record<string, any>>('/analytics/workshop/' + workshopId);
+export const fetchWorkshopAnalytics = async (workshopId: string): Promise<WorkshopAnalyticsView> => {
+  const data = await apiGet<BackendWorkshopAnalytics>('/analytics/workshop/' + workshopId);
+  return adaptWorkshopAnalytics(data);
 };
 
-export const fetchStudentAnalytics = async (studentId: string) => {
-  return apiGet<Record<string, any>>('/analytics/student/' + studentId);
+export const fetchStudentAnalytics = async (studentId: string): Promise<StudentAnalyticsView> => {
+  const data = await apiGet<BackendStudentAnalytics>('/analytics/student/' + studentId);
+  return adaptStudentAnalytics(data);
 };
+
+
+
+
+
+
+
+

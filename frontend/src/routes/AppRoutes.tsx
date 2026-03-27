@@ -43,7 +43,7 @@ const AppRoutes = () => (
     <Route path="/workshops/:id" element={<ProtectedRoute><WorkshopDetails /></ProtectedRoute>} />
     <Route path="/materials" element={<ProtectedRoute><MaterialsPage /></ProtectedRoute>} />
     <Route path="/assessments" element={<ProtectedRoute><AssessmentsPage /></ProtectedRoute>} />
-    <Route path="/assessments/attempt" element={<ProtectedRoute allowedRoles={["student"]}><AssessmentAttempt /></ProtectedRoute>} />
+    <Route path="/assessments/attempt/:assessmentId" element={<ProtectedRoute allowedRoles={["student"]}><AssessmentAttempt /></ProtectedRoute>} />
     <Route path="/assessments/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
     <Route path="/submissions" element={<ProtectedRoute allowedRoles={["admin", "institution_admin", "educator"]}><SubmissionsPage /></ProtectedRoute>} />
     <Route path="/certificates" element={<ProtectedRoute><Certificates /></ProtectedRoute>} />
@@ -71,3 +71,4 @@ const AppRoutes = () => (
 );
 
 export default AppRoutes;
+

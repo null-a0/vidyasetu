@@ -8,6 +8,9 @@ import type {
   AdminStatsResponse,
   StudentStatsResponse,
   DashboardStatsResponse,
+  BackendStudentAnalytics,
+  BackendWorkshopAnalytics,
+  BackendScoreTrendPoint,
 } from './types';
 import type {
   Workshop,
@@ -19,6 +22,34 @@ import type {
   StudentStats,
   DashboardStats,
 } from '@/mock/mockData';
+
+export interface StudentProgressPoint {
+  label: string;
+  score: number;
+}
+
+export interface StudentAnalyticsView {
+  studentId: string;
+  enrolledWorkshops: number;
+  averagePercentage: number;
+  passed: number;
+  failed: number;
+  attendancePercentage: number;
+  trend: StudentProgressPoint[];
+}
+
+export interface WorkshopAnalyticsView {
+  workshopId: string;
+  totalEnrolled: number;
+  completed: number;
+  dropped: number;
+  active: number;
+  totalSubmissions: number;
+  averageScore: number;
+  averagePercentage: number;
+  passRatePercentage: number;
+  attendancePercentage: number;
+}
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -53,7 +84,7 @@ export const adaptWorkshop = (
   id: workshop.id,
   name: workshop.title ?? 'Untitled Workshop',
   description: workshop.description ?? '',
-  institution: overrides?.institutionName ?? workshop.institution_id ?? '',
+  institution: overrides?.institutionName ?? 'Institution unavailable',
   startDate: formatDate(workshop.start_date),
   endDate: formatDate(workshop.end_date),
   studentsEnrolled: overrides?.studentsEnrolled ?? 0,
@@ -67,10 +98,10 @@ export const adaptWorkshopsPage = (
     enrollmentCounts?: Record<string, number>;
   }
 ): Workshop[] =>
-  page.items.map((w) =>
-    adaptWorkshop(w, {
-      institutionName: options?.institutionLookup?.[w.institution_id ?? ''] ?? w.institution_id ?? '',
-      studentsEnrolled: options?.enrollmentCounts?.[w.id] ?? 0,
+  page.items.map((workshop) =>
+    adaptWorkshop(workshop, {
+      institutionName: options?.institutionLookup?.[workshop.institution_id ?? ''],
+      studentsEnrolled: options?.enrollmentCounts?.[workshop.id] ?? 0,
     })
   );
 
@@ -82,7 +113,7 @@ export const adaptModulesToMaterials = (
     module.materials.map((material) => ({
       id: material.id,
       title: material.title,
-      workshop: workshopLookup[module.workshop_id ?? ''] ?? '',
+      workshop: workshopLookup[module.workshop_id ?? ''] ?? 'Workshop',
       fileType: material.type.toUpperCase(),
       uploadDate: formatDate(material.created_at),
     }))
@@ -95,7 +126,7 @@ export const adaptAssessments = (
   assessments.map((assessment) => ({
     id: assessment.id,
     title: assessment.title ?? 'Untitled Assessment',
-    workshop: workshopLookup[assessment.workshop_id ?? ''] ?? '',
+    workshop: workshopLookup[assessment.workshop_id ?? ''] ?? 'Workshop',
     totalMarks: assessment.total_marks ?? 0,
     passingMarks: assessment.pass_mark ?? 0,
     status: 'Published',
@@ -110,7 +141,7 @@ export const adaptCertificates = (
     id: cert.id,
     certificateId: cert.verification_code ?? cert.id,
     studentName: cert.student_name ?? studentLookup[cert.student_id ?? ''] ?? '',
-    workshop: cert.workshop_title ?? workshopLookup[cert.workshop_id ?? ''] ?? '',
+    workshop: cert.workshop_title ?? workshopLookup[cert.workshop_id ?? ''] ?? 'Workshop',
     completionDate: formatDate(cert.issue_date),
     status: cert.qr_url ? 'Issued' : 'Pending',
   }));
@@ -156,4 +187,39 @@ export const adaptDashboardStats = (stats: DashboardStatsResponse): DashboardSta
   materialsUploaded: stats.materials_uploaded,
   activeAssessments: stats.active_assessments,
   pendingSubmissions: stats.pending_submissions,
+});
+
+const adaptTrendPoint = (point: BackendScoreTrendPoint, idx: number): StudentProgressPoint => {
+  const dt = point.submitted_at ? new Date(point.submitted_at) : null;
+  const parsedScore = typeof point.percentage === 'number' ? point.percentage : 0;
+  const label = dt && !Number.isNaN(dt.getTime())
+    ? dt.toLocaleString('en-US', { month: 'short', day: 'numeric' })
+    : `Attempt ${idx + 1}`;
+  return {
+    label,
+    score: Math.max(0, Math.min(100, Math.round(parsedScore))),
+  };
+};
+
+export const adaptStudentAnalytics = (analytics: BackendStudentAnalytics): StudentAnalyticsView => ({
+  studentId: analytics.student_id,
+  enrolledWorkshops: analytics.enrolled_workshops,
+  averagePercentage: Math.round(analytics.assessment.avg_percentage ?? 0),
+  passed: analytics.assessment.passed ?? 0,
+  failed: analytics.assessment.failed ?? 0,
+  attendancePercentage: Math.round(analytics.attendance.attendance_percentage ?? 0),
+  trend: (analytics.assessment.score_trend ?? []).map(adaptTrendPoint),
+});
+
+export const adaptWorkshopAnalytics = (analytics: BackendWorkshopAnalytics): WorkshopAnalyticsView => ({
+  workshopId: analytics.workshop_id,
+  totalEnrolled: analytics.enrollment.total_enrolled ?? 0,
+  completed: analytics.enrollment.completed ?? 0,
+  dropped: analytics.enrollment.dropped ?? 0,
+  active: analytics.enrollment.active ?? 0,
+  totalSubmissions: analytics.assessment.total_submissions ?? 0,
+  averageScore: Math.round(analytics.assessment.avg_score ?? 0),
+  averagePercentage: Math.round(analytics.assessment.avg_percentage ?? 0),
+  passRatePercentage: Math.round(analytics.assessment.pass_rate_percentage ?? 0),
+  attendancePercentage: Math.round(analytics.attendance.avg_attendance_percentage ?? 0),
 });

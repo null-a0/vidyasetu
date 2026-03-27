@@ -153,7 +153,7 @@ const AssessmentsPage = () => {
             <p className="text-sm text-muted-foreground mb-4 flex-1">Passing: {a.passingMarks}/{a.totalMarks} marks</p>
             <div className="flex gap-2">
               {isStudent && a.status === "Published" ? (
-                <VButton className="flex-1" onClick={() => navigate("/assessments/attempt")}>
+                <VButton className="flex-1" onClick={() => navigate(`/assessments/attempt/${a.id}`)}>
                   <Play className="h-4 w-4" /> Take Test
                 </VButton>
               ) : canManage ? (
@@ -382,3 +382,4 @@ const AssessmentsPage = () => {
 };
 
 export default AssessmentsPage;
+

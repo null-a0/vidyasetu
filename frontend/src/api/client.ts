@@ -1,6 +1,7 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
 
 export const TOKEN_STORAGE_KEY = 'vidyasetu_access_token';
+export const REFRESH_TOKEN_STORAGE_KEY = 'vidyasetu_refresh_token';
 export const AUTH_CHANGED_EVENT = 'vidyasetu:auth:changed';
 
 const DEFAULT_API_BASE = 'http://localhost:8000';
@@ -9,8 +10,8 @@ const DEFAULT_API_BASE = 'http://localhost:8000';
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE).replace(/\/+$/, '');
 
 let accessToken: string | null = null;
-let isRefreshing = false;
-let refreshSubscribers: Array<(token: string | null) => void> = [];
+let refreshToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
 
 const safeLocalStorage = () => (typeof window !== 'undefined' ? window.localStorage : null);
 
@@ -23,14 +24,25 @@ const emitAuthChanged = (token: string | null) => {
   }
 };
 
-const storeToken = (token: string | null) => {
-  accessToken = token;
+const storeTokens = (tokens: { accessToken?: string | null; refreshToken?: string | null }) => {
+  if (tokens.accessToken !== undefined) accessToken = tokens.accessToken;
+  if (tokens.refreshToken !== undefined) refreshToken = tokens.refreshToken;
+
   const storage = safeLocalStorage();
   if (storage) {
-    if (token) storage.setItem(TOKEN_STORAGE_KEY, token);
-    else storage.removeItem(TOKEN_STORAGE_KEY);
+    if (tokens.accessToken !== undefined) {
+      if (tokens.accessToken) storage.setItem(TOKEN_STORAGE_KEY, tokens.accessToken);
+      else storage.removeItem(TOKEN_STORAGE_KEY);
+    }
+    if (tokens.refreshToken !== undefined) {
+      if (tokens.refreshToken) storage.setItem(REFRESH_TOKEN_STORAGE_KEY, tokens.refreshToken);
+      else storage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    }
   }
-  emitAuthChanged(token);
+
+  if (tokens.accessToken !== undefined) {
+    emitAuthChanged(tokens.accessToken);
+  }
 };
 
 const loadToken = () => {
@@ -40,6 +52,15 @@ const loadToken = () => {
   const stored = storage.getItem(TOKEN_STORAGE_KEY);
   if (stored) accessToken = stored;
   return accessToken;
+};
+
+const loadRefreshToken = () => {
+  if (refreshToken) return refreshToken;
+  const storage = safeLocalStorage();
+  if (!storage) return null;
+  const stored = storage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (stored) refreshToken = stored;
+  return refreshToken;
 };
 
 const api = axios.create({
@@ -56,28 +77,25 @@ const refreshClient = axios.create({
   timeout: 15000,
 });
 
-const subscribeTokenRefresh = (cb: (token: string | null) => void) => {
-  refreshSubscribers.push(cb);
-};
-
-const notifyRefreshSubscribers = (token: string | null) => {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
-};
-
 const refreshAccessToken = async () => {
-  const token = loadToken();
-  if (!token) throw new Error('Missing token for refreshing session.');
+  const currentRefreshToken = loadRefreshToken();
+  if (!currentRefreshToken) throw new Error('Missing refresh token for refreshing session.');
 
-  const response = await refreshClient.post('/auth/refresh', null, {
-    headers: { Authorization: 'Bearer ' + token },
+  const response = await refreshClient.post('/auth/refresh', {
+    refresh_token: currentRefreshToken,
+  });
+  const tokenData = response.data as { access_token?: string; refresh_token?: string };
+  const newAccessToken = tokenData.access_token;
+  const newRefreshToken = tokenData.refresh_token;
+
+  if (!newAccessToken) throw new Error('Refresh endpoint did not return an access token.');
+
+  storeTokens({
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken ?? currentRefreshToken,
   });
 
-  const newToken = (response.data as any)?.access_token as string | undefined;
-  if (!newToken) throw new Error('Refresh endpoint did not return an access token.');
-
-  storeToken(newToken);
-  return newToken;
+  return newAccessToken;
 };
 
 api.interceptors.request.use((config) => {
@@ -96,35 +114,37 @@ api.interceptors.response.use(
   async (error: AxiosError & { config?: RefreshableRequestConfig }) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      if (!isRefreshing) {
-        isRefreshing = true;
-        try {
-          const token = await refreshAccessToken();
-          notifyRefreshSubscribers(token);
-        } catch (refreshError) {
-          // Token is no longer usable.
-          storeToken(null);
-          notifyRefreshSubscribers(null);
-          throw refreshError;
-        } finally {
-          isRefreshing = false;
-        }
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !String(originalRequest.url || '').includes('/auth/refresh')
+    ) {
+      const currentRefreshToken = loadRefreshToken();
+      if (!currentRefreshToken) {
+        storeTokens({ accessToken: null, refreshToken: null });
+        return Promise.reject(error);
       }
 
-      return new Promise((resolve, reject) => {
-        subscribeTokenRefresh((token) => {
-          if (token) {
-            originalRequest.headers = originalRequest.headers ?? {};
-            (originalRequest.headers as Record<string, string>)['Authorization'] = 'Bearer ' + token;
-            resolve(api(originalRequest));
-          } else {
-            reject(error);
-          }
-        });
-      });
+      originalRequest._retry = true;
+
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken()
+          .catch(() => {
+            storeTokens({ accessToken: null, refreshToken: null });
+            return null;
+          })
+          .finally(() => {
+            refreshPromise = null;
+          });
+      }
+
+      const token = await refreshPromise;
+      if (!token) return Promise.reject(error);
+
+      originalRequest.headers = originalRequest.headers ?? {};
+      (originalRequest.headers as Record<string, string>)['Authorization'] = 'Bearer ' + token;
+      return api(originalRequest);
     }
 
     return Promise.reject(error);
@@ -189,8 +209,14 @@ export const apiDelete = async <T = unknown>(url: string, config?: AxiosRequestC
   }
 };
 
-export const setAccessToken = (token: string | null) => storeToken(token);
+export const setAuthTokens = (tokens: { accessToken: string | null; refreshToken?: string | null }) =>
+  storeTokens({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
+export const setAccessToken = (token: string | null) => storeTokens({ accessToken: token });
 export const getAccessToken = () => loadToken();
-export const clearAccessToken = () => storeToken(null);
+export const clearAccessToken = () => storeTokens({ accessToken: null, refreshToken: null });
 
 export default api;
+
+
+
+

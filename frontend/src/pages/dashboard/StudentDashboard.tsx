@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, ClipboardList, Award, TrendingUp, TrendingDown, Play, CheckCircle2, Clock, Star, Search, Filter, FileText, Users } from "lucide-react";
+import { BookOpen, ClipboardList, Award, TrendingUp, Play, CheckCircle2, Clock, Star, Search, FileText, Users } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -10,7 +10,17 @@ import VButton from "@/components/ui-custom/VButton";
 import VModal from "@/components/ui-custom/VModal";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchStudentStats, fetchWorkshops, fetchEnrollments, enrollInWorkshop } from "@/services/api";
+import {
+  enrollInWorkshop,
+  fetchEnrollments,
+  fetchStudentAnalytics,
+  fetchStudentLearningCourses,
+  fetchStudentStats,
+  fetchWorkshopModules,
+  fetchWorkshops,
+  type StudentLearningCourse,
+  type StudentLearningModule,
+} from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
 
 const iconColors = [
@@ -29,13 +39,13 @@ const statCards = [
   { key: "certificatesEarned", label: "Certificates", icon: Award },
 ] as const;
 
-const progressData = [
-  { week: "W1", score: 65 },
-  { week: "W2", score: 72 },
-  { week: "W3", score: 70 },
-  { week: "W4", score: 85 },
-  { week: "W5", score: 82 },
-  { week: "W6", score: 90 },
+const FALLBACK_PROGRESS_DATA = [
+  { label: "W1", score: 65 },
+  { label: "W2", score: 72 },
+  { label: "W3", score: 70 },
+  { label: "W4", score: 85 },
+  { label: "W5", score: 82 },
+  { label: "W6", score: 90 },
 ];
 
 type MyCourse = {
@@ -47,70 +57,37 @@ type MyCourse = {
   modules: number;
   completed: number;
 };
-const categories = ["All", "Programming", "Data Science", "Design", "Cloud", "DevOps"];
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const { showToast } = useVToast();
   const { user } = useAuth();
+
   const { data: stats } = useQuery({
     queryKey: ["studentStats", user?.id],
     queryFn: () => fetchStudentStats(user?.id ?? ""),
     enabled: Boolean(user),
   });
+
+  const { data: studentAnalytics } = useQuery({
+    queryKey: ["studentAnalytics", user?.id],
+    queryFn: () => fetchStudentAnalytics(user?.id ?? ""),
+    enabled: Boolean(user),
+  });
+
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
   const { data: enrollments, refetch: refetchEnrollments } = useQuery({
     queryKey: ["enrollments", user?.id],
     queryFn: () => fetchEnrollments(user?.id ?? ""),
     enabled: Boolean(user),
   });
-  const enrolledIds = useMemo(
-    () => (enrollments?.items.map((item) => item.workshop_id).filter(Boolean) as string[]) ?? [],
-    [enrollments]
-  );
-  const myCourses = useMemo<MyCourse[]>(() => {
-    const workshopById = Object.fromEntries(workshops.map((w) => [w.id, w]));
-    const now = Date.now();
-    const MODULES = 8;
 
-    const map = new Map<string, MyCourse>();
-    for (const enr of enrollments?.items ?? []) {
-      const workshopId = enr.workshop_id ?? '';
-      if (!workshopId) continue;
-      const w = workshopById[workshopId];
-      if (!w) continue;
+  const { data: learningCourses = [] } = useQuery({
+    queryKey: ["studentLearningCourses", user?.id],
+    queryFn: () => fetchStudentLearningCourses(user?.id ?? ""),
+    enabled: Boolean(user),
+  });
 
-      const statusRaw = (enr.status ?? '').toLowerCase();
-      const isCompleted = statusRaw === 'completed';
-
-      let progress = isCompleted ? 100 : 35;
-      if (!isCompleted) {
-        const startMs = w.startDate ? Date.parse(w.startDate) : NaN;
-        const endMs = w.endDate ? Date.parse(w.endDate) : NaN;
-        if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {
-          const ratio = (now - startMs) / (endMs - startMs);
-          progress = Math.max(0, Math.min(99, Math.round(ratio * 100)));
-        }
-      }
-
-      const completedModules = isCompleted ? MODULES : Math.max(1, Math.round((progress / 100) * MODULES));
-
-      map.set(workshopId, {
-        id: workshopId,
-        workshopId,
-        name: w.name,
-        progress: isCompleted ? 100 : progress,
-        status: isCompleted ? 'Completed' : 'In Progress',
-        modules: MODULES,
-        completed: isCompleted ? MODULES : completedModules,
-      });
-    }
-
-    return Array.from(map.values()).sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'In Progress' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [enrollments, workshops]);
   const [activeTab, setActiveTab] = useState<"overview" | "browse" | "mycourses" | "learning">("overview");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -118,40 +95,120 @@ const StudentDashboard = () => {
   const [learningCourse, setLearningCourse] = useState<MyCourse | null>(null);
   const [activeModule, setActiveModule] = useState(0);
 
-  const filteredWorkshops = workshops.filter(w => {
-    const matchSearch = w.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchSearch;
+  const { data: modalModules = [] } = useQuery({
+    queryKey: ["workshopModules", enrollModal?.id],
+    queryFn: () => fetchWorkshopModules(enrollModal?.id ?? ""),
+    enabled: Boolean(enrollModal?.id),
   });
 
-  const handleEnroll = async (w: Workshop) => {
+  const enrolledIds = useMemo(
+    () => (enrollments?.items.map((item) => item.workshop_id).filter(Boolean) as string[]) ?? [],
+    [enrollments]
+  );
+
+  const learningCourseMap = useMemo(
+    () => Object.fromEntries(learningCourses.map((course) => [course.workshopId, course])),
+    [learningCourses]
+  );
+
+  const myCourses = useMemo<MyCourse[]>(() => {
+    const map = new Map<string, MyCourse>();
+
+    for (const enrollment of enrollments?.items ?? []) {
+      const workshopId = enrollment.workshop_id ?? "";
+      if (!workshopId) continue;
+
+      const workshop = workshops.find((w) => w.id === workshopId);
+      if (!workshop) continue;
+
+      const courseData = learningCourseMap[workshopId];
+      const moduleCount = Math.max(1, courseData?.modules.length ?? 1);
+      const statusRaw = (enrollment.status ?? "").toLowerCase();
+      const isCompleted = statusRaw === "completed";
+
+      let progress = isCompleted ? 100 : 35;
+      if (!isCompleted) {
+        const startMs = workshop.startDate ? Date.parse(workshop.startDate) : Number.NaN;
+        const endMs = workshop.endDate ? Date.parse(workshop.endDate) : Number.NaN;
+        if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {
+          const ratio = (Date.now() - startMs) / (endMs - startMs);
+          progress = Math.max(5, Math.min(99, Math.round(ratio * 100)));
+        }
+      }
+
+      const completedModules = isCompleted ? moduleCount : Math.max(1, Math.min(moduleCount - 1, Math.round((progress / 100) * moduleCount)));
+
+      map.set(workshopId, {
+        id: workshopId,
+        workshopId,
+        name: workshop.name,
+        progress: isCompleted ? 100 : progress,
+        status: isCompleted ? "Completed" : "In Progress",
+        modules: moduleCount,
+        completed: isCompleted ? moduleCount : completedModules,
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.status !== b.status) return a.status === "In Progress" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [enrollments, workshops, learningCourseMap]);
+
+  const categories = useMemo(() => {
+    const institutions = Array.from(new Set(workshops.map((w) => w.institution).filter(Boolean)));
+    return ["All", ...institutions];
+  }, [workshops]);
+
+  const filteredWorkshops = useMemo(() => {
+    return workshops.filter((workshop) => {
+      const matchSearch = workshop.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCategory = selectedCategory === "All" || workshop.institution === selectedCategory;
+      return matchSearch && matchCategory;
+    });
+  }, [workshops, searchQuery, selectedCategory]);
+
+  const selectedLearningData = learningCourse ? learningCourseMap[learningCourse.workshopId] : null;
+  const modules: StudentLearningModule[] = selectedLearningData?.modules ?? [];
+
+  const progressData = useMemo(() => {
+    if (studentAnalytics && studentAnalytics.trend.length > 0) {
+      return studentAnalytics.trend.map((point) => ({ week: point.label, score: point.score }));
+    }
+    return FALLBACK_PROGRESS_DATA.map((point) => ({ week: point.label, score: point.score }));
+  }, [studentAnalytics]);
+
+  const isProgressFallback = !studentAnalytics || studentAnalytics.trend.length === 0;
+
+  useEffect(() => {
+    setActiveModule(0);
+  }, [learningCourse?.workshopId]);
+
+  const handleEnroll = async (workshop: Workshop) => {
     if (!user) {
       showToast("warning", "Sign in Required", "Please sign in to enroll.");
       return;
     }
     setEnrollModal(null);
     try {
-      await enrollInWorkshop(user.id, w.id);
-      await refetchEnrollments();
-      showToast("success", "Enrolled!", `You have been enrolled in "${w.name}".`);
+      await enrollInWorkshop(user.id, workshop.id);
+      await Promise.all([refetchEnrollments()]);
+      showToast("success", "Enrolled!", `You have been enrolled in "${workshop.name}".`);
     } catch (err: unknown) {
       showToast("destructive", "Enrollment Failed", err instanceof Error ? err.message : "Unable to enroll right now.");
     }
   };
 
-  const modules = [
-    { title: "Introduction & Setup", duration: "15 min", content: "Welcome to the course! In this module, we'll set up the development environment and understand the core concepts. You'll install the required tools and create your first project." },
-    { title: "Core Concepts", duration: "25 min", content: "Dive deep into the fundamental building blocks. Learn about components, props, and state management. We'll build several small examples to cement understanding." },
-    { title: "Advanced Patterns", duration: "30 min", content: "Explore advanced patterns like compound components, render props, and hooks. Learn when to use each pattern for maximum code reusability." },
-    { title: "State Management", duration: "35 min", content: "Master state management with Context API and external libraries. Understand when to use local vs global state and best practices for large apps." },
-    { title: "API Integration", duration: "20 min", content: "Connect your application to real APIs. Learn about fetch, axios, and React Query for data fetching, caching, and synchronization." },
-    { title: "Testing", duration: "25 min", content: "Write reliable tests using Jest and React Testing Library. Learn unit testing, integration testing, and snapshot testing approaches." },
-    { title: "Deployment", duration: "15 min", content: "Deploy your application to production. Learn about build optimization, CI/CD pipelines, and hosting platforms." },
-    { title: "Final Project", duration: "45 min", content: "Put everything together in a comprehensive final project. Build a full-featured application from scratch, applying all concepts learned." },
-  ];
+  const moduleContentText = (module: StudentLearningModule) => {
+    const firstMaterial = module.materials[0];
+    if (!firstMaterial) return "No material uploaded for this module yet.";
+    return firstMaterial.content || `Study material: ${firstMaterial.title}`;
+  };
+
+  const currentModule = modules[activeModule];
 
   return (
     <DashboardLayout title="Student Dashboard">
-      {/* Tab Navigation */}
       <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
         {[
           { key: "overview", label: "Overview" },
@@ -161,7 +218,7 @@ const StudentDashboard = () => {
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
+            onClick={() => setActiveTab(tab.key as "overview" | "browse" | "mycourses" | "learning")}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === tab.key
                 ? "border-primary text-primary"
@@ -173,7 +230,6 @@ const StudentDashboard = () => {
         ))}
       </div>
 
-      {/* ═══ OVERVIEW TAB ═══ */}
       {activeTab === "overview" && (
         <>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-8">
@@ -189,17 +245,18 @@ const StudentDashboard = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "—"}</p>
+                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "�"}</p>
               </VCard>
             ))}
           </div>
 
           <div className="grid gap-5 lg:grid-cols-2 mb-8">
-            {/* Progress Chart */}
             <VCard className="p-0">
               <div className="px-5 pt-5 pb-2">
                 <h3 className="text-base font-semibold text-foreground">My Progress</h3>
-                <p className="text-sm text-muted-foreground">Score trend over weeks</p>
+                <p className="text-sm text-muted-foreground">
+                  {isProgressFallback ? "Score trend over weeks (fallback)" : "Score trend from student analytics"}
+                </p>
               </div>
               <div className="h-48 px-2">
                 <ResponsiveContainer width="100%" height="100%">
@@ -219,11 +276,10 @@ const StudentDashboard = () => {
               </div>
             </VCard>
 
-            {/* Active Courses */}
             <VCard className="p-5">
               <h3 className="text-base font-semibold text-foreground mb-4">Active Courses</h3>
               <div className="space-y-3">
-                {myCourses.filter(c => c.status === "In Progress").map((course) => (
+                {myCourses.filter((course) => course.status === "In Progress").map((course) => (
                   <button
                     key={course.id}
                     onClick={() => { setLearningCourse(course); setActiveTab("learning"); }}
@@ -245,15 +301,12 @@ const StudentDashboard = () => {
                   </button>
                 ))}
               </div>
-              <VButton variant="secondary" className="w-full mt-4" onClick={() => setActiveTab("browse")}>
-                Browse More Courses
-              </VButton>
+              <VButton variant="secondary" className="w-full mt-4" onClick={() => setActiveTab("browse")}>Browse More Courses</VButton>
             </VCard>
           </div>
         </>
       )}
 
-      {/* ═══ BROWSE COURSES TAB ═══ */}
       {activeTab === "browse" && (
         <>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -268,49 +321,45 @@ const StudentDashboard = () => {
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {categories.map((cat) => (
+              {categories.map((category) => (
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                    selectedCategory === cat
+                    selectedCategory === category
                       ? "bg-primary text-primary-foreground"
                       : "bg-secondary text-secondary-foreground hover:bg-accent"
                   }`}
                 >
-                  {cat}
+                  {category}
                 </button>
               ))}
             </div>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredWorkshops.map((w) => {
-              const isEnrolled = enrolledIds.includes(w.id);
+            {filteredWorkshops.map((workshop) => {
+              const isEnrolled = enrolledIds.includes(workshop.id);
               return (
-                <VCard key={w.id} hover className="p-5 flex flex-col">
+                <VCard key={workshop.id} hover className="p-5 flex flex-col">
                   <div className="flex items-center justify-between mb-3">
-                    <VBadge variant={w.status === "Active" ? "success" : w.status === "Upcoming" ? "warning" : "outline"}>
-                      {w.status}
-                    </VBadge>
+                    <VBadge variant={workshop.status === "Active" ? "success" : workshop.status === "Upcoming" ? "warning" : "outline"}>{workshop.status}</VBadge>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Star className="h-3.5 w-3.5 fill-warning text-warning" /> 4.8
                     </div>
                   </div>
-                  <h3 className="text-base font-bold text-foreground mb-1">{w.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2 flex-1">{w.description}</p>
+                  <h3 className="text-base font-bold text-foreground mb-1">{workshop.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2 flex-1">{workshop.description}</p>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
-                    <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> 4 weeks</span>
-                    <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {w.studentsEnrolled} enrolled</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {Math.max(1, Math.ceil((Date.parse(workshop.endDate) - Date.parse(workshop.startDate)) / (1000 * 60 * 60 * 24 * 7) || 4))} weeks</span>
+                    <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {workshop.studentsEnrolled} enrolled</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-3">{w.institution}</p>
+                  <p className="text-xs text-muted-foreground mb-3">{workshop.institution}</p>
                   {isEnrolled ? (
                     <VButton variant="secondary" className="w-full" onClick={() => { setActiveTab("mycourses"); }}>
                       <CheckCircle2 className="h-4 w-4" /> Enrolled
                     </VButton>
                   ) : (
-                    <VButton className="w-full" onClick={() => setEnrollModal(w)}>
-                      Enroll Now
-                    </VButton>
+                    <VButton className="w-full" onClick={() => setEnrollModal(workshop)}>Enroll Now</VButton>
                   )}
                 </VCard>
               );
@@ -319,7 +368,6 @@ const StudentDashboard = () => {
         </>
       )}
 
-      {/* ═══ MY COURSES TAB ═══ */}
       {activeTab === "mycourses" &&
         (myCourses.length === 0 ? (
           <VCard className="p-8 text-center">
@@ -336,9 +384,7 @@ const StudentDashboard = () => {
                   <span className="text-sm font-bold text-primary">{course.progress}%</span>
                 </div>
                 <h3 className="text-base font-bold text-foreground mb-2">{course.name}</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {course.completed}/{course.modules} modules completed
-                </p>
+                <p className="text-sm text-muted-foreground mb-3">{course.completed}/{course.modules} modules completed</p>
                 <div className="h-2 rounded-full bg-secondary mb-4">
                   <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${course.progress}%` }} />
                 </div>
@@ -354,137 +400,115 @@ const StudentDashboard = () => {
                     }
                   }}
                 >
-                  {course.status === "Completed" ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" /> View Certificate
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4" /> Continue Learning
-                    </>
-                  )}
+                  {course.status === "Completed" ? <><CheckCircle2 className="h-4 w-4" /> View Certificate</> : <><Play className="h-4 w-4" /> Continue Learning</>}
                 </VButton>
               </VCard>
             ))}
           </div>
         ))}
-{/* ═══ LEARNING TAB ═══ */}
+
       {activeTab === "learning" && (
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-          {/* Module sidebar */}
           <VCard className="p-3 h-fit">
-            <h3 className="text-sm font-semibold text-foreground px-3 py-2 mb-1">
-              {learningCourse?.name || "React Fundamentals"}
-            </h3>
+            <h3 className="text-sm font-semibold text-foreground px-3 py-2 mb-1">{learningCourse?.name || "Select a course"}</h3>
             <div className="space-y-0.5">
-              {modules.map((mod, i) => (
+              {modules.map((module, idx) => (
                 <button
-                  key={i}
-                  onClick={() => setActiveModule(i)}
+                  key={module.id}
+                  onClick={() => setActiveModule(idx)}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all ${
-                    activeModule === i
+                    activeModule === idx
                       ? "bg-primary text-primary-foreground font-medium"
-                      : i < (learningCourse?.completed || 3)
+                      : idx < (learningCourse?.completed || 0)
                       ? "text-foreground hover:bg-accent"
                       : "text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                    activeModule === i
+                    activeModule === idx
                       ? "bg-primary-foreground/20"
-                      : i < (learningCourse?.completed || 3)
+                      : idx < (learningCourse?.completed || 0)
                       ? "bg-success/10 text-success"
                       : "bg-muted text-muted-foreground"
                   }`}>
-                    {i < (learningCourse?.completed || 3) ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+                    {idx < (learningCourse?.completed || 0) ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
                   </span>
-                  <span className="flex-1 text-left truncate">{mod.title}</span>
-                  <span className={`text-xs ${activeModule === i ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{mod.duration}</span>
+                  <span className="flex-1 text-left truncate">{module.title}</span>
+                  <span className={`text-xs ${activeModule === idx ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                    {module.materials.length > 0 ? `${module.materials.length} items` : "No items"}
+                  </span>
                 </button>
               ))}
             </div>
           </VCard>
 
-          {/* Content area */}
           <VCard className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Module {activeModule + 1} of {modules.length}</p>
-                <h2 className="text-xl font-bold text-foreground">{modules[activeModule].title}</h2>
+            {currentModule ? (
+              <>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Module {activeModule + 1} of {modules.length}</p>
+                    <h2 className="text-xl font-bold text-foreground">{currentModule.title}</h2>
+                  </div>
+                  <VBadge variant={activeModule < (learningCourse?.completed || 0) ? "success" : "default"}>
+                    {activeModule < (learningCourse?.completed || 0) ? "Completed" : "In Progress"}
+                  </VBadge>
+                </div>
+
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-foreground leading-relaxed">{moduleContentText(currentModule)}</p>
+                </div>
+
+                <div className="mt-6 rounded-xl bg-muted/50 border border-border p-8 text-center">
+                  <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                    <FileText className="h-8 w-8 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">Study material for this module</p>
+                  <VButton
+                    variant="secondary"
+                    className="mt-3"
+                    onClick={() => showToast("info", "Opening", currentModule.materials[0]?.title ?? "No file available")}
+                  >
+                    Read Material
+                  </VButton>
+                </div>
+
+                <div className="flex justify-between mt-6 pt-6 border-t border-border">
+                  <VButton variant="secondary" disabled={activeModule === 0} onClick={() => setActiveModule(Math.max(0, activeModule - 1))}>Previous Module</VButton>
+                  {activeModule < modules.length - 1 ? (
+                    <VButton onClick={() => { setActiveModule(activeModule + 1); showToast("success", "Module Complete!"); }}>Next Module</VButton>
+                  ) : (
+                    <VButton onClick={() => { navigate("/assessments"); showToast("success", "Course Complete!", "Time to take the assessment."); }}>Take Assessment</VButton>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="py-16 text-center">
+                <p className="text-sm text-muted-foreground mb-4">Select an enrolled course to continue learning.</p>
+                <VButton onClick={() => setActiveTab("mycourses")}>Go to My Courses</VButton>
               </div>
-              <VBadge variant={activeModule < (learningCourse?.completed || 3) ? "success" : "default"}>
-                {activeModule < (learningCourse?.completed || 3) ? "Completed" : "In Progress"}
-              </VBadge>
-            </div>
-
-            <div className="prose prose-sm max-w-none">
-              <p className="text-foreground leading-relaxed">{modules[activeModule].content}</p>
-            </div>
-
-            {/* Simulated video/content area */}
-            <div className="mt-6 rounded-xl bg-muted/50 border border-border p-8 text-center">
-              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <FileText className="h-8 w-8 text-primary" />
-              </div>
-              <p className="text-sm text-muted-foreground">Study material for this module</p>
-              <VButton variant="secondary" className="mt-3" onClick={() => showToast("info", "Opening", "Reading material opened")}>
-                Read Material
-              </VButton>
-            </div>
-
-            <div className="flex justify-between mt-6 pt-6 border-t border-border">
-              <VButton
-                variant="secondary"
-                disabled={activeModule === 0}
-                onClick={() => setActiveModule(Math.max(0, activeModule - 1))}
-              >
-                Previous Module
-              </VButton>
-              {activeModule < modules.length - 1 ? (
-                <VButton onClick={() => { setActiveModule(activeModule + 1); showToast("success", "Module Complete!"); }}>
-                  Next Module
-                </VButton>
-              ) : (
-                <VButton onClick={() => { navigate("/assessments"); showToast("success", "Course Complete!", "Time to take the assessment."); }}>
-                  Take Assessment
-                </VButton>
-              )}
-            </div>
+            )}
           </VCard>
         </div>
       )}
 
-      {/* Enrollment Modal */}
       <VModal isOpen={!!enrollModal} onClose={() => setEnrollModal(null)} title="Enroll in Workshop">
         {enrollModal && (
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-foreground">{enrollModal.name}</h3>
             <p className="text-sm text-muted-foreground">{enrollModal.description}</p>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-xl bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Institution</p>
-                <p className="font-medium text-foreground">{enrollModal.institution}</p>
-              </div>
-              <div className="rounded-xl bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Duration</p>
-                <p className="font-medium text-foreground">{enrollModal.startDate} - {enrollModal.endDate}</p>
-              </div>
-              <div className="rounded-xl bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Students</p>
-                <p className="font-medium text-foreground">{enrollModal.studentsEnrolled} enrolled</p>
-              </div>
-              <div className="rounded-xl bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Status</p>
-                <p className="font-medium text-foreground">{enrollModal.status}</p>
-              </div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Institution</p><p className="font-medium text-foreground">{enrollModal.institution}</p></div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Duration</p><p className="font-medium text-foreground">{enrollModal.startDate} - {enrollModal.endDate}</p></div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Students</p><p className="font-medium text-foreground">{enrollModal.studentsEnrolled} enrolled</p></div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Status</p><p className="font-medium text-foreground">{enrollModal.status}</p></div>
             </div>
             <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
               <h4 className="text-sm font-semibold text-foreground mb-2">Syllabus</h4>
               <ul className="space-y-1.5 text-sm text-muted-foreground">
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Introduction & Core Concepts</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Hands-on Projects</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Assessment & Certification</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Industry-Ready Skills</li>
+                {(modalModules.length > 0 ? modalModules.slice(0, 4).map((module) => module.title || "Untitled Module") : ["Syllabus will be available after module setup"]).map((label, index) => (
+                  <li key={`${label}-${index}`} className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> {label}</li>
+                ))}
               </ul>
             </div>
             <div className="flex justify-end gap-3 pt-2">
@@ -497,7 +521,6 @@ const StudentDashboard = () => {
     </DashboardLayout>
   );
 };
-
 
 export default StudentDashboard;
 

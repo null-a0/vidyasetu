@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, BookOpen, Users, GraduationCap, TrendingUp, TrendingDown, Plus, Eye, Pencil, Trash2, Zap, ArrowRight } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Bar, BarChart } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -13,7 +13,7 @@ import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchAdminStats, fetchWorkshops } from "@/services/api";
+import { createWorkshop, deleteWorkshop, fetchAdminStats, fetchInstitutions, fetchWorkshops, updateWorkshop } from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
 
 const iconColors = [
@@ -33,7 +33,7 @@ const statCards = [
   { key: "totalStudents", label: "Students", icon: GraduationCap },
 ] as const;
 
-const weeklyData = [
+const FALLBACK_WEEKLY_ACTIVITY = [
   { day: "Mon", value: 65 },
   { day: "Tue", value: 80 },
   { day: "Wed", value: 72 },
@@ -43,7 +43,7 @@ const weeklyData = [
   { day: "Sun", value: 40 },
 ];
 
-const demographicData = [
+const FALLBACK_DEMOGRAPHIC_DATA = [
   { range: "18-24", male: 340, female: 360 },
   { range: "25-30", male: 280, female: 300 },
   { range: "31-35", male: 220, female: 240 },
@@ -51,7 +51,7 @@ const demographicData = [
   { range: "41+", male: 200, female: 200 },
 ];
 
-const activityFeed = [
+const FALLBACK_ACTIVITY_FEED = [
   { id: "1", text: "New workshop 'React Fundamentals' created by IIT Delhi", time: "5 min ago", type: "workshop" },
   { id: "2", text: "Certificate issued to Aarav Sharma", time: "15 min ago", type: "certificate" },
   { id: "3", text: "35 students enrolled in Python for Data Science", time: "1 hour ago", type: "enrollment" },
@@ -61,9 +61,11 @@ const activityFeed = [
 
 const AdminDashboard = () => {
   const { showToast } = useVToast();
+  const queryClient = useQueryClient();
   const { data: stats } = useQuery({ queryKey: ["adminStats"], queryFn: fetchAdminStats });
-  const { data: initialWorkshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
-  const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
+  const { data: institutions = [] } = useQuery({ queryKey: ["institutions"], queryFn: fetchInstitutions });
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWorkshop, setSelectedWorkshop] = useState<Workshop | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -74,20 +76,84 @@ const AdminDashboard = () => {
   const [activeStatFilter, setActiveStatFilter] = useState<string | null>(null);
   const [highlightedActivity, setHighlightedActivity] = useState<string | null>(null);
 
-  // Form state
   const [formName, setFormName] = useState("");
   const [formInstitution, setFormInstitution] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formStatus, setFormStatus] = useState("Active");
 
-  // Sync fetched data
-  const allWorkshops = workshops.length > 0 ? workshops : initialWorkshops;
   const displayWorkshops = searchQuery
-    ? allWorkshops.filter(w =>
+    ? workshops.filter(w =>
         w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         w.institution.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : allWorkshops;
+    : workshops;
+
+  const createMutation = useMutation({
+    mutationFn: createWorkshop,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workshops"] });
+      setCreateModal(false);
+      showToast("success", "Workshop Created", `"${formName}" has been added to the platform.`);
+    },
+    onError: (error: unknown) => {
+      showToast("error", "Create failed", error instanceof Error ? error.message : "Please try again.");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { title?: string | null; description?: string | null; start_date?: string | null; end_date?: string | null } }) =>
+      updateWorkshop(id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workshops"] });
+      setEditModal(false);
+      showToast("success", "Workshop Updated", `"${formName}" has been updated successfully.`);
+    },
+    onError: (error: unknown) => {
+      showToast("error", "Update failed", error instanceof Error ? error.message : "Please try again.");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteWorkshop,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workshops"] });
+      setDeleteDialog(false);
+      showToast("success", "Workshop Deleted", `"${deleteTarget?.name ?? "Workshop"}" has been removed.`);
+      setDeleteTarget(null);
+    },
+    onError: (error: unknown) => {
+      showToast("error", "Delete failed", error instanceof Error ? error.message : "Please try again.");
+    },
+  });
+
+  const parseStatusDates = (status: string) => {
+    const now = new Date();
+    if (status === "Completed") {
+      const end = new Date(now);
+      end.setDate(now.getDate() - 1);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 30);
+      return { start, end };
+    }
+    if (status === "Upcoming") {
+      const start = new Date(now);
+      start.setDate(now.getDate() + 1);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 30);
+      return { start, end };
+    }
+    const start = new Date(now);
+    start.setDate(now.getDate() - 1);
+    const end = new Date(now);
+    end.setDate(now.getDate() + 30);
+    return { start, end };
+  };
+
+  const resolveInstitutionId = (name: string) => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return undefined;
+    return institutions.find((item) => item.name.toLowerCase() === trimmed)?.id;
+  };
 
   const handleView = (w: Workshop) => {
     setSelectedWorkshop(w);
@@ -103,16 +169,26 @@ const AdminDashboard = () => {
     setEditModal(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!selectedWorkshop) return;
-    const updated = (workshops.length > 0 ? workshops : initialWorkshops).map(w =>
-      w.id === selectedWorkshop.id
-        ? { ...w, name: formName, institution: formInstitution, description: formDescription, status: formStatus as Workshop["status"] }
-        : w
-    );
-    setWorkshops(updated);
-    setEditModal(false);
-    showToast("success", "Workshop Updated", `"${formName}" has been updated successfully.`);
+
+    let startDate = selectedWorkshop.startDate;
+    let endDate = selectedWorkshop.endDate;
+    if (formStatus !== selectedWorkshop.status) {
+      const dates = parseStatusDates(formStatus);
+      startDate = dates.start.toISOString();
+      endDate = dates.end.toISOString();
+    }
+
+    await updateMutation.mutateAsync({
+      id: selectedWorkshop.id,
+      payload: {
+        title: formName,
+        description: formDescription,
+        start_date: startDate || null,
+        end_date: endDate || null,
+      },
+    });
   };
 
   const handleDelete = (w: Workshop) => {
@@ -120,13 +196,9 @@ const AdminDashboard = () => {
     setDeleteDialog(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const updated = (workshops.length > 0 ? workshops : initialWorkshops).filter(w => w.id !== deleteTarget.id);
-    setWorkshops(updated);
-    setDeleteDialog(false);
-    showToast("success", "Workshop Deleted", `"${deleteTarget.name}" has been removed.`);
-    setDeleteTarget(null);
+    await deleteMutation.mutateAsync(deleteTarget.id);
   };
 
   const handleCreate = () => {
@@ -134,20 +206,17 @@ const AdminDashboard = () => {
     setCreateModal(true);
   };
 
-  const handleSaveCreate = () => {
-    const newWorkshop: Workshop = {
-      id: Date.now().toString(),
-      name: formName,
-      institution: formInstitution,
-      description: formDescription,
-      startDate: new Date().toISOString().split("T")[0],
-      endDate: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-      studentsEnrolled: 0,
-      status: formStatus as Workshop["status"],
-    };
-    setWorkshops([newWorkshop, ...(workshops.length > 0 ? workshops : initialWorkshops)]);
-    setCreateModal(false);
-    showToast("success", "Workshop Created", `"${formName}" has been added to the platform.`);
+  const handleSaveCreate = async () => {
+    const institutionId = resolveInstitutionId(formInstitution);
+    const dates = parseStatusDates(formStatus);
+
+    await createMutation.mutateAsync({
+      title: formName,
+      description: formDescription || null,
+      institution_id: institutionId,
+      start_date: dates.start.toISOString(),
+      end_date: dates.end.toISOString(),
+    });
   };
 
   const handleStatClick = (key: string) => {
@@ -220,7 +289,7 @@ const AdminDashboard = () => {
           <div className="flex items-center justify-between px-5 pt-5 pb-2">
             <div>
               <h3 className="text-base font-semibold text-foreground">Platform Activity</h3>
-              <p className="text-sm text-muted-foreground">Weekly overview</p>
+              <p className="text-sm text-muted-foreground">Weekly overview (fallback)</p>
             </div>
           </div>
           <div className="flex gap-3 px-5 pb-3 flex-wrap">
@@ -235,7 +304,7 @@ const AdminDashboard = () => {
           </div>
           <div className="h-52 px-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={weeklyData}>
+              <AreaChart data={FALLBACK_WEEKLY_ACTIVITY}>
                 <defs>
                   <linearGradient id="adminAreaGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
@@ -272,16 +341,16 @@ const AdminDashboard = () => {
         </VCard>
       </div>
 
-      {/* Demographics + Activity Feed */}
+      {/* Demographics + Activity Feed (fallback) */}
       <div className="grid gap-5 lg:grid-cols-2 mb-8">
         <VCard className="p-0">
           <div className="px-5 pt-5 pb-4">
             <h3 className="text-base font-semibold text-foreground">Student Demographics</h3>
-            <p className="text-sm text-muted-foreground">Age distribution</p>
+            <p className="text-sm text-muted-foreground">Age distribution (fallback)</p>
           </div>
           <div className="h-52 px-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={demographicData}>
+              <BarChart data={FALLBACK_DEMOGRAPHIC_DATA}>
                 <XAxis dataKey="range" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", fontSize: 13, background: "hsl(var(--card))", color: "hsl(var(--foreground))" }} />
@@ -293,9 +362,9 @@ const AdminDashboard = () => {
         </VCard>
 
         <VCard className="p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">Activity Feed</h3>
+          <h3 className="text-base font-semibold text-foreground mb-4">Activity Feed (fallback)</h3>
           <div className="space-y-1">
-            {activityFeed.map((item) => (
+            {FALLBACK_ACTIVITY_FEED.map((item) => (
               <button
                 key={item.id}
                 onClick={() => { setHighlightedActivity(item.id); showToast("info", item.text); }}
@@ -423,3 +492,5 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+
+

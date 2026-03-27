@@ -1,6 +1,6 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { loginUser, fetchCurrentUser } from '@/services/api';
-import { AUTH_CHANGED_EVENT, TOKEN_STORAGE_KEY, setAccessToken, getAccessToken, clearAccessToken } from '@/api/client';
+import { AUTH_CHANGED_EVENT, TOKEN_STORAGE_KEY, setAuthTokens, getAccessToken, clearAccessToken } from '@/api/client';
 import type { BackendUser } from '@/api/types';
 
 interface AuthContextValue {
@@ -72,7 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     try {
       const token = await loginUser({ email, password });
-      setAccessToken(token.access_token);
+      setAuthTokens({ accessToken: token.access_token, refreshToken: token.refresh_token ?? null });
       const data = await fetchCurrentUser();
       setUser(data);
       return data;

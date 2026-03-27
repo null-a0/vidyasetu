@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, Clock, ChevronLeft, ChevronRight, Flag, Send, Shield, Maximize2 } from "lucide-react";
 import VCard from "@/components/ui-custom/VCard";
 import VButton from "@/components/ui-custom/VButton";
 import VModal from "@/components/ui-custom/VModal";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchQuestions } from "@/services/api";
+import {
+  startAssessmentAttempt,
+  saveAssessmentAnswers,
+  submitAssessmentAttempt,
+  type StartAttemptResponse,
+} from "@/services/api";
 
 const TOTAL_TIME = 600; // 10 minutes
 const MAX_WARNINGS = 3;
@@ -14,12 +19,15 @@ const MAX_WARNINGS = 3;
 const AssessmentAttempt = () => {
   const navigate = useNavigate();
   const { showToast } = useVToast();
-  const { data: questions = [] } = useQuery({ queryKey: ["questions"], queryFn: fetchQuestions });
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const { assessmentId } = useParams<{ assessmentId: string }>();
+
+  const [attemptData, setAttemptData] = useState<StartAttemptResponse | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [currentQ, setCurrentQ] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [started, setStarted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [warnings, setWarnings] = useState(0);
   const [warningModal, setWarningModal] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
@@ -27,17 +35,54 @@ const AssessmentAttempt = () => {
   const [submitModal, setSubmitModal] = useState(false);
   const [autoSubmitting, setAutoSubmitting] = useState(false);
 
-  const handleSubmit = useCallback(() => {
-    let score = 0;
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correctIndex) score++;
-    });
-    navigate("/assessments/results", { state: { score, total: questions.length, answers, questions } });
-  }, [answers, questions, navigate]);
+  const startMutation = useMutation({
+    mutationFn: async () => {
+      if (!assessmentId) throw new Error("Assessment ID is missing.");
+      return startAssessmentAttempt(assessmentId);
+    },
+    onSuccess: (data) => {
+      setAttemptData(data);
+      setStarted(true);
+      setRulesModal(false);
+      showToast("info", "Assessment Started", "Good luck!");
+    },
+    onError: (error: unknown) => {
+      showToast("error", "Unable to start assessment", error instanceof Error ? error.message : "Please try again.");
+    },
+  });
 
-  // Timer
+  const handleSubmit = useCallback(async () => {
+    if (!assessmentId || !attemptData || isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      const payload = Object.entries(answers).map(([questionId, optionId]) => ({
+        questionId,
+        selectedOptionIds: optionId ? [optionId] : [],
+      }));
+
+      await saveAssessmentAnswers(attemptData.submission_id, payload);
+      const result = await submitAssessmentAttempt(assessmentId, attemptData.submission_id);
+
+      navigate("/assessments/results", {
+        state: {
+          assessmentId,
+          assessmentTitle: attemptData.title,
+          result,
+          answers,
+          questions: attemptData.questions,
+        },
+      });
+    } catch (error: unknown) {
+      showToast("error", "Submission failed", error instanceof Error ? error.message : "Please retry.");
+    } finally {
+      setIsSubmitting(false);
+      setAutoSubmitting(false);
+    }
+  }, [assessmentId, attemptData, answers, isSubmitting, navigate, showToast]);
+
   useEffect(() => {
-    if (!started || timeLeft <= 0) return;
+    if (!started || timeLeft <= 0 || isSubmitting) return;
     const interval = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -49,18 +94,16 @@ const AssessmentAttempt = () => {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [started]);
+  }, [started, isSubmitting, timeLeft]);
 
-  // Auto-submit animation
   useEffect(() => {
     if (autoSubmitting) {
       showToast("warning", "Time's Up!", "Auto-submitting your assessment...");
-      const timeout = setTimeout(() => handleSubmit(), 2000);
+      const timeout = setTimeout(() => void handleSubmit(), 1200);
       return () => clearTimeout(timeout);
     }
   }, [autoSubmitting, handleSubmit, showToast]);
 
-  // Tab switch detection
   useEffect(() => {
     if (!started) return;
     const handler = () => {
@@ -70,7 +113,7 @@ const AssessmentAttempt = () => {
         setWarningMessage(`Tab switch detected! Warning ${newWarnings}/${MAX_WARNINGS}. ${newWarnings >= MAX_WARNINGS ? "Your test will be auto-submitted." : "Please stay on this tab."}`);
         setWarningModal(true);
         if (newWarnings >= MAX_WARNINGS) {
-          setTimeout(() => handleSubmit(), 2000);
+          setTimeout(() => void handleSubmit(), 1200);
         }
       }
     };
@@ -78,7 +121,6 @@ const AssessmentAttempt = () => {
     return () => document.removeEventListener("visibilitychange", handler);
   }, [started, warnings, handleSubmit]);
 
-  // Copy prevention
   useEffect(() => {
     if (!started) return;
     const handler = (e: ClipboardEvent) => {
@@ -88,13 +130,16 @@ const AssessmentAttempt = () => {
       setWarningMessage(`Copy attempt detected! Warning ${newWarnings}/${MAX_WARNINGS}.`);
       setWarningModal(true);
       showToast("warning", "Copy Blocked", "Copying is not allowed during the assessment.");
+      if (newWarnings >= MAX_WARNINGS) {
+        setTimeout(() => void handleSubmit(), 1200);
+      }
     };
     document.addEventListener("copy", handler);
     return () => document.removeEventListener("copy", handler);
-  }, [started, warnings, showToast]);
+  }, [started, warnings, showToast, handleSubmit]);
 
-  const handleSelect = (qId: string, optIndex: number) => {
-    setAnswers((prev) => ({ ...prev, [qId]: optIndex }));
+  const handleSelect = (qId: string, optId: string) => {
+    setAnswers((prev) => ({ ...prev, [qId]: optId }));
   };
 
   const toggleFlag = (qId: string) => {
@@ -113,10 +158,33 @@ const AssessmentAttempt = () => {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const questions = attemptData?.questions ?? [];
   const answeredCount = Object.keys(answers).length;
   const currentQuestion = questions[currentQ];
   const isUrgent = timeLeft < 60;
 
+  if (!assessmentId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <VCard className="p-6 max-w-md text-center">
+          <p className="text-sm text-muted-foreground mb-4">Assessment link is invalid.</p>
+          <VButton onClick={() => navigate("/assessments")}>Back to Assessments</VButton>
+        </VCard>
+      </div>
+    );
+  }
+
+
+  if (started && questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <VCard className="p-6 max-w-md text-center">
+          <p className="text-sm text-muted-foreground mb-4">No questions are available for this assessment yet.</p>
+          <VButton onClick={() => navigate("/assessments")}>Back to Assessments</VButton>
+        </VCard>
+      </div>
+    );
+  }
   if (!started || !currentQuestion) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -127,16 +195,16 @@ const AssessmentAttempt = () => {
               <p className="text-sm text-foreground">This is a proctored assessment. Please read the rules carefully.</p>
             </div>
             <ul className="space-y-2.5 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> You have <strong className="text-foreground">10 minutes</strong> to complete {questions.length} questions.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Do not switch tabs</strong> — this will trigger a warning.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Copying is not allowed</strong> — attempts will be detected.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> You have <strong className="text-foreground">10 minutes</strong> to complete {questions.length || "all"} questions.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Do not switch tabs</strong> � this will trigger a warning.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Copying is not allowed</strong> � attempts will be detected.</li>
               <li className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> After <strong className="text-foreground">{MAX_WARNINGS} warnings</strong>, your test will be auto-submitted.</li>
               <li className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> When time runs out, your answers will be <strong className="text-foreground">automatically submitted</strong>.</li>
             </ul>
             <div className="flex justify-end gap-3 pt-2">
               <VButton variant="ghost" onClick={() => navigate("/assessments")}>Cancel</VButton>
-              <VButton onClick={() => { setStarted(true); setRulesModal(false); showToast("info", "Assessment Started", "Good luck!"); }}>
-                <Maximize2 className="h-4 w-4" /> Start Assessment
+              <VButton onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
+                <Maximize2 className="h-4 w-4" /> {startMutation.isPending ? "Starting..." : "Start Assessment"}
               </VButton>
             </div>
           </div>
@@ -147,7 +215,6 @@ const AssessmentAttempt = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Auto-submit overlay */}
       {autoSubmitting && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
           <VCard className="p-8 text-center max-w-sm mx-4 animate-in zoom-in-95 duration-300">
@@ -156,17 +223,13 @@ const AssessmentAttempt = () => {
             </div>
             <h3 className="text-xl font-bold text-foreground mb-2">Time's Up!</h3>
             <p className="text-sm text-muted-foreground">Auto-submitting your answers...</p>
-            <div className="mt-4 h-1.5 rounded-full bg-secondary overflow-hidden">
-              <div className="h-full bg-primary rounded-full animate-[shimmer_2s_ease-in-out]" style={{ width: "100%", animation: "shimmer 2s ease-in-out" }} />
-            </div>
           </VCard>
         </div>
       )}
 
-      {/* Top bar */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card/90 backdrop-blur-md px-4 sm:px-6 py-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm sm:text-base font-semibold text-foreground">React Components Quiz</h2>
+          <h2 className="text-sm sm:text-base font-semibold text-foreground">{attemptData.title || "Assessment"}</h2>
           {warnings > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-semibold text-warning">
               <AlertTriangle className="h-3 w-3" />
@@ -179,14 +242,13 @@ const AssessmentAttempt = () => {
             <Clock className="h-4 w-4" />
             {formatTime(timeLeft)}
           </div>
-          <VButton size="sm" onClick={() => setSubmitModal(true)}>
+          <VButton size="sm" onClick={() => setSubmitModal(true)} disabled={isSubmitting}>
             <Send className="h-3.5 w-3.5" /> Submit
           </VButton>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto p-4 sm:p-6 grid gap-5 lg:grid-cols-[1fr_200px]">
-        {/* Question */}
         <VCard className="p-6">
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-muted-foreground">Question {currentQ + 1} of {questions.length}</p>
@@ -204,23 +266,23 @@ const AssessmentAttempt = () => {
           <div className="space-y-3">
             {currentQuestion.options.map((opt, oi) => (
               <button
-                key={oi}
-                onClick={() => handleSelect(currentQuestion.id, oi)}
+                key={opt.id}
+                onClick={() => handleSelect(currentQuestion.id, opt.id)}
                 className={`w-full text-left rounded-xl border px-5 py-4 text-sm transition-all ${
-                  answers[currentQuestion.id] === oi
+                  answers[currentQuestion.id] === opt.id
                     ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/30"
                     : "border-border text-foreground hover:bg-accent hover:border-primary/20"
                 }`}
               >
                 <span className="inline-flex items-center gap-3">
                   <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                    answers[currentQuestion.id] === oi
+                    answers[currentQuestion.id] === opt.id
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}>
                     {String.fromCharCode(65 + oi)}
                   </span>
-                  {opt}
+                  {opt.text}
                 </span>
               </button>
             ))}
@@ -234,14 +296,13 @@ const AssessmentAttempt = () => {
                 Next <ChevronRight className="h-4 w-4" />
               </VButton>
             ) : (
-              <VButton onClick={() => setSubmitModal(true)}>
+              <VButton onClick={() => setSubmitModal(true)} disabled={isSubmitting}>
                 <Send className="h-4 w-4" /> Submit
               </VButton>
             )}
           </div>
         </VCard>
 
-        {/* Question Navigation Panel */}
         <VCard className="p-4 h-fit">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Questions</p>
           <div className="grid grid-cols-3 gap-2">
@@ -271,8 +332,7 @@ const AssessmentAttempt = () => {
         </VCard>
       </div>
 
-      {/* Warning Modal */}
-      <VModal isOpen={warningModal} onClose={() => setWarningModal(false)} title="⚠️ Warning" className="max-w-sm">
+      <VModal isOpen={warningModal} onClose={() => setWarningModal(false)} title="?? Warning" className="max-w-sm">
         <div className="flex items-start gap-3 mb-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/10">
             <AlertTriangle className="h-5 w-5 text-warning" />
@@ -284,7 +344,6 @@ const AssessmentAttempt = () => {
         </div>
       </VModal>
 
-      {/* Submit Confirmation Modal */}
       <VModal isOpen={submitModal} onClose={() => setSubmitModal(false)} title="Submit Assessment" className="max-w-sm">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -298,7 +357,9 @@ const AssessmentAttempt = () => {
           )}
           <div className="flex justify-end gap-3">
             <VButton variant="ghost" onClick={() => setSubmitModal(false)}>Review Answers</VButton>
-            <VButton onClick={() => { setSubmitModal(false); handleSubmit(); }}>Submit Now</VButton>
+            <VButton onClick={() => { setSubmitModal(false); void handleSubmit(); }} disabled={isSubmitting}>
+              {isSubmitting ? "Submitting..." : "Submit Now"}
+            </VButton>
           </div>
         </div>
       </VModal>
@@ -307,3 +368,4 @@ const AssessmentAttempt = () => {
 };
 
 export default AssessmentAttempt;
+

@@ -101,8 +101,67 @@ export interface DashboardStatsResponse {
   pending_submissions: number;
 }
 
+export interface BackendScoreTrendPoint {
+  assessment_id?: string | null;
+  score?: number | null;
+  percentage?: number | null;
+  pass_fail?: boolean | null;
+  submitted_at?: string | null;
+}
+
+export interface BackendStudentAssessmentAnalytics {
+  total_submissions: number;
+  avg_score: number;
+  avg_percentage: number;
+  passed: number;
+  failed: number;
+  score_trend: BackendScoreTrendPoint[];
+}
+
+export interface BackendStudentAttendanceAnalytics {
+  total_sessions: number;
+  present: number;
+  late: number;
+  absent: number;
+  attendance_percentage: number;
+}
+
+export interface BackendStudentAnalytics {
+  student_id: string;
+  enrolled_workshops: number;
+  assessment: BackendStudentAssessmentAnalytics;
+  attendance: BackendStudentAttendanceAnalytics;
+}
+
+export interface BackendWorkshopEnrollmentAnalytics {
+  total_enrolled: number;
+  completed: number;
+  dropped: number;
+  active: number;
+}
+
+export interface BackendWorkshopAssessmentAnalytics {
+  total_submissions: number;
+  avg_score: number;
+  avg_percentage: number;
+  pass_rate_percentage: number;
+}
+
+export interface BackendWorkshopAttendanceAnalytics {
+  total_attendance_records: number;
+  avg_attendance_percentage: number;
+}
+
+export interface BackendWorkshopAnalytics {
+  workshop_id: string;
+  enrollment: BackendWorkshopEnrollmentAnalytics;
+  assessment: BackendWorkshopAssessmentAnalytics;
+  attendance: BackendWorkshopAttendanceAnalytics;
+}
+
 export interface TokenResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
 }
 
@@ -116,7 +175,6 @@ export interface BackendSubmission {
   submitted_at?: string | null;
 }
 
-
 export interface BackendInstitution {
   id: string;
   name: string;
@@ -128,7 +186,7 @@ export interface BackendApprovalRequest {
   id: string;
   request_type: string;
   status: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
   requested_by?: string | null;
   created_at?: string | null;
   resolved_at?: string | null;

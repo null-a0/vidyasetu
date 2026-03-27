@@ -8,23 +8,6 @@ import { Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllUsers, fetchStudentAnalytics, fetchWorkshopAnalytics, fetchWorkshops } from "@/services/api";
 
-type WorkshopAnalytics = {
-  workshop_id: string;
-  enrollment?: { total_enrolled?: number; completed?: number; dropped?: number };
-  assessment?: { total_submissions?: number; avg_percentage?: number; pass_rate_percentage?: number };
-};
-
-type StudentAnalytics = {
-  student_id: string;
-  enrolled_workshops?: number;
-  assessment?: {
-    avg_percentage?: number;
-    passed?: number;
-    failed?: number;
-    score_trend?: { percentage?: number | null; submitted_at?: string | null }[];
-  };
-};
-
 const PerformanceReports = () => {
   const { showToast } = useVToast();
   const [hoveredStudent, setHoveredStudent] = useState<string | null>(null);
@@ -42,71 +25,70 @@ const PerformanceReports = () => {
     },
   });
 
-  const workshopIdsKey = useMemo(() => (workshopsQuery.data ?? []).map((w) => w.id).slice(0, 20).sort().join(","), [workshopsQuery.data]);
+  const workshopIdsKey = useMemo(
+    () => (workshopsQuery.data ?? []).map((workshop) => workshop.id).slice(0, 20).sort().join(","),
+    [workshopsQuery.data]
+  );
 
   const workshopAnalyticsQuery = useQuery({
     queryKey: ["workshopAnalytics", workshopIdsKey],
     queryFn: async () => {
-      const workshops = workshopsQuery.data ?? [];
-      const limited = workshops.slice(0, 20);
-      const results = await Promise.all(
-        limited.map(async (w) => {
+      const workshops = (workshopsQuery.data ?? []).slice(0, 20);
+      return Promise.all(
+        workshops.map(async (workshop) => {
           try {
-            const data = (await fetchWorkshopAnalytics(w.id)) as WorkshopAnalytics;
-            return { workshopId: w.id, title: w.name, data };
+            const data = await fetchWorkshopAnalytics(workshop.id);
+            return { workshopId: workshop.id, title: workshop.name, data };
           } catch {
-            return { workshopId: w.id, title: w.name, data: { workshop_id: w.id } as WorkshopAnalytics };
+            return { workshopId: workshop.id, title: workshop.name, data: null };
           }
         })
       );
-      return results;
     },
     enabled: (workshopsQuery.data?.length ?? 0) > 0,
   });
 
-  const studentIdsKey = useMemo(() => (studentsQuery.data ?? []).map((s) => s.id).slice(0, 10).sort().join(","), [studentsQuery.data]);
+  const studentIdsKey = useMemo(
+    () => (studentsQuery.data ?? []).map((student) => student.id).slice(0, 10).sort().join(","),
+    [studentsQuery.data]
+  );
 
   const studentAnalyticsQuery = useQuery({
     queryKey: ["studentAnalytics", studentIdsKey],
     queryFn: async () => {
-      const students = studentsQuery.data ?? [];
-      const limited = students.slice(0, 10);
-      const results = await Promise.all(
-        limited.map(async (s) => {
+      const students = (studentsQuery.data ?? []).slice(0, 10);
+      return Promise.all(
+        students.map(async (student) => {
           try {
-            const data = (await fetchStudentAnalytics(s.id)) as StudentAnalytics;
-            return { studentId: s.id, name: s.name || s.email, data };
+            const data = await fetchStudentAnalytics(student.id);
+            return { studentId: student.id, name: student.name || student.email, data };
           } catch {
-            return { studentId: s.id, name: s.name || s.email, data: { student_id: s.id } as StudentAnalytics };
+            return { studentId: student.id, name: student.name || student.email, data: null };
           }
         })
       );
-      return results;
     },
     enabled: (studentsQuery.data?.length ?? 0) > 0,
   });
 
   const reportData = useMemo(() => {
-    const wa = workshopAnalyticsQuery.data ?? [];
+    const rows = workshopAnalyticsQuery.data ?? [];
 
-    const totals = wa.reduce(
-      (acc, w) => {
-        const enrolled = w.data.enrollment?.total_enrolled ?? 0;
-        const completed = w.data.enrollment?.completed ?? 0;
-        const submissions = w.data.assessment?.total_submissions ?? 0;
-        const avgPct = w.data.assessment?.avg_percentage ?? 0;
-        const passRate = w.data.assessment?.pass_rate_percentage ?? 0;
+    const totals = rows.reduce(
+      (acc, row) => {
+        const data = row.data;
+        if (!data) return acc;
 
-        acc.totalEnrolled += enrolled;
-        acc.totalCompleted += completed;
-        acc.totalSubmissions += submissions;
-        acc.sumAvgPct += avgPct;
-        acc.sumPassRateWeighted += passRate * submissions;
-        acc.avgPctCount += submissions > 0 ? 1 : 0;
+        acc.totalEnrolled += data.totalEnrolled;
+        acc.totalCompleted += data.completed;
+        acc.totalSubmissions += data.totalSubmissions;
+        acc.sumAveragePercentage += data.averagePercentage;
+        acc.sumPassRateWeighted += data.passRatePercentage * data.totalSubmissions;
+        acc.averageCount += data.totalSubmissions > 0 ? 1 : 0;
 
-        if (enrolled > acc.topEnrollment) {
-          acc.topEnrollment = enrolled;
-          acc.topWorkshop = w.title;
+        if (data.totalEnrolled > acc.topEnrollment) {
+          acc.topEnrollment = data.totalEnrolled;
+          acc.topWorkshop = row.title;
         }
         return acc;
       },
@@ -114,72 +96,72 @@ const PerformanceReports = () => {
         totalEnrolled: 0,
         totalCompleted: 0,
         totalSubmissions: 0,
-        sumAvgPct: 0,
+        sumAveragePercentage: 0,
         sumPassRateWeighted: 0,
-        avgPctCount: 0,
+        averageCount: 0,
         topEnrollment: 0,
         topWorkshop: "",
       }
     );
 
-    const avgScore = totals.avgPctCount > 0 ? Math.round(totals.sumAvgPct / totals.avgPctCount) : 0;
+    const avgScore = totals.averageCount > 0 ? Math.round(totals.sumAveragePercentage / totals.averageCount) : 0;
     const completion = totals.totalEnrolled > 0 ? Math.round((totals.totalCompleted / totals.totalEnrolled) * 100) : 0;
     const passRate = totals.totalSubmissions > 0 ? Math.round(totals.sumPassRateWeighted / totals.totalSubmissions) : 0;
 
     return [
       { label: "Average Score", value: `${avgScore}%`, description: "Across available assessments" },
       { label: "Completion Rate", value: `${completion}%`, description: "Workshop completion (enrollments)" },
-      { label: "Top Workshop", value: totals.topWorkshop || "â€”", description: "Highest enrollment (sampled)" },
+      { label: "Top Workshop", value: totals.topWorkshop || "—", description: "Highest enrollment (sampled)" },
       { label: "Pass Rate", value: `${passRate}%`, description: "Across available submissions" },
     ];
   }, [workshopAnalyticsQuery.data]);
 
   const studentPerformance = useMemo(() => {
-    const results = studentAnalyticsQuery.data ?? [];
-    const rows = results.map((r) => ({
-      name: r.name,
-      avgScore: Math.round(r.data.assessment?.avg_percentage ?? 0),
-      workshopsCompleted: r.data.enrolled_workshops ?? 0,
-      passed: r.data.assessment?.passed ?? 0,
-      failed: r.data.assessment?.failed ?? 0,
-      trend: r.data.assessment?.score_trend ?? [],
-    }));
-    // Prefer higher avg score.
+    const rows = (studentAnalyticsQuery.data ?? [])
+      .filter((item) => item.data)
+      .map((item) => ({
+        name: item.name,
+        avgScore: item.data?.averagePercentage ?? 0,
+        workshopsCompleted: item.data?.enrolledWorkshops ?? 0,
+        passed: item.data?.passed ?? 0,
+        failed: item.data?.failed ?? 0,
+        trend: item.data?.trend ?? [],
+      }));
+
     rows.sort((a, b) => b.avgScore - a.avgScore);
     return rows.slice(0, 5);
   }, [studentAnalyticsQuery.data]);
 
   const barData = useMemo(() => {
-    // Build a 6-month trend from student score_trend submissions.
     const now = new Date();
     const buckets = Array.from({ length: 6 }).map((_, idx) => {
-      const d = new Date(now);
-      d.setMonth(now.getMonth() - (5 - idx));
-      const key = d.toISOString().slice(0, 7);
-      return { key, month: d.toLocaleString("en-US", { month: "short" }), scores: [] as number[] };
+      const date = new Date(now);
+      date.setMonth(now.getMonth() - (5 - idx));
+      const key = date.toISOString().slice(0, 7);
+      return { key, month: date.toLocaleString("en-US", { month: "short" }), scores: [] as number[] };
     });
 
-    const scorePoints = studentPerformance.flatMap((s) => s.trend || []);
-    for (const p of scorePoints) {
-      const dt = p.submitted_at ? new Date(p.submitted_at) : null;
-      if (!dt || Number.isNaN(dt.getTime())) continue;
-      const key = dt.toISOString().slice(0, 7);
-      const bucket = buckets.find((b) => b.key === key);
-      if (!bucket) continue;
-      const pct = p.percentage ?? null;
-      if (pct === null || pct === undefined) continue;
-      bucket.scores.push(Number(pct));
+    const scorePoints = studentPerformance.flatMap((student) => student.trend);
+    for (const point of scorePoints) {
+      const dt = point.label ? new Date(point.label) : null;
+      const fromLabel = dt && !Number.isNaN(dt.getTime()) ? dt.toISOString().slice(0, 7) : null;
+      const bucket = fromLabel ? buckets.find((entry) => entry.key === fromLabel) : null;
+      if (bucket) bucket.scores.push(point.score);
     }
 
-    return buckets.map((b) => {
-      const avg = b.scores.length > 0 ? Math.round(b.scores.reduce((s, n) => s + n, 0) / b.scores.length) : 0;
-      return { month: b.month, score: avg };
+    if (scorePoints.length === 0) {
+      return buckets.map((bucket, idx) => ({ month: bucket.month, score: studentPerformance[idx]?.avgScore ?? 0 }));
+    }
+
+    return buckets.map((bucket) => {
+      const avg = bucket.scores.length > 0 ? Math.round(bucket.scores.reduce((sum, score) => sum + score, 0) / bucket.scores.length) : 0;
+      return { month: bucket.month, score: avg };
     });
   }, [studentPerformance]);
 
   const pieData = useMemo(() => {
-    const passed = studentPerformance.reduce((s, r) => s + (r.passed || 0), 0);
-    const failed = studentPerformance.reduce((s, r) => s + (r.failed || 0), 0);
+    const passed = studentPerformance.reduce((sum, row) => sum + row.passed, 0);
+    const failed = studentPerformance.reduce((sum, row) => sum + row.failed, 0);
     const total = passed + failed;
     const passPct = total > 0 ? Math.round((passed / total) * 100) : 0;
     const failPct = total > 0 ? 100 - passPct : 0;
@@ -189,15 +171,12 @@ const PerformanceReports = () => {
     ];
   }, [studentPerformance]);
 
-  const isLoading =
-    workshopsQuery.isLoading || studentsQuery.isLoading || workshopAnalyticsQuery.isLoading || studentAnalyticsQuery.isLoading;
+  const isLoading = workshopsQuery.isLoading || studentsQuery.isLoading || workshopAnalyticsQuery.isLoading || studentAnalyticsQuery.isLoading;
 
   return (
     <DashboardLayout title="Performance Reports">
       <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-muted-foreground">
-          Comprehensive performance analytics {isLoading ? "(loading...)" : ""}
-        </p>
+        <p className="text-sm text-muted-foreground">Comprehensive performance analytics {isLoading ? "(loading...)" : ""}</p>
         <VButton variant="secondary" onClick={() => showToast("success", "Report Exported", "PDF report downloaded")}>
           <Download className="h-4 w-4" /> Export PDF
         </VButton>
@@ -245,10 +224,10 @@ const PerformanceReports = () => {
             </ResponsiveContainer>
           </div>
           <div className="flex justify-center gap-6 mt-2">
-            {pieData.map((d) => (
-              <div key={d.name} className="flex items-center gap-2 text-sm">
-                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
-                <span className="text-muted-foreground">{d.name}: {d.value}%</span>
+            {pieData.map((entry) => (
+              <div key={entry.name} className="flex items-center gap-2 text-sm">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-muted-foreground">{entry.name}: {entry.value}%</span>
               </div>
             ))}
           </div>
@@ -267,20 +246,20 @@ const PerformanceReports = () => {
             </tr>
           </thead>
           <tbody>
-            {studentPerformance.map((s) => (
+            {studentPerformance.map((student) => (
               <tr
-                key={s.name}
-                onMouseEnter={() => setHoveredStudent(s.name)}
+                key={student.name}
+                onMouseEnter={() => setHoveredStudent(student.name)}
                 onMouseLeave={() => setHoveredStudent(null)}
-                onClick={() => showToast("info", s.name, `Average score: ${s.avgScore}%, Workshops: ${s.workshopsCompleted}`)}
-                className={`border-b border-border last:border-0 cursor-pointer transition-colors ${hoveredStudent === s.name ? "bg-primary/5" : "hover:bg-accent/50"}`}
+                onClick={() => showToast("info", student.name, `Average score: ${student.avgScore}%, Workshops: ${student.workshopsCompleted}`)}
+                className={`border-b border-border last:border-0 cursor-pointer transition-colors ${hoveredStudent === student.name ? "bg-primary/5" : "hover:bg-accent/50"}`}
               >
-                <td className="px-6 py-4 text-foreground font-medium">{s.name}</td>
-                <td className="px-6 py-4 text-foreground">{s.avgScore}%</td>
-                <td className="px-6 py-4 text-foreground">{s.workshopsCompleted}</td>
+                <td className="px-6 py-4 text-foreground font-medium">{student.name}</td>
+                <td className="px-6 py-4 text-foreground">{student.avgScore}%</td>
+                <td className="px-6 py-4 text-foreground">{student.workshopsCompleted}</td>
                 <td className="px-6 py-4">
                   <div className="w-32 h-2 rounded-full bg-secondary">
-                    <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${s.avgScore}%` }} />
+                    <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${student.avgScore}%` }} />
                   </div>
                 </td>
               </tr>
