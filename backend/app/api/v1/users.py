@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import (
+    PaginationParams,
+    get_current_user,
+    get_db,
+    require_role,
+)
+from app.crud import get_user, get_users, update_user
+from app.models import User, UserRole
+from app.schemas.base import Page
+from app.schemas.user import UserResponse, UserUpdate
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+
+# ---------------------------------------------------------------------------
+# GET /users/   — admin / institution_admin only, institution-filtered
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/",
+    response_model=Page[UserResponse],
+    summary="List all users (admin only; institution_admin sees their institution only)",
+)
+async def list_users(
+    page: PaginationParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)
+    ),
+) -> Page[UserResponse]:
+    # Institution admins are automatically scoped to their institution
+    inst_filter = (
+        current_user.institution_id
+        if current_user.role == UserRole.INSTITUTION_ADMIN
+        else None
+    )
+    users, total = await get_users(
+        db, offset=page.offset, limit=page.limit, institution_id=inst_filter
+    )
+    return Page(
+        items=[UserResponse.model_validate(u) for u in users],
+        total=total,
+        offset=page.offset,
+        limit=page.limit,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /users/me
+# ---------------------------------------------------------------------------
+
+
+@router.get("/me", response_model=UserResponse, summary="Current authenticated user")
+async def get_me(
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    return UserResponse.model_validate(current_user)
+
+
+# ---------------------------------------------------------------------------
+# GET /users/{user_id}
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{user_id}", response_model=UserResponse, summary="Fetch user by ID")
+async def get_user_by_id(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    # Students can only see themselves; institution_admin limited to their institution
+    if current_user.role == UserRole.STUDENT:
+        if current_user.id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    user = await get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    # Institution admins cannot view users from other institutions
+    if (
+        current_user.role == UserRole.INSTITUTION_ADMIN
+        and user.institution_id != current_user.institution_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    return UserResponse.model_validate(user)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /users/{user_id}
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{user_id}", response_model=UserResponse, summary="Update user profile")
+async def patch_user(
+    user_id: str,
+    payload: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    # Users can only update themselves; admins can update anyone
+    if current_user.role not in (UserRole.ADMIN,):
+        if current_user.id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    user = await get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    updated = await update_user(db, user, payload)
+    return UserResponse.model_validate(updated)
