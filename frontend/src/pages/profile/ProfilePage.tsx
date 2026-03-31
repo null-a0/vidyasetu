@@ -71,6 +71,7 @@ const ProfilePage = () => {
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Avatar & Header */}
         <VCard className="p-6">
+          <p className="text-xs text-muted-foreground mb-4">Fallback: profile image upload endpoint is not available yet.</p>
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="relative group">
               <div className="h-24 w-24 rounded-full vidya-gradient flex items-center justify-center text-primary-foreground text-2xl font-bold">

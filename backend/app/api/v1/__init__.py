@@ -6,6 +6,7 @@ from app.api.v1 import (
     assessments,
     auth,
     bulk,
+    communication,
     certificates,
     dashboard,
     enrollments,
@@ -42,6 +43,7 @@ api_router.include_router(certificates.router)
 api_router.include_router(fees.router)
 api_router.include_router(payments.router)
 api_router.include_router(bulk.router)
+api_router.include_router(communication.router)
 api_router.include_router(analytics.router)
 api_router.include_router(notifications.router)
 api_router.include_router(dashboard.router)

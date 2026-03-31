@@ -215,3 +215,15 @@ class SalaryPaymentResponse(BaseModel):
     amount: int
     status: str
     created_at: Optional[datetime]
+
+
+class ParentMessageRequest(BaseModel):
+    student_ids: list[str]
+    subject: str
+    body: str
+
+
+class ParentMessageResponse(BaseModel):
+    accepted: int
+    failed: int
+    message: str

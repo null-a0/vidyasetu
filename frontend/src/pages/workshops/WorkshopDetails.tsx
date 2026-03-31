@@ -74,6 +74,7 @@ const WorkshopDetails = () => {
       label: "Educator",
       content: (
         <VCard className="p-6">
+          <p className="text-xs text-muted-foreground mb-4">Fallback educator profile: backend workshop-to-educator contract is not available yet.</p>
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="h-20 w-20 rounded-full vidya-gradient flex items-center justify-center text-primary-foreground text-2xl font-bold shrink-0">
               {mockEducatorInfo.name.split(" ").map(n => n[0]).join("").slice(0, 2)}

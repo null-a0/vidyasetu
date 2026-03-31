@@ -119,6 +119,15 @@ def client_and_state():
                 pass_fail=None,
                 answers=[],
             )
+            graded_submission = Submission(
+                id="submission-graded",
+                student_id="student-1",
+                assessment_id="assessment-1",
+                score=10,
+                percentage=100,
+                pass_fail=True,
+                answers=[{"question_id": "question-1", "selected_option_ids": ["opt-a"]}],
+            )
             notification = Notification(
                 id="notification-1",
                 user_id="educator-1",
@@ -139,6 +148,7 @@ def client_and_state():
                     question,
                     enrollment,
                     submission,
+                    graded_submission,
                     notification,
                 ]
             )
@@ -225,6 +235,31 @@ def test_educator_notifications_success(client_and_state):
     response = client.get("/api/v1/notifications/educator-1")
     assert response.status_code == 200
     assert response.json()["total"] >= 1
+
+
+def test_educator_can_view_review_and_dispatch_parent_message(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    review = client.get("/api/v1/submissions/submission-graded/review")
+    assert review.status_code == 200
+    review_payload = review.json()
+    assert review_payload["submission_id"] == "submission-graded"
+    assert len(review_payload["questions"]) >= 1
+
+    message = client.post(
+        "/api/v1/communication/parent-email",
+        json={
+            "student_ids": ["student-1"],
+            "subject": "Submission Reviewed",
+            "body": "Please check updated breakdown.",
+        },
+    )
+    assert message.status_code == 200
+    assert message.json()["accepted"] == 1
+
+    assessment_lb = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1")
+    assert assessment_lb.status_code == 200
 
 
 def test_educator_forbidden_admin_and_delete_routes(client_and_state):

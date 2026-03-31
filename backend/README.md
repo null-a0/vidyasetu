@@ -53,18 +53,18 @@ This will create `backend/vidyasetu.db` locally when using the default SQLite co
 - Admin: `admin@vidyasetu.edu` / `admin123`
 - Institution admin: `institution.admin@vidyasetu.edu` / `institution123`
 - Educator: `educator@vidyasetu.edu` / `educator123`
-- Student: `student@vidyasetu.edu` / `student123`
+- Student: `student2@vidyasetu.edu` / `demo123`
 
 ## Frontend integration
 
 - API prefix: `/api/v1`
 - Auth flow:
-  - `POST /api/v1/auth/login`
-  - `GET /api/v1/users/me`
-  - `POST /api/v1/auth/refresh`
+    - `POST /api/v1/auth/login`
+    - `GET /api/v1/users/me`
+    - `POST /api/v1/auth/refresh`
 - Minimal password reset support:
-  - `POST /api/v1/auth/forgot-password`
-  - `POST /api/v1/auth/reset-password`
+    - `POST /api/v1/auth/forgot-password`
+    - `POST /api/v1/auth/reset-password`
 
 CORS is controlled by `FRONTEND_ORIGINS`, which should match the Vite dev origin(s).
 
@@ -81,4 +81,3 @@ Used by the frontend dashboards:
 - GET /api/v1/certificates/ (staff list)
 - GET /api/v1/certificates/student/{student_id}
 - GET /api/v1/certificates/verify/{verification_code} (public)
-

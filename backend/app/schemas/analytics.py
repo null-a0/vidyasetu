@@ -81,3 +81,55 @@ class WorkshopAnalyticsResponse(BaseModel):
     enrollment: WorkshopEnrollmentAnalytics = WorkshopEnrollmentAnalytics()
     assessment: WorkshopAssessmentAnalytics = WorkshopAssessmentAnalytics()
     attendance: WorkshopAttendanceAnalytics = WorkshopAttendanceAnalytics()
+
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    student_id: str
+    student_name: str
+    average_percentage: float = 0.0
+    attempts: int = 0
+    passed: int = 0
+
+
+class AssessmentLeaderboardResponse(BaseModel):
+    assessment_id: str
+    entries: list[LeaderboardEntry] = []
+
+
+class WorkshopLeaderboardResponse(BaseModel):
+    workshop_id: str
+    entries: list[LeaderboardEntry] = []
+
+
+class DashboardAlertItem(BaseModel):
+    id: str
+    text: str
+    level: str = "info"
+
+
+class DashboardActivityItem(BaseModel):
+    id: str
+    text: str
+    time: str
+    type: str = "general"
+
+
+class DashboardSeriesPoint(BaseModel):
+    label: str
+    value: float
+
+
+class InstitutionDashboardAggregateResponse(BaseModel):
+    kpis: dict[str, float | int | str]
+    alerts: list[DashboardAlertItem] = []
+    activity_feed: list[DashboardActivityItem] = []
+    attendance_trend: list[DashboardSeriesPoint] = []
+    enrollment_trend: list[DashboardSeriesPoint] = []
+    report_cards: dict[str, float | int | str]
+
+
+class AdminDashboardInsightsResponse(BaseModel):
+    weekly_activity: list[DashboardSeriesPoint] = []
+    demographics: list[dict]
+    activity_feed: list[DashboardActivityItem] = []

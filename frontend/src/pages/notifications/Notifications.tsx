@@ -1,5 +1,5 @@
-﻿import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, CheckCircle, AlertTriangle, Info, Check, Trash2, Mail } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import VCard from '@/components/ui-custom/VCard';
@@ -10,7 +10,7 @@ import VInput from '@/components/ui-custom/VInput';
 import { useVToast } from '@/components/ui-custom/VToast';
 import { useRole } from '@/hooks/useRole';
 import { useAuth } from '@/hooks/useAuth';
-import { fetchNotifications } from '@/services/api';
+import { deleteNotification, fetchAllUsers, fetchNotifications, markNotificationRead, sendParentEmailMessage } from '@/services/api';
 import type { Notification } from '@/mock/mockData';
 
 const iconMap = {
@@ -23,6 +23,7 @@ const Notifications = () => {
   const { showToast } = useVToast();
   const { user } = useAuth();
   const role = useRole();
+  const queryClient = useQueryClient();
 
   const { data: fetched = [] } = useQuery({
     queryKey: ['notifications', user?.id],
@@ -30,20 +31,32 @@ const Notifications = () => {
     enabled: Boolean(user),
   });
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState('All');
   const [emailModal, setEmailModal] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
 
+  const markReadMutation = useMutation({
+    mutationFn: markNotificationRead,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteNotification,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
+  });
+  const sendParentEmailMutation = useMutation({
+    mutationFn: sendParentEmailMessage,
+  });
+
   const isInstitution = role === 'institution_admin';
 
-  useEffect(() => {
-    setNotifications(fetched);
-  }, [fetched]);
-
-  const all = notifications.length > 0 ? notifications : fetched;
+  const all = fetched;
   const filtered =
     filter === 'All'
       ? all
@@ -52,18 +65,31 @@ const Notifications = () => {
         : all.filter((n) => n.read);
 
   const markRead = (id: string) => {
-    setNotifications(all.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    showToast('success', 'Marked as read');
+    markReadMutation.mutate(id, {
+      onSuccess: () => showToast('success', 'Marked as read'),
+      onError: (err: unknown) =>
+        showToast('destructive', 'Failed', err instanceof Error ? err.message : 'Unable to mark as read.'),
+    });
   };
 
   const markAllRead = () => {
-    setNotifications(all.map((n) => ({ ...n, read: true })));
-    showToast('success', 'All notifications marked as read');
+    const unread = all.filter((item) => !item.read);
+    Promise.all(unread.map((item) => markNotificationRead(item.id)))
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+        showToast('success', 'All notifications marked as read');
+      })
+      .catch((err: unknown) => {
+        showToast('destructive', 'Failed', err instanceof Error ? err.message : 'Unable to mark notifications.');
+      });
   };
 
   const deleteNotif = (id: string) => {
-    setNotifications(all.filter((n) => n.id !== id));
-    showToast('info', 'Notification removed');
+    deleteMutation.mutate(id, {
+      onSuccess: () => showToast('info', 'Notification removed'),
+      onError: (err: unknown) =>
+        showToast('destructive', 'Failed', err instanceof Error ? err.message : 'Unable to delete notification.'),
+    });
   };
 
   const unreadCount = all.filter((n) => !n.read).length;
@@ -201,9 +227,34 @@ const Notifications = () => {
               Cancel
             </VButton>
             <VButton
-              onClick={() => {
-                setEmailModal(false);
-                showToast('success', 'Email Sent', `Email sent to ${emailTo || 'parents'}`);
+              onClick={async () => {
+                try {
+                  const parsedEmails = emailTo
+                    .split(',')
+                    .map((item) => item.trim().toLowerCase())
+                    .filter(Boolean);
+                  if (parsedEmails.length === 0) {
+                    showToast('warning', 'Recipients required', 'Enter at least one recipient email.');
+                    return;
+                  }
+                  const users = await fetchAllUsers({ max: 1000 });
+                  const recipientStudentIds = users
+                    .filter((item) => item.role === 'student' && item.email && parsedEmails.includes(item.email.toLowerCase()))
+                    .map((item) => item.id);
+                  if (recipientStudentIds.length === 0) {
+                    showToast('warning', 'No student matches', 'None of the emails matched student accounts.');
+                    return;
+                  }
+                  const response = await sendParentEmailMutation.mutateAsync({
+                    studentIds: recipientStudentIds,
+                    subject: emailSubject,
+                    body: emailBody,
+                  });
+                  setEmailModal(false);
+                  showToast('success', 'Email Sent', `Accepted: ${response.accepted}, Failed: ${response.failed}`);
+                } catch (err: unknown) {
+                  showToast('destructive', 'Send Failed', err instanceof Error ? err.message : 'Unable to dispatch parent email.');
+                }
               }}
               disabled={!emailSubject || !emailBody}
             >
@@ -217,3 +268,4 @@ const Notifications = () => {
 };
 
 export default Notifications;
+

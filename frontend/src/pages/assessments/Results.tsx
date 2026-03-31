@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Award, ArrowRight, CheckCircle2, XCircle, Trophy, Star, MessageSquare } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -9,6 +10,7 @@ import VBadge from "@/components/ui-custom/VBadge";
 import VModal from "@/components/ui-custom/VModal";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
+import { fetchAssessmentLeaderboard } from "@/services/api";
 
 type ResultState = {
   assessmentId?: string;
@@ -31,14 +33,6 @@ type ResultState = {
   total?: number;
 };
 
-const leaderboardData = [
-  { rank: 1, name: "Priya Patel", score: 92, time: "8:30" },
-  { rank: 2, name: "Aarav Sharma", score: 85, time: "9:15" },
-  { rank: 3, name: "Vikram Singh", score: 78, time: "9:45" },
-  { rank: 4, name: "Ananya Iyer", score: 72, time: "9:50" },
-  { rank: 5, name: "Rohan Gupta", score: 65, time: "10:00" },
-];
-
 const Results = () => {
   const location = useLocation();
   const state = (location.state ?? null) as ResultState | null;
@@ -58,12 +52,19 @@ const Results = () => {
   const percentage = backendResult
     ? Math.round(backendResult.percentage)
     : total > 0
-    ? Math.round((score / total) * 100)
-    : 0;
+      ? Math.round((score / total) * 100)
+      : 0;
   const passed = backendResult?.pass_fail ?? percentage >= 60;
   const answers = state?.answers ?? {};
   const questions = state?.questions ?? [];
   const perQuestionMap = Object.fromEntries((backendResult?.per_question ?? []).map((item) => [item.question_id, item]));
+  const assessmentId = state?.assessmentId;
+  const leaderboardQuery = useQuery({
+    queryKey: ["assessmentLeaderboard", assessmentId],
+    queryFn: () => fetchAssessmentLeaderboard(assessmentId ?? ""),
+    enabled: Boolean(showLeaderboard && passed && assessmentId),
+  });
+  const leaderboardEntries = leaderboardQuery.data?.entries ?? [];
 
   useEffect(() => {
     if (!state) return;
@@ -134,7 +135,7 @@ const Results = () => {
                   {passed ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Passed!</> : <><XCircle className="h-4 w-4 mr-1" /> Failed</>}
                 </VBadge>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {passed ? "Great work! Backend grading marked this attempt as pass." : "Keep going — backend grading marked this attempt as not passed yet."}
+                  {passed ? "Great work! Backend grading marked this attempt as pass." : "Keep going â€” backend grading marked this attempt as not passed yet."}
                 </p>
               </motion.div>
             </div>
@@ -149,7 +150,7 @@ const Results = () => {
                 <h3 className="text-lg font-semibold text-foreground">Leaderboard</h3>
               </div>
               <div className="space-y-2">
-                {leaderboardData.map((entry) => (
+                {leaderboardEntries.map((entry) => (
                   <div key={entry.rank} className="flex items-center gap-4 rounded-xl px-4 py-3 transition-all hover:bg-accent">
                     <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
                       entry.rank === 1 ? "bg-warning/10 text-warning" : entry.rank === 2 ? "bg-muted text-muted-foreground" : entry.rank === 3 ? "bg-warning/5 text-warning/70" : "bg-muted text-muted-foreground"
@@ -157,12 +158,17 @@ const Results = () => {
                       {entry.rank <= 3 ? <Trophy className="h-4 w-4" /> : entry.rank}
                     </span>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground">{entry.name}</p>
+                      <p className="text-sm font-medium text-foreground">{entry.student_name}</p>
                     </div>
-                    <span className="text-sm font-bold text-foreground">{entry.score}%</span>
-                    <span className="text-xs text-muted-foreground">{entry.time}</span>
+                    <span className="text-sm font-bold text-foreground">{Math.round(entry.average_percentage)}%</span>
+                    <span className="text-xs text-muted-foreground">{entry.attempts} attempts</span>
                   </div>
                 ))}
+                {!leaderboardEntries.length && (
+                  <p className="text-sm text-muted-foreground">
+                    {leaderboardQuery.isLoading ? "Loading leaderboard..." : "No leaderboard entries yet."}
+                  </p>
+                )}
               </div>
             </VCard>
           </motion.div>
@@ -215,7 +221,7 @@ const Results = () => {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Help us improve! Rate the assessment and share your thoughts.</p>
           <div className="flex items-center justify-center gap-2">
-            {[1, 2, 3, 4, 5].map(s => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <button key={s} onClick={() => setFeedbackRating(s)} className="transition-transform hover:scale-110">
                 <Star className={`h-8 w-8 ${s <= feedbackRating ? "fill-warning text-warning" : "text-muted-foreground"}`} />
               </button>

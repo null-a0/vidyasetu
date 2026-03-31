@@ -12,7 +12,7 @@ import VModal from "@/components/ui-custom/VModal";
 import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchWorkshops } from "@/services/api";
+import { fetchInstitutionDashboardAggregate, fetchWorkshops } from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
 
 const iconColors = [
@@ -22,34 +22,16 @@ const iconColors = [
   "bg-success/10 text-success",
 ];
 
-const statsData = [
-  { label: "Institution Workshops", value: "12", icon: BookOpen, trend: "+3", up: true },
-  { label: "Educators", value: "8", icon: Users, trend: "+2", up: true },
-  { label: "Active Assessments", value: "6", icon: ClipboardList, trend: "-1", up: false },
-  { label: "Certificates Issued", value: "145", icon: Award, trend: "+22%", up: true },
+const FALLBACK_STATS_DATA = [
+  { label: "Institution Workshops", value: "0", icon: BookOpen, trend: "0", up: true },
+  { label: "Educators", value: "0", icon: Users, trend: "0", up: true },
+  { label: "Active Assessments", value: "0", icon: ClipboardList, trend: "0", up: true },
+  { label: "Students", value: "0", icon: Award, trend: "0", up: true },
 ];
 
-const alerts = [
-  { id: "1", text: "Cloud Computing Basics workshop starting in 2 weeks", type: "warning" },
-  { id: "2", text: "5 students pending certificate approval", type: "info" },
-  { id: "3", text: "React Fundamentals enrollment target reached", type: "success" },
-];
-
-const recentActivity = [
-  { id: "1", text: "Dr. Anand uploaded 'React Hooks Guide'", time: "10 min ago" },
-  { id: "2", text: "42 students enrolled in React Fundamentals", time: "1 hour ago" },
-  { id: "3", text: "Assessment results published for UI/UX", time: "3 hours ago" },
-  { id: "4", text: "New educator Dr. Meera onboarded", time: "Yesterday" },
-];
-
-const enrollmentData = [
-  { month: "Jan", students: 120 },
-  { month: "Feb", students: 185 },
-  { month: "Mar", students: 210 },
-  { month: "Apr", students: 165 },
-  { month: "May", students: 240 },
-  { month: "Jun", students: 280 },
-];
+const FALLBACK_ALERTS: Array<{ id: string; text: string; type: "warning" | "info" | "success" }> = [];
+const FALLBACK_ACTIVITY: Array<{ id: string; text: string; time: string }> = [];
+const FALLBACK_ENROLLMENT_DATA: Array<{ month: string; students: number }> = [];
 
 const studentData = [
   { id: "1", name: "Aarav Sharma", email: "aarav@student.com", workshop: "React Fundamentals", status: "Active" },
@@ -72,9 +54,66 @@ const InstitutionDashboard = () => {
   const navigate = useNavigate();
   const { showToast } = useVToast();
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
+  const institutionAggregateQuery = useQuery({
+    queryKey: ["institutionDashboardAggregate"],
+    queryFn: fetchInstitutionDashboardAggregate,
+  });
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "attendance" | "reports">("overview");
   const [createModal, setCreateModal] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const aggregate = institutionAggregateQuery.data;
+  const statsData = aggregate
+    ? [
+        {
+          label: "Institution Workshops",
+          value: String(aggregate.kpis.workshops ?? 0),
+          icon: BookOpen,
+          trend: String(aggregate.kpis.workshops ?? 0),
+          up: true,
+        },
+        {
+          label: "Educators",
+          value: String(aggregate.kpis.educators ?? 0),
+          icon: Users,
+          trend: String(aggregate.kpis.educators ?? 0),
+          up: true,
+        },
+        {
+          label: "Active Assessments",
+          value: String(aggregate.kpis.active_assessments ?? 0),
+          icon: ClipboardList,
+          trend: String(aggregate.kpis.active_assessments ?? 0),
+          up: true,
+        },
+        {
+          label: "Students",
+          value: String(aggregate.kpis.students ?? 0),
+          icon: Award,
+          trend: String(aggregate.kpis.students ?? 0),
+          up: true,
+        },
+      ]
+    : FALLBACK_STATS_DATA;
+  const alerts = (aggregate?.alerts ?? FALLBACK_ALERTS).map((item) => ({
+    id: item.id,
+    text: item.text,
+    type: ((item.level === "warning" || item.level === "success") ? item.level : "info") as "warning" | "success" | "info",
+  }));
+  const recentActivity = (aggregate?.activity_feed ?? FALLBACK_ACTIVITY).map((item) => ({
+    id: item.id,
+    text: item.text,
+    time: item.time,
+  }));
+  const enrollmentData = (aggregate?.enrollment_trend ?? FALLBACK_ENROLLMENT_DATA).map((item) => ({
+    month: item.label,
+    students: Math.round(item.value),
+  }));
+  const reportCards = aggregate?.report_cards ?? {
+    average_score: 0,
+    completion_rate: 0,
+    top_workshop: "—",
+    pass_rate: 0,
+  };
 
   const toggleStudent = (id: string) => {
     setSelectedStudents(prev => {
@@ -135,6 +174,9 @@ const InstitutionDashboard = () => {
       {/* ═══ OVERVIEW ═══ */}
       {activeTab === "overview" && (
         <>
+          {institutionAggregateQuery.isLoading && (
+            <p className="text-xs text-muted-foreground mb-3">Loading institution aggregate metrics...</p>
+          )}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-8">
             {statsData.map(({ label, value, icon: Icon, trend, up }, i) => (
               <VCard key={label} hover className="p-5 cursor-pointer" onClick={() => showToast("info", label, `Showing ${label.toLowerCase()} details`)}>
@@ -209,6 +251,7 @@ const InstitutionDashboard = () => {
       {/* ═══ STUDENTS ═══ */}
       {activeTab === "students" && (
         <>
+          <p className="text-xs text-muted-foreground mb-3">Fallback panel: institution-wide student roster/report contract is not fully available yet.</p>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">{selectedStudents.size} selected</p>
             <div className="flex gap-2">
@@ -268,6 +311,7 @@ const InstitutionDashboard = () => {
       {/* ═══ ATTENDANCE ═══ */}
       {activeTab === "attendance" && (
         <VCard className="overflow-hidden">
+          <p className="text-xs text-muted-foreground px-5 pt-4">Fallback panel: attendance report contract for this widget is not available yet.</p>
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h3 className="text-base font-semibold text-foreground">Weekly Attendance — React Fundamentals</h3>
             <VButton variant="secondary" size="sm" onClick={() => showToast("info", "Attendance exported")}>
@@ -326,10 +370,10 @@ const InstitutionDashboard = () => {
           </VCard>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Average Score", value: "76%", desc: "Across all assessments" },
-              { label: "Completion Rate", value: "82%", desc: "Workshop completion" },
-              { label: "Top Workshop", value: "React", desc: "Highest enrollment" },
-              { label: "Pass Rate", value: "89%", desc: "Assessment pass rate" },
+              { label: "Average Score", value: `${Math.round(Number(reportCards.average_score ?? 0))}%`, desc: "Across all assessments" },
+              { label: "Completion Rate", value: `${Math.round(Number(reportCards.completion_rate ?? 0))}%`, desc: "Workshop completion" },
+              { label: "Top Workshop", value: String(reportCards.top_workshop ?? "—"), desc: "Highest enrollment" },
+              { label: "Pass Rate", value: `${Math.round(Number(reportCards.pass_rate ?? 0))}%`, desc: "Assessment pass rate" },
             ].map((item) => (
               <VCard key={item.label} hover className="p-5 cursor-pointer" onClick={() => showToast("info", item.label, item.desc)}>
                 <p className="text-sm text-muted-foreground">{item.label}</p>

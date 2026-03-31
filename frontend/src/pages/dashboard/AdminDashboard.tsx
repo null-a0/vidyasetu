@@ -13,7 +13,7 @@ import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { createWorkshop, deleteWorkshop, fetchAdminStats, fetchInstitutions, fetchWorkshops, updateWorkshop } from "@/services/api";
+import { createWorkshop, deleteWorkshop, fetchAdminDashboardInsights, fetchAdminStats, fetchInstitutions, fetchWorkshops, updateWorkshop } from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
 
 const iconColors = [
@@ -63,8 +63,18 @@ const AdminDashboard = () => {
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
   const { data: stats } = useQuery({ queryKey: ["adminStats"], queryFn: fetchAdminStats });
+  const insightsQuery = useQuery({ queryKey: ["adminDashboardInsights"], queryFn: fetchAdminDashboardInsights });
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
   const { data: institutions = [] } = useQuery({ queryKey: ["institutions"], queryFn: fetchInstitutions });
+  const insights = insightsQuery.data;
+  const weeklyActivity = (insights?.weekly_activity ?? []).map((point) => ({ day: point.label, value: point.value }));
+  const demographicData = insights?.demographics?.length ? insights.demographics : FALLBACK_DEMOGRAPHIC_DATA;
+  const activityFeed = (insights?.activity_feed ?? FALLBACK_ACTIVITY_FEED).map((item) => ({
+    id: item.id,
+    text: item.text,
+    time: item.time,
+    type: item.type,
+  }));
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWorkshop, setSelectedWorkshop] = useState<Workshop | null>(null);
@@ -289,22 +299,22 @@ const AdminDashboard = () => {
           <div className="flex items-center justify-between px-5 pt-5 pb-2">
             <div>
               <h3 className="text-base font-semibold text-foreground">Platform Activity</h3>
-              <p className="text-sm text-muted-foreground">Weekly overview (fallback)</p>
+              <p className="text-sm text-muted-foreground">Weekly overview</p>
             </div>
           </div>
           <div className="flex gap-3 px-5 pb-3 flex-wrap">
             <div className="rounded-xl bg-primary/10 px-4 py-2">
               <p className="text-xs text-primary font-semibold">This Week</p>
-              <p className="text-lg font-bold text-foreground">611</p>
+              <p className="text-lg font-bold text-foreground">{Math.round((weeklyActivity.length ? weeklyActivity : FALLBACK_WEEKLY_ACTIVITY).reduce((sum, item) => sum + item.value, 0))}</p>
             </div>
             <div className="rounded-xl bg-muted px-4 py-2">
-              <p className="text-xs text-muted-foreground">Completed</p>
-              <p className="text-lg font-bold text-foreground">568</p>
+              <p className="text-xs text-muted-foreground">Peak Day</p>
+              <p className="text-lg font-bold text-foreground">{Math.round(Math.max(...(weeklyActivity.length ? weeklyActivity : FALLBACK_WEEKLY_ACTIVITY).map((item) => item.value), 0))}</p>
             </div>
           </div>
           <div className="h-52 px-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={FALLBACK_WEEKLY_ACTIVITY}>
+              <AreaChart data={weeklyActivity.length ? weeklyActivity : FALLBACK_WEEKLY_ACTIVITY}>
                 <defs>
                   <linearGradient id="adminAreaGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
@@ -346,11 +356,11 @@ const AdminDashboard = () => {
         <VCard className="p-0">
           <div className="px-5 pt-5 pb-4">
             <h3 className="text-base font-semibold text-foreground">Student Demographics</h3>
-            <p className="text-sm text-muted-foreground">Age distribution (fallback)</p>
+            <p className="text-sm text-muted-foreground">{insights?.demographics?.length ? "Institution distribution" : "Age distribution (fallback)"}</p>
           </div>
           <div className="h-52 px-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={FALLBACK_DEMOGRAPHIC_DATA}>
+              <BarChart data={demographicData}>
                 <XAxis dataKey="range" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", fontSize: 13, background: "hsl(var(--card))", color: "hsl(var(--foreground))" }} />
@@ -362,9 +372,9 @@ const AdminDashboard = () => {
         </VCard>
 
         <VCard className="p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">Activity Feed (fallback)</h3>
+          <h3 className="text-base font-semibold text-foreground mb-4">Activity Feed</h3>
           <div className="space-y-1">
-            {FALLBACK_ACTIVITY_FEED.map((item) => (
+            {activityFeed.map((item) => (
               <button
                 key={item.id}
                 onClick={() => { setHighlightedActivity(item.id); showToast("info", item.text); }}

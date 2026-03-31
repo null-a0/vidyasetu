@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload, Eye, Trash2, Download, FileText, Presentation, Search } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VTable from "@/components/ui-custom/VTable";
@@ -12,7 +12,7 @@ import VDrawer from "@/components/ui-custom/VDrawer";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
-import { fetchMaterials } from "@/services/api";
+import { deleteModuleMaterial, fetchMaterials, fetchWorkshopModules, fetchWorkshops, uploadModuleMaterial } from "@/services/api";
 import type { Material } from "@/mock/mockData";
 
 const fileIcons: Record<string, React.ElementType> = { PDF: FileText, PPTX: Presentation, DOC: FileText, TXT: FileText };
@@ -20,8 +20,9 @@ const fileIcons: Record<string, React.ElementType> = { PDF: FileText, PPTX: Pres
 const MaterialsPage = () => {
   const role = useRole();
   const { showToast } = useVToast();
-  const { data: initialMaterials = [] } = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
-  const [materials, setMaterials] = useState<Material[]>([]);
+  const queryClient = useQueryClient();
+  const { data: all = [] } = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
+  const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
   const [search, setSearch] = useState("");
   const [uploadModal, setUploadModal] = useState(false);
   const [viewDrawer, setViewDrawer] = useState(false);
@@ -30,10 +31,45 @@ const MaterialsPage = () => {
   const [formTitle, setFormTitle] = useState("");
   const [formWorkshop, setFormWorkshop] = useState("");
   const [formType, setFormType] = useState("PDF");
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
-  const all = materials.length > 0 ? materials : initialMaterials;
   const filtered = all.filter(m => m.title.toLowerCase().includes(search.toLowerCase()) || m.workshop.toLowerCase().includes(search.toLowerCase()));
   const canUpload = role !== "student";
+
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!fileToUpload) throw new Error("Please choose a file.");
+      const workshop = workshops.find((item) => item.name === formWorkshop);
+      if (!workshop) throw new Error("Select a valid workshop.");
+      const modules = await fetchWorkshopModules(workshop.id);
+      if (modules.length === 0) throw new Error("No module exists for this workshop. Create a module first.");
+      return uploadModuleMaterial(modules[0].id, fileToUpload);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["materials"] });
+      setUploadModal(false);
+      setFileToUpload(null);
+      showToast("success", "Material Uploaded");
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Upload Failed", err instanceof Error ? err.message : "Unable to upload material.");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (material: Material) => {
+      if (!material.moduleId) throw new Error("Missing module mapping for this material.");
+      return deleteModuleMaterial(material.moduleId, material.id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["materials"] });
+      setDeleteDialog(false);
+      showToast("success", "Material Deleted");
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Delete Failed", err instanceof Error ? err.message : "Unable to delete material.");
+    },
+  });
 
   const columns = [
     { key: "title", header: "Title", render: (r: Material) => {
@@ -70,11 +106,8 @@ const MaterialsPage = () => {
           <VSelect label="File Type" value={formType} onChange={e => setFormType(e.target.value)} options={[
             { value: "PDF", label: "PDF Document" }, { value: "PPTX", label: "Presentation" }, { value: "DOC", label: "Document" }, { value: "TXT", label: "Text File" },
           ]} />
-          <VInput label="File" type="file" />
-          <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setUploadModal(false)}>Cancel</VButton><VButton onClick={() => {
-            const nm: Material = { id: Date.now().toString(), title: formTitle, workshop: formWorkshop, fileType: formType, uploadDate: new Date().toISOString().split("T")[0] };
-            setMaterials([nm, ...all]); setUploadModal(false); showToast("success", "Material Uploaded", `"${formTitle}" added successfully`);
-          }} disabled={!formTitle}>Upload</VButton></div>
+          <VInput label="File" type="file" onChange={(e) => setFileToUpload((e.target as HTMLInputElement).files?.[0] ?? null)} />
+          <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setUploadModal(false)}>Cancel</VButton><VButton onClick={() => uploadMutation.mutate()} disabled={!formTitle || !fileToUpload || uploadMutation.isPending}>Upload</VButton></div>
         </div>
       </VModal>
 
@@ -96,7 +129,8 @@ const MaterialsPage = () => {
       </VDrawer>
 
       <VConfirmDialog isOpen={deleteDialog} onClose={() => setDeleteDialog(false)} onConfirm={() => {
-        setMaterials(all.filter(m => m.id !== selected?.id)); setDeleteDialog(false); showToast("success", "Material Deleted");
+        if (!selected) return;
+        deleteMutation.mutate(selected);
       }} title="Delete Material" message={`Delete "${selected?.title}"?`} />
     </DashboardLayout>
   );

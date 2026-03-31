@@ -200,3 +200,99 @@ export interface BackendSalaryPayment {
   status: string;
   created_at?: string | null;
 }
+
+export interface BackendQuestionOption {
+  id: string;
+  text: string;
+  is_correct?: boolean;
+}
+
+export interface BackendQuestion {
+  id: string;
+  assessment_id?: string | null;
+  text?: string | null;
+  type?: string | null;
+  marks?: number | null;
+  options: BackendQuestionOption[];
+}
+
+export interface BackendLeaderboardEntry {
+  rank: number;
+  student_id: string;
+  student_name: string;
+  average_percentage: number;
+  attempts: number;
+  passed: number;
+}
+
+export interface BackendAssessmentLeaderboard {
+  assessment_id: string;
+  entries: BackendLeaderboardEntry[];
+}
+
+export interface BackendWorkshopLeaderboard {
+  workshop_id: string;
+  entries: BackendLeaderboardEntry[];
+}
+
+export interface BackendDashboardSeriesPoint {
+  label: string;
+  value: number;
+}
+
+export interface BackendDashboardAlertItem {
+  id: string;
+  text: string;
+  level: string;
+}
+
+export interface BackendDashboardActivityItem {
+  id: string;
+  text: string;
+  time: string;
+  type: string;
+}
+
+export interface BackendInstitutionDashboardAggregate {
+  kpis: Record<string, number | string>;
+  alerts: BackendDashboardAlertItem[];
+  activity_feed: BackendDashboardActivityItem[];
+  attendance_trend: BackendDashboardSeriesPoint[];
+  enrollment_trend: BackendDashboardSeriesPoint[];
+  report_cards: Record<string, number | string>;
+}
+
+export interface BackendAdminDashboardInsights {
+  weekly_activity: BackendDashboardSeriesPoint[];
+  demographics: Array<{ range: string; male: number; female: number }>;
+  activity_feed: BackendDashboardActivityItem[];
+}
+
+export interface BackendSubmissionReviewQuestion {
+  question_id: string;
+  question_text: string;
+  selected_option_ids: string[];
+  selected_option_texts: string[];
+  correct_option_ids: string[];
+  correct_option_texts: string[];
+  earned_marks: number;
+  max_marks: number;
+  is_correct: boolean;
+}
+
+export interface BackendSubmissionReview {
+  submission_id: string;
+  assessment_id: string;
+  student_id: string;
+  score: number;
+  total_marks: number;
+  percentage: number;
+  pass_fail: boolean;
+  questions: BackendSubmissionReviewQuestion[];
+}
+
+export interface BackendParentMessageResponse {
+  accepted: number;
+  failed: number;
+  message: string;
+}

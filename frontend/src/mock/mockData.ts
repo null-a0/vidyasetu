@@ -25,6 +25,7 @@ export interface Material {
   workshop: string;
   fileType: string;
   uploadDate: string;
+  moduleId?: string;
 }
 
 export interface Assessment {

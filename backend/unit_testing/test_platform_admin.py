@@ -257,3 +257,41 @@ def test_admin_users_and_institutions_endpoints(client_and_state):
     institutions_response = client.get("/api/v1/institutions/")
     assert institutions_response.status_code == 200
     assert any(item["id"] == "inst-1" for item in institutions_response.json())
+
+
+def test_admin_new_analytics_endpoints(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    assessment_lb = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1")
+    assert assessment_lb.status_code == 200
+    assert assessment_lb.json()["assessment_id"] == "assessment-1"
+    assert len(assessment_lb.json()["entries"]) >= 1
+
+    workshop_lb = client.get("/api/v1/analytics/leaderboard/workshop/workshop-1")
+    assert workshop_lb.status_code == 200
+    assert workshop_lb.json()["workshop_id"] == "workshop-1"
+
+    admin_insights = client.get("/api/v1/analytics/admin/insights")
+    assert admin_insights.status_code == 200
+    payload = admin_insights.json()
+    assert "weekly_activity" in payload
+    assert "activity_feed" in payload
+
+
+def test_admin_parent_communication_dispatch(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    response = client.post(
+        "/api/v1/communication/parent-email",
+        json={
+            "student_ids": ["user-student"],
+            "subject": "Attendance Follow-up",
+            "body": "Please connect with mentor.",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["accepted"] == 1
+    assert payload["failed"] == 0

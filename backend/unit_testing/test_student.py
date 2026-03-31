@@ -290,3 +290,25 @@ def test_student_forbidden_from_other_student_data(client_and_state):
 
     other_dashboard = client.get("/api/v1/dashboard/student/student-2")
     assert other_dashboard.status_code == 403
+
+
+def test_student_leaderboard_access_and_staff_only_guards(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    assessment_lb = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1")
+    assert assessment_lb.status_code == 200
+    assert assessment_lb.json()["assessment_id"] == "assessment-1"
+
+    workshop_lb = client.get("/api/v1/analytics/leaderboard/workshop/workshop-1")
+    assert workshop_lb.status_code == 200
+    assert workshop_lb.json()["workshop_id"] == "workshop-1"
+
+    review_forbidden = client.get("/api/v1/submissions/submission-graded/review")
+    assert review_forbidden.status_code == 403
+
+    communication_forbidden = client.post(
+        "/api/v1/communication/parent-email",
+        json={"student_ids": ["student-1"], "subject": "Hi", "body": "Test"},
+    )
+    assert communication_forbidden.status_code == 403

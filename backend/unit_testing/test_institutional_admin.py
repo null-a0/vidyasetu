@@ -246,3 +246,39 @@ def test_institution_admin_can_create_approval_request(client_and_state):
     )
     assert response.status_code == 201
     assert response.json()["status"] == "pending"
+
+
+def test_institution_admin_dashboard_aggregate_and_leaderboards(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    aggregate = client.get("/api/v1/analytics/institution/dashboard")
+    assert aggregate.status_code == 200
+    payload = aggregate.json()
+    assert "kpis" in payload
+    assert "alerts" in payload
+    assert "attendance_trend" in payload
+
+    assessment_lb = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1")
+    assert assessment_lb.status_code == 200
+    assert assessment_lb.json()["assessment_id"] == "assessment-1"
+
+    workshop_lb = client.get("/api/v1/analytics/leaderboard/workshop/workshop-own")
+    assert workshop_lb.status_code == 200
+    assert workshop_lb.json()["workshop_id"] == "workshop-own"
+
+
+def test_institution_admin_parent_message_dispatch(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.post(
+        "/api/v1/communication/parent-email",
+        json={
+            "student_ids": ["student-1"],
+            "subject": "Progress Update",
+            "body": "Please review the latest grades.",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["accepted"] == 1

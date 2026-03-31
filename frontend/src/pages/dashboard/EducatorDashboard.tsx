@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, FileText, ClipboardList, Inbox, TrendingUp, TrendingDown, Plus, Eye, Upload, BarChart3 } from "lucide-react";
@@ -31,16 +31,6 @@ const statCards = [
   { key: "pendingSubmissions", label: "Pending Submissions", icon: Inbox },
 ] as const;
 
-const chartData = [
-  { day: "Mon", scheduled: 40, completed: 35 },
-  { day: "Tue", scheduled: 55, completed: 48 },
-  { day: "Wed", scheduled: 45, completed: 42 },
-  { day: "Thu", scheduled: 70, completed: 65 },
-  { day: "Fri", scheduled: 90, completed: 82 },
-  { day: "Sat", scheduled: 60, completed: 55 },
-  { day: "Sun", scheduled: 35, completed: 30 },
-];
-
 const quickActions = [
   { label: "Upload Material", icon: Upload, route: "/materials" },
   { label: "Create Assessment", icon: ClipboardList, route: "/assessments" },
@@ -54,6 +44,22 @@ const EducatorDashboard = () => {
   const { data: stats } = useQuery({ queryKey: ["dashboardStats"], queryFn: fetchDashboardStats });
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
   const [uploadModal, setUploadModal] = useState(false);
+  const chartData = useMemo(() => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const dayBuckets = days.map((day) => ({ day, scheduled: 0, completed: 0 }));
+    workshops.forEach((workshop) => {
+      const start = Date.parse(workshop.startDate);
+      const dayIndex = Number.isNaN(start) ? 0 : Math.max(0, Math.min(6, new Date(start).getDay() - 1));
+      dayBuckets[dayIndex].scheduled += 1;
+      if (workshop.status === "Completed") dayBuckets[dayIndex].completed += 1;
+      if (workshop.status === "Active") dayBuckets[dayIndex].completed += 0.5;
+    });
+    return dayBuckets.map((bucket) => ({
+      day: bucket.day,
+      scheduled: Math.round(bucket.scheduled * 20),
+      completed: Math.round(bucket.completed * 20),
+    }));
+  }, [workshops]);
 
   const workshopColumns = [
     { key: "name", header: "Workshop Name" },

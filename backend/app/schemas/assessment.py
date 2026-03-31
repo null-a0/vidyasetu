@@ -209,3 +209,26 @@ class GradeResult(BaseModel):
     percentage: float
     pass_fail: bool
     per_question: list[dict]  # [{question_id, earned, max}]
+
+
+class SubmissionReviewQuestion(BaseModel):
+    question_id: str
+    question_text: str
+    selected_option_ids: list[str] = []
+    selected_option_texts: list[str] = []
+    correct_option_ids: list[str] = []
+    correct_option_texts: list[str] = []
+    earned_marks: int
+    max_marks: int
+    is_correct: bool
+
+
+class SubmissionReviewResponse(BaseModel):
+    submission_id: str
+    assessment_id: str
+    student_id: str
+    score: int
+    total_marks: int
+    percentage: float
+    pass_fail: bool
+    questions: list[SubmissionReviewQuestion] = []

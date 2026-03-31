@@ -18,6 +18,7 @@ import type {
   BackendWorkshop,
   BackendModule,
   BackendAssessment,
+  BackendQuestion,
   BackendEnrollment,
   BackendCertificate,
   BackendNotification,
@@ -26,6 +27,12 @@ import type {
   BackendApprovalRequest,
   BackendSalaryPayment,
   BackendSubmission,
+  BackendAssessmentLeaderboard,
+  BackendWorkshopLeaderboard,
+  BackendAdminDashboardInsights,
+  BackendInstitutionDashboardAggregate,
+  BackendParentMessageResponse,
+  BackendSubmissionReview,
   TokenResponse,
   AdminStatsResponse,
   StudentStatsResponse,
@@ -118,6 +125,61 @@ export const fetchAssessments = async (): Promise<Assessment[]> => {
   );
   const assessments = assessmentPages.flatMap((page) => page.items);
   return adaptAssessments(assessments, workshopLookup);
+};
+
+export const createAssessment = async (payload: {
+  workshopId: string;
+  moduleId?: string | null;
+  title: string;
+  totalMarks: number;
+  passingMarks: number;
+}): Promise<BackendAssessment> => {
+  return apiPost<BackendAssessment>('/assessments/', {
+    workshop_id: payload.workshopId,
+    module_id: payload.moduleId ?? null,
+    title: payload.title,
+    total_marks: payload.totalMarks,
+    pass_mark: payload.passingMarks,
+  });
+};
+
+export const updateAssessment = async (
+  assessmentId: string,
+  payload: { title?: string; totalMarks?: number; passingMarks?: number; moduleId?: string | null }
+): Promise<BackendAssessment> => {
+  return apiPatch<BackendAssessment>(`/assessments/${assessmentId}`, {
+    ...(payload.title !== undefined ? { title: payload.title } : {}),
+    ...(payload.totalMarks !== undefined ? { total_marks: payload.totalMarks } : {}),
+    ...(payload.passingMarks !== undefined ? { pass_mark: payload.passingMarks } : {}),
+    ...(payload.moduleId !== undefined ? { module_id: payload.moduleId } : {}),
+  });
+};
+
+export const deleteAssessment = async (assessmentId: string): Promise<void> => {
+  await apiDelete<void>(`/assessments/${assessmentId}`);
+};
+
+export const fetchAssessmentQuestions = async (assessmentId: string): Promise<BackendQuestion[]> => {
+  const page = await apiGet<ApiPage<BackendQuestion>>(`/assessments/${assessmentId}/questions`, { params: { limit: 200 } });
+  return page.items;
+};
+
+export const createAssessmentQuestion = async (
+  assessmentId: string,
+  payload: {
+    text: string;
+    type: string;
+    marks: number;
+    options: Array<{ id: string; text: string; is_correct: boolean }>;
+  }
+): Promise<BackendQuestion> => {
+  return apiPost<BackendQuestion>(`/assessments/${assessmentId}/questions`, {
+    assessment_id: assessmentId,
+    text: payload.text,
+    type: payload.type.toLowerCase(),
+    marks: payload.marks,
+    options: payload.options,
+  });
 };
 
 export interface AttemptQuestionOption {
@@ -310,6 +372,26 @@ export const fetchNotifications = async (userId: string): Promise<Notification[]
   return adaptNotifications(data.items);
 };
 
+export const markNotificationRead = async (notificationId: string): Promise<BackendNotification> => {
+  return apiPatch<BackendNotification>(`/notifications/${notificationId}/read`);
+};
+
+export const deleteNotification = async (notificationId: string): Promise<void> => {
+  await apiDelete<void>(`/notifications/${notificationId}`);
+};
+
+export const sendBulkNotifications = async (payload: {
+  userIds: string[];
+  message: string;
+  notificationType?: string;
+}): Promise<BackendNotification[]> => {
+  return apiPost<BackendNotification[]>('/notifications/send', {
+    user_ids: payload.userIds,
+    message: payload.message,
+    notification_type: payload.notificationType ?? 'general',
+  });
+};
+
 export const fetchSubmissions = async (): Promise<Submission[]> => {
   const workshopPage = await apiGet<ApiPage<BackendWorkshop>>('/workshops/', { params: { limit: 6 } });
   const assessmentPages = await Promise.all(
@@ -342,6 +424,20 @@ export const fetchSubmissions = async (): Promise<Submission[]> => {
     status: s.pass_fail === null || s.pass_fail === undefined ? 'Pending' : 'Graded',
     submittedAt: formatDateTime(s.submitted_at),
   }));
+};
+
+export const fetchSubmissionResult = async (submissionId: string): Promise<BackendSubmission> => {
+  return apiGet<BackendSubmission>(`/submissions/${submissionId}/result`);
+};
+
+export const uploadModuleMaterial = async (moduleId: string, file: File): Promise<BackendModule> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiPost<BackendModule>(`/modules/${moduleId}/materials/upload`, formData);
+};
+
+export const deleteModuleMaterial = async (moduleId: string, materialId: string): Promise<BackendModule> => {
+  return apiDelete<BackendModule>(`/materials/${moduleId}/${materialId}`);
 };
 
 export const fetchAdminStats = async () => {
@@ -468,6 +564,38 @@ export const fetchWorkshopAnalytics = async (workshopId: string): Promise<Worksh
 export const fetchStudentAnalytics = async (studentId: string): Promise<StudentAnalyticsView> => {
   const data = await apiGet<BackendStudentAnalytics>('/analytics/student/' + studentId);
   return adaptStudentAnalytics(data);
+};
+
+export const fetchAssessmentLeaderboard = async (assessmentId: string): Promise<BackendAssessmentLeaderboard> => {
+  return apiGet<BackendAssessmentLeaderboard>(`/analytics/leaderboard/assessment/${assessmentId}`);
+};
+
+export const fetchWorkshopLeaderboard = async (workshopId: string): Promise<BackendWorkshopLeaderboard> => {
+  return apiGet<BackendWorkshopLeaderboard>(`/analytics/leaderboard/workshop/${workshopId}`);
+};
+
+export const fetchInstitutionDashboardAggregate = async (): Promise<BackendInstitutionDashboardAggregate> => {
+  return apiGet<BackendInstitutionDashboardAggregate>('/analytics/institution/dashboard');
+};
+
+export const fetchAdminDashboardInsights = async (): Promise<BackendAdminDashboardInsights> => {
+  return apiGet<BackendAdminDashboardInsights>('/analytics/admin/insights');
+};
+
+export const sendParentEmailMessage = async (payload: {
+  studentIds: string[];
+  subject: string;
+  body: string;
+}): Promise<BackendParentMessageResponse> => {
+  return apiPost<BackendParentMessageResponse>('/communication/parent-email', {
+    student_ids: payload.studentIds,
+    subject: payload.subject,
+    body: payload.body,
+  });
+};
+
+export const fetchSubmissionReview = async (submissionId: string): Promise<BackendSubmissionReview> => {
+  return apiGet<BackendSubmissionReview>(`/submissions/${submissionId}/review`);
 };
 
 

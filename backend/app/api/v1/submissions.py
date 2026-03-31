@@ -6,12 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams, get_current_user, get_db, require_role
 from app.crud.crud_assessment import (
     append_answers,
+    get_assessment,
+    get_questions_by_assessment,
     get_submission,
     get_submissions_by_assessment,
     get_submissions_by_student,
 )
 from app.models import User, UserRole
-from app.schemas.assessment import AnswerBatch, SubmissionResponse
+from app.schemas.assessment import AnswerBatch, SubmissionResponse, SubmissionReviewQuestion, SubmissionReviewResponse
 from app.schemas.base import Page
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
@@ -135,4 +137,71 @@ async def list_by_assessment(
         total=total,
         offset=page.offset,
         limit=page.limit,
+    )
+
+
+@router.get(
+    "/{submission_id}/review",
+    response_model=SubmissionReviewResponse,
+    summary="Detailed graded submission review for staff",
+)
+async def review_submission(
+    submission_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(*_STAFF)),
+) -> SubmissionReviewResponse:
+    submission = await get_submission(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+    if submission.pass_fail is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission is not graded yet.")
+
+    assessment = await get_assessment(db, submission.assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+
+    questions, _ = await get_questions_by_assessment(db, submission.assessment_id, limit=500)
+    answer_lookup = {
+        item.get("question_id"): item.get("selected_option_ids", [])
+        for item in (submission.answers or [])
+        if isinstance(item, dict)
+    }
+
+    review_rows: list[SubmissionReviewQuestion] = []
+    total_marks = 0
+    for question in questions:
+        options = question.options or []
+        correct_ids = [opt.get("id") for opt in options if opt.get("is_correct")]
+        selected_ids = answer_lookup.get(question.id, [])
+
+        selected_texts = [opt.get("text", "") for opt in options if opt.get("id") in selected_ids]
+        correct_texts = [opt.get("text", "") for opt in options if opt.get("id") in correct_ids]
+        max_marks = int(question.marks or 0)
+        is_correct = sorted(selected_ids) == sorted(correct_ids)
+        earned_marks = max_marks if is_correct else 0
+        total_marks += max_marks
+
+        review_rows.append(
+            SubmissionReviewQuestion(
+                question_id=question.id,
+                question_text=question.text or "",
+                selected_option_ids=selected_ids,
+                selected_option_texts=selected_texts,
+                correct_option_ids=correct_ids,
+                correct_option_texts=correct_texts,
+                earned_marks=earned_marks,
+                max_marks=max_marks,
+                is_correct=is_correct,
+            )
+        )
+
+    return SubmissionReviewResponse(
+        submission_id=submission.id,
+        assessment_id=submission.assessment_id,
+        student_id=submission.student_id,
+        score=int(submission.score or 0),
+        total_marks=total_marks,
+        percentage=float(submission.percentage or 0),
+        pass_fail=bool(submission.pass_fail),
+        questions=review_rows,
     )

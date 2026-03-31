@@ -112,6 +112,7 @@ export const adaptModulesToMaterials = (
   modules.flatMap((module) =>
     module.materials.map((material) => ({
       id: material.id,
+      moduleId: module.id,
       title: material.title,
       workshop: workshopLookup[module.workshop_id ?? ''] ?? 'Workshop',
       fileType: material.type.toUpperCase(),
@@ -223,3 +224,4 @@ export const adaptWorkshopAnalytics = (analytics: BackendWorkshopAnalytics): Wor
   passRatePercentage: Math.round(analytics.assessment.pass_rate_percentage ?? 0),
   attendancePercentage: Math.round(analytics.attendance.avg_attendance_percentage ?? 0),
 });
+

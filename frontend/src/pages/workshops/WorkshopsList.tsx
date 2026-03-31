@@ -14,16 +14,8 @@ import VDrawer from "@/components/ui-custom/VDrawer";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
-import { createWorkshop, deleteWorkshop, fetchWorkshops, updateWorkshop } from "@/services/api";
+import { createApprovalRequest, createWorkshop, deleteWorkshop, fetchWorkshopLeaderboard, fetchWorkshops, updateWorkshop } from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
-
-const workshopLeaderboard = [
-  { rank: 1, name: "Priya Patel", score: 95, assessments: 3 },
-  { rank: 2, name: "Aarav Sharma", score: 88, assessments: 3 },
-  { rank: 3, name: "Vikram Singh", score: 82, assessments: 2 },
-  { rank: 4, name: "Ananya Iyer", score: 76, assessments: 3 },
-  { rank: 5, name: "Rohan Gupta", score: 70, assessments: 2 },
-];
 
 const WorkshopsList = () => {
   const navigate = useNavigate();
@@ -47,6 +39,12 @@ const WorkshopsList = () => {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formInst, setFormInst] = useState("");
+  const leaderboardQuery = useQuery({
+    queryKey: ["workshopLeaderboard", selected?.id],
+    queryFn: () => fetchWorkshopLeaderboard(selected?.id ?? ""),
+    enabled: Boolean(selected?.id && leaderboardModal),
+  });
+  const workshopLeaderboard = leaderboardQuery.data?.entries ?? [];
 
   const isInstitution = role === "institution_admin";
 
@@ -91,12 +89,24 @@ const WorkshopsList = () => {
 
   const handleDelete = async (w: Workshop) => {
     if (isInstitution) {
-      setDeleteDialog(false);
-      showToast(
-        "info",
-        "Removal Request Sent",
-        `Request to delete "${w.name}" has been sent to Platform Admin for approval.`
-      );
+      try {
+        await createApprovalRequest({
+          request_type: "delete_workshop",
+          payload: { workshop_id: w.id, workshop_title: w.name, institution: w.institution },
+        });
+        setDeleteDialog(false);
+        showToast(
+          "info",
+          "Removal Request Sent",
+          `Request to delete "${w.name}" has been sent to Platform Admin for approval.`
+        );
+      } catch (err: unknown) {
+        showToast(
+          "destructive",
+          "Request Failed",
+          err instanceof Error ? err.message : "Unable to send request."
+        );
+      }
       return;
     }
 
@@ -239,18 +249,24 @@ const WorkshopsList = () => {
       {/* Workshop Leaderboard */}
       <VModal isOpen={leaderboardModal} onClose={() => setLeaderboardModal(false)} title={`Leaderboard — ${selected?.name || "Workshop"}`} className="max-w-lg">
         <div className="space-y-2">
+          {!selected?.id && <p className="text-xs text-muted-foreground px-1">Choose a workshop to load leaderboard entries.</p>}
           {workshopLeaderboard.map(entry => (
             <div key={entry.rank} className="flex items-center gap-4 rounded-xl px-4 py-3 hover:bg-accent transition-all">
               <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${entry.rank <= 3 ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground"}`}>
                 {entry.rank <= 3 ? <Trophy className="h-4 w-4" /> : entry.rank}
               </span>
               <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{entry.name}</p>
-                <p className="text-xs text-muted-foreground">{entry.assessments} assessments</p>
+                <p className="text-sm font-medium text-foreground">{entry.student_name}</p>
+                <p className="text-xs text-muted-foreground">{entry.attempts} attempts</p>
               </div>
-              <span className="text-sm font-bold text-foreground">{entry.score}%</span>
+              <span className="text-sm font-bold text-foreground">{Math.round(entry.average_percentage)}%</span>
             </div>
           ))}
+          {!workshopLeaderboard.length && (
+            <p className="text-sm text-muted-foreground px-1">
+              {leaderboardQuery.isLoading ? "Loading leaderboard..." : "No leaderboard entries yet."}
+            </p>
+          )}
         </div>
       </VModal>
 

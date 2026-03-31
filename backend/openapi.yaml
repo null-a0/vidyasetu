@@ -1,0 +1,5852 @@
+openapi: 3.1.0
+info:
+  title: VidyaSetu
+  version: 0.1.0
+paths:
+  /api/v1/auth/register:
+    post:
+      tags:
+      - auth
+      summary: Register a new user
+      operationId: register_api_v1_auth_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth
+      summary: Obtain a JWT access token
+      operationId: login_api_v1_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - auth
+      summary: Refresh an access token
+      description: Issue fresh access + refresh tokens from a valid refresh token.
+      operationId: refresh_token_api_v1_auth_refresh_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/forgot-password:
+    post:
+      tags:
+      - auth
+      summary: Start password reset flow
+      operationId: forgot_password_api_v1_auth_forgot_password_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/reset-password:
+    post:
+      tags:
+      - auth
+      summary: Reset password using email and a new password
+      operationId: reset_password_api_v1_auth_reset_password_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/users/:
+    get:
+      tags:
+      - users
+      summary: List all users (admin only; institution_admin sees their institution
+        only)
+      operationId: list_users_api_v1_users__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_UserResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/users/me:
+    get:
+      tags:
+      - users
+      summary: Current authenticated user
+      operationId: get_me_api_v1_users_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/users/{user_id}:
+    get:
+      tags:
+      - users
+      summary: Fetch user by ID
+      operationId: get_user_by_id_api_v1_users__user_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - users
+      summary: Update user profile
+      operationId: patch_user_api_v1_users__user_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/institutions/:
+    post:
+      tags:
+      - institutions
+      summary: Create institution (admin only)
+      operationId: create_api_v1_institutions__post
+      security:
+      - OAuth2PasswordBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstitutionCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitutionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - institutions
+      summary: List institutions
+      operationId: list_institutions_api_v1_institutions__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Offset
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InstitutionResponse'
+                title: Response List Institutions Api V1 Institutions  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/institutions/{institution_id}:
+    get:
+      tags:
+      - institutions
+      summary: Get institution by ID
+      operationId: get_one_api_v1_institutions__institution_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: institution_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Institution Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitutionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - institutions
+      summary: Update institution (admin only)
+      operationId: update_one_api_v1_institutions__institution_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: institution_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Institution Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstitutionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitutionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - institutions
+      summary: Delete institution (admin only)
+      operationId: delete_one_api_v1_institutions__institution_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: institution_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Institution Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workshops/:
+    post:
+      tags:
+      - workshops
+      summary: Create a workshop (admin / institution_admin / educator)
+      operationId: create_api_v1_workshops__post
+      security:
+      - OAuth2PasswordBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkshopCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkshopResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - workshops
+      summary: List workshops (scoped by institution for non-admins)
+      operationId: list_workshops_api_v1_workshops__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_WorkshopResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workshops/{workshop_id}:
+    get:
+      tags:
+      - workshops
+      summary: Get a workshop by ID
+      operationId: get_one_api_v1_workshops__workshop_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkshopResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - workshops
+      summary: Update a workshop
+      operationId: update_one_api_v1_workshops__workshop_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkshopUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkshopResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - workshops
+      summary: Delete a workshop (admin / institution_admin only)
+      operationId: delete_one_api_v1_workshops__workshop_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workshops/{workshop_id}/modules:
+    get:
+      tags:
+      - workshops
+      summary: List modules for a workshop
+      operationId: list_modules_api_v1_workshops__workshop_id__modules_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_ModuleResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/modules/:
+    post:
+      tags:
+      - modules
+      summary: Create a module
+      operationId: create_api_v1_modules__post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/modules/reorder:
+    patch:
+      tags:
+      - modules
+      summary: Batch-reorder modules by setting their order_index values
+      operationId: batch_reorder_api_v1_modules_reorder_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleReorderRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ModuleResponse'
+                type: array
+                title: Response Batch Reorder Api V1 Modules Reorder Patch
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/modules/{module_id}:
+    get:
+      tags:
+      - modules
+      summary: Get a module by ID
+      operationId: get_one_api_v1_modules__module_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - modules
+      summary: Update a module
+      operationId: update_one_api_v1_modules__module_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - modules
+      summary: Delete a module
+      operationId: delete_one_api_v1_modules__module_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/modules/{module_id}/materials/upload:
+    post:
+      tags:
+      - modules
+      summary: Upload a material file and append it to the module's materials list
+      operationId: upload_material_api_v1_modules__module_id__materials_upload_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_material_api_v1_modules__module_id__materials_upload_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/materials/{module_id}/{material_id}:
+    patch:
+      tags:
+      - materials
+      summary: Update a single material item inside a module (staff only)
+      operationId: patch_material_api_v1_materials__module_id___material_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      - name: material_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Material Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialItemUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - materials
+      summary: Remove a single material item from a module (staff only)
+      operationId: delete_material_api_v1_materials__module_id___material_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      - name: material_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Material Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/enrollments/:
+    post:
+      tags:
+      - enrollments
+      summary: Enrol a student in a workshop
+      operationId: enrol_api_v1_enrollments__post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/enrollments/student/{student_id}:
+    get:
+      tags:
+      - enrollments
+      summary: Get enrollments for a student
+      operationId: list_by_student_api_v1_enrollments_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_EnrollmentResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/enrollments/workshop/{workshop_id}:
+    get:
+      tags:
+      - enrollments
+      summary: Get all enrollments for a workshop (staff only)
+      operationId: list_by_workshop_api_v1_enrollments_workshop__workshop_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_EnrollmentResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/enrollments/{enrollment_id}:
+    get:
+      tags:
+      - enrollments
+      summary: Get a single enrollment
+      operationId: get_one_api_v1_enrollments__enrollment_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: enrollment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Enrollment Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - enrollments
+      summary: Update enrollment status (staff only)
+      operationId: update_one_api_v1_enrollments__enrollment_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: enrollment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Enrollment Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - enrollments
+      summary: Drop / delete an enrollment
+      operationId: delete_one_api_v1_enrollments__enrollment_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: enrollment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Enrollment Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/:
+    post:
+      tags:
+      - sessions
+      summary: Create a session (staff only)
+      operationId: create_api_v1_sessions__post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/sessions/workshop/{workshop_id}:
+    get:
+      tags:
+      - sessions
+      summary: List sessions for a workshop
+      operationId: list_by_workshop_api_v1_sessions_workshop__workshop_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_SessionResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}:
+    get:
+      tags:
+      - sessions
+      summary: Get a session by ID
+      operationId: get_one_api_v1_sessions__session_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - sessions
+      summary: Update a session (staff only)
+      operationId: update_one_api_v1_sessions__session_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - sessions
+      summary: Delete a session (staff only)
+      operationId: delete_one_api_v1_sessions__session_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/attendance:
+    post:
+      tags:
+      - sessions
+      summary: Mark attendance for a session (staff only)
+      operationId: mark_attendance_api_v1_sessions__session_id__attendance_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - sessions
+      summary: Get attendance records for a session (staff only)
+      operationId: list_attendance_api_v1_sessions__session_id__attendance_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_AttendanceResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/attendance/{attendance_id}:
+    patch:
+      tags:
+      - sessions
+      summary: Update an attendance record (staff only)
+      operationId: update_attendance_record_api_v1_sessions__session_id__attendance__attendance_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: attendance_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Attendance Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assessments/:
+    post:
+      tags:
+      - assessments
+      summary: Create an assessment (staff only)
+      operationId: create_api_v1_assessments__post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessmentCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/assessments/workshop/{workshop_id}:
+    get:
+      tags:
+      - assessments
+      summary: List assessments for a workshop
+      operationId: list_by_workshop_api_v1_assessments_workshop__workshop_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_AssessmentResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assessments/module/{module_id}:
+    get:
+      tags:
+      - assessments
+      summary: List assessments for a module
+      operationId: list_by_module_api_v1_assessments_module__module_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: module_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Module Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_AssessmentResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assessments/{assessment_id}:
+    get:
+      tags:
+      - assessments
+      summary: Get an assessment by ID
+      operationId: get_one_api_v1_assessments__assessment_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - assessments
+      summary: Update an assessment (staff only)
+      operationId: update_one_api_v1_assessments__assessment_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessmentUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - assessments
+      summary: Delete an assessment (staff only)
+      operationId: delete_one_api_v1_assessments__assessment_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assessments/{assessment_id}/questions:
+    post:
+      tags:
+      - assessments
+      summary: Add a question to an assessment (staff only)
+      operationId: add_question_api_v1_assessments__assessment_id__questions_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - assessments
+      summary: List questions for an assessment (staff sees is_correct)
+      operationId: list_questions_api_v1_assessments__assessment_id__questions_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_QuestionResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/questions/{question_id}:
+    patch:
+      tags:
+      - questions
+      summary: Update a question (staff only)
+      operationId: update_one_api_v1_questions__question_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - questions
+      summary: Delete a question (staff only)
+      operationId: delete_one_api_v1_questions__question_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tests/{assessment_id}/start:
+    post:
+      tags:
+      - tests
+      summary: "Start a test \u2014 creates a blank submission and returns questions\
+        \ (no correct answers)"
+      operationId: start_test_api_v1_tests__assessment_id__start_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestStartResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tests/{assessment_id}/submit:
+    post:
+      tags:
+      - tests
+      summary: "Submit test answers \u2014 auto-grades MCQ/MSQ, persists score and\
+        \ pass/fail"
+      operationId: submit_test_api_v1_tests__assessment_id__submit_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      - name: submission_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Submission Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/submissions/{submission_id}/answers:
+    post:
+      tags:
+      - submissions
+      summary: 'Append or replace answers in a submission (student: own only)'
+      operationId: post_answers_api_v1_submissions__submission_id__answers_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: submission_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Submission Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerBatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/submissions/{submission_id}/result:
+    get:
+      tags:
+      - submissions
+      summary: Get graded result of a submission
+      operationId: get_result_api_v1_submissions__submission_id__result_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: submission_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Submission Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/submissions/student/{student_id}:
+    get:
+      tags:
+      - submissions
+      summary: List all submissions for a student
+      operationId: list_by_student_api_v1_submissions_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_SubmissionResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/submissions/assessment/{assessment_id}:
+    get:
+      tags:
+      - submissions
+      summary: List all submissions for an assessment (staff only)
+      operationId: list_by_assessment_api_v1_submissions_assessment__assessment_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_SubmissionResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/submissions/{submission_id}/review:
+    get:
+      tags:
+      - submissions
+      summary: Detailed graded submission review for staff
+      operationId: review_submission_api_v1_submissions__submission_id__review_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: submission_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Submission Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionReviewResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/certificates/:
+    get:
+      tags:
+      - certificates
+      summary: List all certificates (staff only)
+      operationId: list_all_api_v1_certificates__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_CertificateResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/certificates/generate:
+    post:
+      tags:
+      - certificates
+      summary: Generate a certificate for a student (staff only)
+      operationId: generate_certificate_api_v1_certificates_generate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/certificates/{certificate_id}:
+    get:
+      tags:
+      - certificates
+      summary: Fetch a certificate by ID
+      operationId: get_one_api_v1_certificates__certificate_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: certificate_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Certificate Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/certificates/student/{student_id}:
+    get:
+      tags:
+      - certificates
+      summary: List all certificates for a student
+      operationId: list_by_student_api_v1_certificates_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_CertificateResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/certificates/verify/{verification_code}:
+    get:
+      tags:
+      - certificates
+      summary: Publicly verify a certificate by its verification code (no auth required)
+      operationId: verify_certificate_api_v1_certificates_verify__verification_code__get
+      parameters:
+      - name: verification_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Verification Code
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/fees/plans:
+    post:
+      tags:
+      - fees
+      summary: Create a fee plan (admin / institution_admin only)
+      operationId: create_plan_api_v1_fees_plans_post
+      security:
+      - OAuth2PasswordBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeePlanCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePlanResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - fees
+      summary: List all fee plans
+      operationId: list_plans_api_v1_fees_plans_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_FeePlanResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/fees/plans/{plan_id}:
+    get:
+      tags:
+      - fees
+      summary: Get a fee plan by ID
+      operationId: get_plan_api_v1_fees_plans__plan_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: plan_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plan Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePlanResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - fees
+      summary: Update a fee plan (admin / institution_admin only)
+      operationId: update_plan_api_v1_fees_plans__plan_id__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: plan_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plan Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeePlanUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePlanResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/fees/assign:
+    post:
+      tags:
+      - fees
+      summary: Assign a fee plan to a student
+      operationId: assign_fee_api_v1_fees_assign_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentFeeAssign'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentFeeResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/fees/student/{student_id}:
+    get:
+      tags:
+      - fees
+      summary: Get fee records for a student (with fee plan detail)
+      operationId: list_student_fees_api_v1_fees_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_StudentFeeResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/fees/{student_fee_id}:
+    get:
+      tags:
+      - fees
+      summary: Get a specific student fee record
+      operationId: get_student_fee_record_api_v1_fees__student_fee_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_fee_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Fee Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentFeeResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/payments/:
+    post:
+      tags:
+      - payments
+      summary: Record a payment (staff only); optionally credits a student fee balance
+      operationId: record_payment_api_v1_payments__post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/payments/{payment_id}:
+    get:
+      tags:
+      - payments
+      summary: Get a payment record by ID (staff only)
+      operationId: get_one_api_v1_payments__payment_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Payment Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/payments/student/{student_id}:
+    get:
+      tags:
+      - payments
+      summary: List payment history for a student (newest first)
+      operationId: list_by_student_api_v1_payments_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_PaymentResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/students/bulk-upload:
+    post:
+      tags:
+      - bulk
+      summary: Upload a CSV to bulk-create student accounts (admin / institution_admin
+        only)
+      operationId: bulk_upload_students_api_v1_students_bulk_upload_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_bulk_upload_students_api_v1_students_bulk_upload_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkStudentUploadResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/enrollments/bulk:
+    post:
+      tags:
+      - bulk
+      summary: Bulk enrol students in workshops (staff only)
+      operationId: bulk_enroll_api_v1_enrollments_bulk_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkEnrollmentRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkEnrollmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/attendance/bulk:
+    post:
+      tags:
+      - bulk
+      summary: Bulk mark attendance for a session (staff only)
+      operationId: bulk_attendance_api_v1_attendance_bulk_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkAttendanceRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkAttendanceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/communication/parent-email:
+    post:
+      tags:
+      - communication
+      summary: Dispatch parent communication message and log notifications
+      operationId: dispatch_parent_email_api_v1_communication_parent_email_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParentMessageRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParentMessageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/analytics/student/{student_id}:
+    get:
+      tags:
+      - analytics
+      summary: Get performance trends, average scores, and attendance % for a student
+      operationId: student_analytics_api_v1_analytics_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAnalyticsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analytics/attendance/{student_id}:
+    get:
+      tags:
+      - analytics
+      summary: Get detailed chronological attendance records for a student
+      operationId: student_attendance_api_v1_analytics_attendance__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAttendanceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analytics/workshop/{workshop_id}:
+    get:
+      tags:
+      - analytics
+      summary: Get cohort-level averages and pass rates for a workshop (staff only)
+      operationId: workshop_analytics_api_v1_analytics_workshop__workshop_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkshopAnalyticsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analytics/leaderboard/assessment/{assessment_id}:
+    get:
+      tags:
+      - analytics
+      summary: Assessment leaderboard ranked by average percentage
+      operationId: assessment_leaderboard_api_v1_analytics_leaderboard_assessment__assessment_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assessment Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentLeaderboardResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analytics/leaderboard/workshop/{workshop_id}:
+    get:
+      tags:
+      - analytics
+      summary: Workshop leaderboard ranked by average percentage across workshop assessments
+      operationId: workshop_leaderboard_api_v1_analytics_leaderboard_workshop__workshop_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: workshop_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workshop Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkshopLeaderboardResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analytics/institution/dashboard:
+    get:
+      tags:
+      - analytics
+      summary: Institution dashboard aggregate/reporting data
+      operationId: institution_dashboard_aggregate_api_v1_analytics_institution_dashboard_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitutionDashboardAggregateResponse'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/analytics/admin/insights:
+    get:
+      tags:
+      - analytics
+      summary: Admin dashboard insights for charts/activity feed
+      operationId: admin_insights_api_v1_analytics_admin_insights_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardInsightsResponse'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/notifications/send:
+    post:
+      tags:
+      - notifications
+      summary: Send a notification to multiple users concurrently (staff only)
+      operationId: send_notification_api_v1_notifications_send_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationBulkCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/NotificationResponse'
+                type: array
+                title: Response Send Notification Api V1 Notifications Send Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/notifications/{user_id}:
+    get:
+      tags:
+      - notifications
+      summary: List all notifications for a user (newest first)
+      operationId: list_notifications_api_v1_notifications__user_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_NotificationResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/notifications/{notification_id}/read:
+    patch:
+      tags:
+      - notifications
+      summary: Mark a notification as read
+      operationId: mark_read_api_v1_notifications__notification_id__read_patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: notification_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Notification Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/notifications/{notification_id}:
+    delete:
+      tags:
+      - notifications
+      summary: Delete a notification
+      operationId: delete_one_api_v1_notifications__notification_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: notification_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Notification Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/admin:
+    get:
+      tags:
+      - dashboard
+      summary: Admin dashboard summary stats (admin only)
+      operationId: admin_stats_api_v1_dashboard_admin_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardStats'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/dashboard/student/{student_id}:
+    get:
+      tags:
+      - dashboard
+      summary: Student dashboard summary stats
+      operationId: student_stats_api_v1_dashboard_student__student_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Student Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDashboardStats'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/educator:
+    get:
+      tags:
+      - dashboard
+      summary: Educator/institution dashboard summary stats (staff)
+      operationId: educator_stats_api_v1_dashboard_educator_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EducatorDashboardStats'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/approvals/requests:
+    post:
+      tags:
+      - approvals
+      summary: Create an approval request (staff only)
+      operationId: create_request_api_v1_approvals_requests_post
+      security:
+      - OAuth2PasswordBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequestCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - approvals
+      summary: List approval requests (admin only)
+      operationId: list_requests_api_v1_approvals_requests_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_ApprovalRequestResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/approvals/requests/{request_id}/approve:
+    post:
+      tags:
+      - approvals
+      summary: Approve a request (admin only)
+      operationId: approve_api_v1_approvals_requests__request_id__approve_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/approvals/requests/{request_id}/reject:
+    post:
+      tags:
+      - approvals
+      summary: Reject a request (admin only)
+      operationId: reject_api_v1_approvals_requests__request_id__reject_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/salaries/:
+    get:
+      tags:
+      - salaries
+      summary: List salary payments (admin only)
+      operationId: list_payments_api_v1_salaries__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: month
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Month
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of records to skip
+          default: 0
+          title: Offset
+        description: Number of records to skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum records to return
+          default: 50
+          title: Limit
+        description: Maximum records to return
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_SalaryPaymentResponse_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/salaries/pay:
+    post:
+      tags:
+      - salaries
+      summary: Mark an educator salary as paid for a month (admin only)
+      operationId: pay_api_v1_salaries_pay_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalaryPaymentCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalaryPaymentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /:
+    get:
+      tags:
+      - health
+      summary: Health
+      operationId: health__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health  Get
+components:
+  schemas:
+    AdminDashboardInsightsResponse:
+      properties:
+        weekly_activity:
+          items:
+            $ref: '#/components/schemas/DashboardSeriesPoint'
+          type: array
+          title: Weekly Activity
+          default: []
+        demographics:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Demographics
+        activity_feed:
+          items:
+            $ref: '#/components/schemas/DashboardActivityItem'
+          type: array
+          title: Activity Feed
+          default: []
+      type: object
+      required:
+      - demographics
+      title: AdminDashboardInsightsResponse
+    AdminDashboardStats:
+      properties:
+        total_institutions:
+          type: integer
+          title: Total Institutions
+        total_workshops:
+          type: integer
+          title: Total Workshops
+        total_educators:
+          type: integer
+          title: Total Educators
+        total_students:
+          type: integer
+          title: Total Students
+        certificates_issued:
+          type: integer
+          title: Certificates Issued
+        active_workshops:
+          type: integer
+          title: Active Workshops
+      type: object
+      required:
+      - total_institutions
+      - total_workshops
+      - total_educators
+      - total_students
+      - certificates_issued
+      - active_workshops
+      title: AdminDashboardStats
+    AnswerBatch:
+      properties:
+        answers:
+          items:
+            $ref: '#/components/schemas/AnswerItem'
+          type: array
+          title: Answers
+      type: object
+      required:
+      - answers
+      title: AnswerBatch
+      description: "Body for POST /submissions/{id}/answers \u2014 append/replace\
+        \ answers."
+    AnswerItem:
+      properties:
+        question_id:
+          type: string
+          title: Question Id
+        selected_option_ids:
+          items:
+            type: string
+          type: array
+          title: Selected Option Ids
+          default: []
+      type: object
+      required:
+      - question_id
+      title: AnswerItem
+    ApprovalRequestCreate:
+      properties:
+        request_type:
+          type: string
+          title: Request Type
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+          default: {}
+      type: object
+      required:
+      - request_type
+      title: ApprovalRequestCreate
+    ApprovalRequestResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        request_type:
+          type: string
+          title: Request Type
+        status:
+          type: string
+          title: Status
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+        requested_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Requested By
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+      type: object
+      required:
+      - id
+      - request_type
+      - status
+      - payload
+      - requested_by
+      - created_at
+      - resolved_at
+      title: ApprovalRequestResponse
+    AssessmentCreate:
+      properties:
+        workshop_id:
+          type: string
+          title: Workshop Id
+        module_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Module Id
+        title:
+          type: string
+          title: Title
+        total_marks:
+          type: integer
+          title: Total Marks
+          default: 0
+        pass_mark:
+          type: integer
+          title: Pass Mark
+          default: 0
+      type: object
+      required:
+      - workshop_id
+      - title
+      title: AssessmentCreate
+    AssessmentLeaderboardResponse:
+      properties:
+        assessment_id:
+          type: string
+          title: Assessment Id
+        entries:
+          items:
+            $ref: '#/components/schemas/LeaderboardEntry'
+          type: array
+          title: Entries
+          default: []
+      type: object
+      required:
+      - assessment_id
+      title: AssessmentLeaderboardResponse
+    AssessmentResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        workshop_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Id
+        module_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Module Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        total_marks:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Marks
+        pass_mark:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pass Mark
+          default: 0
+      type: object
+      required:
+      - id
+      - workshop_id
+      - module_id
+      - title
+      - total_marks
+      title: AssessmentResponse
+    AssessmentUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        total_marks:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Marks
+        pass_mark:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pass Mark
+        module_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Module Id
+      type: object
+      title: AssessmentUpdate
+    AttendanceCreate:
+      properties:
+        session_id:
+          type: string
+          title: Session Id
+        student_id:
+          type: string
+          title: Student Id
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - session_id
+      - student_id
+      - status
+      title: AttendanceCreate
+    AttendanceResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        student_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Id
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      required:
+      - id
+      - session_id
+      - student_id
+      - status
+      title: AttendanceResponse
+    AttendanceUpdate:
+      properties:
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      title: AttendanceUpdate
+    Body_bulk_upload_students_api_v1_students_bulk_upload_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+          description: 'CSV with columns: name, email, password (opt), phone (opt),
+            institution_id (opt)'
+      type: object
+      required:
+      - file
+      title: Body_bulk_upload_students_api_v1_students_bulk_upload_post
+    Body_upload_material_api_v1_modules__module_id__materials_upload_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_material_api_v1_modules__module_id__materials_upload_post
+    BulkAttendanceItem:
+      properties:
+        session_id:
+          type: string
+          title: Session Id
+        student_id:
+          type: string
+          title: Student Id
+        status:
+          type: string
+          title: Status
+          default: present
+      type: object
+      required:
+      - session_id
+      - student_id
+      title: BulkAttendanceItem
+    BulkAttendanceRequest:
+      properties:
+        records:
+          items:
+            $ref: '#/components/schemas/BulkAttendanceItem'
+          type: array
+          title: Records
+      type: object
+      required:
+      - records
+      title: BulkAttendanceRequest
+    BulkAttendanceResponse:
+      properties:
+        created:
+          type: integer
+          title: Created
+        errors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Errors
+      type: object
+      required:
+      - created
+      - errors
+      title: BulkAttendanceResponse
+    BulkEnrollmentItem:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        workshop_id:
+          type: string
+          title: Workshop Id
+      type: object
+      required:
+      - student_id
+      - workshop_id
+      title: BulkEnrollmentItem
+    BulkEnrollmentRequest:
+      properties:
+        enrollments:
+          items:
+            $ref: '#/components/schemas/BulkEnrollmentItem'
+          type: array
+          title: Enrollments
+      type: object
+      required:
+      - enrollments
+      title: BulkEnrollmentRequest
+    BulkEnrollmentResponse:
+      properties:
+        created:
+          type: integer
+          title: Created
+        errors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Errors
+      type: object
+      required:
+      - created
+      - errors
+      title: BulkEnrollmentResponse
+    BulkStudentUploadResponse:
+      properties:
+        created:
+          type: integer
+          title: Created
+        skipped:
+          type: integer
+          title: Skipped
+        errors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Errors
+      type: object
+      required:
+      - created
+      - skipped
+      - errors
+      title: BulkStudentUploadResponse
+    CertificateCreate:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        workshop_id:
+          type: string
+          title: Workshop Id
+      type: object
+      required:
+      - student_id
+      - workshop_id
+      title: CertificateCreate
+    CertificateResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        student_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Id
+        workshop_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Id
+        issue_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Issue Date
+        verification_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verification Code
+        qr_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qr Url
+        pdf_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pdf Path
+        student_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Name
+        workshop_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Title
+      type: object
+      required:
+      - id
+      - student_id
+      - workshop_id
+      - issue_date
+      - verification_code
+      title: CertificateResponse
+    DashboardActivityItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        text:
+          type: string
+          title: Text
+        time:
+          type: string
+          title: Time
+        type:
+          type: string
+          title: Type
+          default: general
+      type: object
+      required:
+      - id
+      - text
+      - time
+      title: DashboardActivityItem
+    DashboardAlertItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        text:
+          type: string
+          title: Text
+        level:
+          type: string
+          title: Level
+          default: info
+      type: object
+      required:
+      - id
+      - text
+      title: DashboardAlertItem
+    DashboardSeriesPoint:
+      properties:
+        label:
+          type: string
+          title: Label
+        value:
+          type: number
+          title: Value
+      type: object
+      required:
+      - label
+      - value
+      title: DashboardSeriesPoint
+    EducatorDashboardStats:
+      properties:
+        assigned_workshops:
+          type: integer
+          title: Assigned Workshops
+        materials_uploaded:
+          type: integer
+          title: Materials Uploaded
+        active_assessments:
+          type: integer
+          title: Active Assessments
+        pending_submissions:
+          type: integer
+          title: Pending Submissions
+      type: object
+      required:
+      - assigned_workshops
+      - materials_uploaded
+      - active_assessments
+      - pending_submissions
+      title: EducatorDashboardStats
+    EnrollmentCreate:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        workshop_id:
+          type: string
+          title: Workshop Id
+      type: object
+      required:
+      - student_id
+      - workshop_id
+      title: EnrollmentCreate
+    EnrollmentResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        student_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Id
+        workshop_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Id
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/EnrollmentStatus'
+          - type: 'null'
+        enrolled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Enrolled At
+      type: object
+      required:
+      - id
+      - student_id
+      - workshop_id
+      - status
+      - enrolled_at
+      title: EnrollmentResponse
+    EnrollmentStatus:
+      type: string
+      enum:
+      - active
+      - completed
+      - dropped
+      title: EnrollmentStatus
+    EnrollmentUpdate:
+      properties:
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/EnrollmentStatus'
+          - type: 'null'
+      type: object
+      title: EnrollmentUpdate
+    FeePlanCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        amount:
+          type: integer
+          title: Amount
+        billing_cycle:
+          type: string
+          title: Billing Cycle
+      type: object
+      required:
+      - name
+      - amount
+      - billing_cycle
+      title: FeePlanCreate
+    FeePlanResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        amount:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Amount
+        billing_cycle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Billing Cycle
+      type: object
+      required:
+      - id
+      - name
+      - amount
+      - billing_cycle
+      title: FeePlanResponse
+    FeePlanUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        amount:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Amount
+        billing_cycle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Billing Cycle
+      type: object
+      title: FeePlanUpdate
+    ForgotPasswordRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+      type: object
+      required:
+      - email
+      title: ForgotPasswordRequest
+    GradeResult:
+      properties:
+        submission_id:
+          type: string
+          title: Submission Id
+        score:
+          type: integer
+          title: Score
+        total_marks:
+          type: integer
+          title: Total Marks
+        percentage:
+          type: number
+          title: Percentage
+        pass_fail:
+          type: boolean
+          title: Pass Fail
+        per_question:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Per Question
+      type: object
+      required:
+      - submission_id
+      - score
+      - total_marks
+      - percentage
+      - pass_fail
+      - per_question
+      title: GradeResult
+      description: Returned by POST /tests/{id}/submit.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    InstitutionCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        admin_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Admin Id
+      type: object
+      required:
+      - name
+      title: InstitutionCreate
+    InstitutionDashboardAggregateResponse:
+      properties:
+        kpis:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: integer
+            - type: string
+          type: object
+          title: Kpis
+        alerts:
+          items:
+            $ref: '#/components/schemas/DashboardAlertItem'
+          type: array
+          title: Alerts
+          default: []
+        activity_feed:
+          items:
+            $ref: '#/components/schemas/DashboardActivityItem'
+          type: array
+          title: Activity Feed
+          default: []
+        attendance_trend:
+          items:
+            $ref: '#/components/schemas/DashboardSeriesPoint'
+          type: array
+          title: Attendance Trend
+          default: []
+        enrollment_trend:
+          items:
+            $ref: '#/components/schemas/DashboardSeriesPoint'
+          type: array
+          title: Enrollment Trend
+          default: []
+        report_cards:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: integer
+            - type: string
+          type: object
+          title: Report Cards
+      type: object
+      required:
+      - kpis
+      - report_cards
+      title: InstitutionDashboardAggregateResponse
+    InstitutionResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        admin_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Admin Id
+      type: object
+      required:
+      - id
+      - name
+      - address
+      - admin_id
+      title: InstitutionResponse
+    InstitutionUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        admin_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Admin Id
+      type: object
+      title: InstitutionUpdate
+    LeaderboardEntry:
+      properties:
+        rank:
+          type: integer
+          title: Rank
+        student_id:
+          type: string
+          title: Student Id
+        student_name:
+          type: string
+          title: Student Name
+        average_percentage:
+          type: number
+          title: Average Percentage
+          default: 0.0
+        attempts:
+          type: integer
+          title: Attempts
+          default: 0
+        passed:
+          type: integer
+          title: Passed
+          default: 0
+      type: object
+      required:
+      - rank
+      - student_id
+      - student_name
+      title: LeaderboardEntry
+    LoginRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: LoginRequest
+    MaterialItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        type:
+          type: string
+          enum:
+          - video
+          - text
+          - link
+          title: Type
+        content:
+          type: string
+          title: Content
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - title
+      - type
+      - content
+      title: MaterialItem
+    MaterialItemUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        type:
+          anyOf:
+          - type: string
+            enum:
+            - video
+            - text
+            - link
+          - type: 'null'
+          title: Type
+        content:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Content
+      type: object
+      title: MaterialItemUpdate
+      description: Partial update schema for a single material embedded in Module.materials.
+    MessageResponse:
+      properties:
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - message
+      title: MessageResponse
+    ModuleCreate:
+      properties:
+        workshop_id:
+          type: string
+          title: Workshop Id
+        title:
+          type: string
+          title: Title
+        order_index:
+          type: integer
+          title: Order Index
+          default: 0
+        materials:
+          items:
+            $ref: '#/components/schemas/MaterialItem'
+          type: array
+          title: Materials
+          default: []
+      type: object
+      required:
+      - workshop_id
+      - title
+      title: ModuleCreate
+    ModuleReorderItem:
+      properties:
+        module_id:
+          type: string
+          title: Module Id
+        order_index:
+          type: integer
+          title: Order Index
+      type: object
+      required:
+      - module_id
+      - order_index
+      title: ModuleReorderItem
+      description: Single entry in a batch reorder request.
+    ModuleReorderRequest:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ModuleReorderItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ModuleReorderRequest
+      description: "Body for PATCH /modules/reorder \u2014 batch set order_index."
+    ModuleResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        workshop_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        order_index:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Order Index
+        materials:
+          items:
+            $ref: '#/components/schemas/MaterialItem'
+          type: array
+          title: Materials
+          default: []
+      type: object
+      required:
+      - id
+      - workshop_id
+      - title
+      - order_index
+      title: ModuleResponse
+    ModuleUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        order_index:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Order Index
+        materials:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/MaterialItem'
+            type: array
+          - type: 'null'
+          title: Materials
+      type: object
+      title: ModuleUpdate
+    NotificationBulkCreate:
+      properties:
+        user_ids:
+          items:
+            type: string
+          type: array
+          title: User Ids
+        message:
+          type: string
+          title: Message
+        notification_type:
+          $ref: '#/components/schemas/NotificationType'
+          default: general
+      type: object
+      required:
+      - user_ids
+      - message
+      title: NotificationBulkCreate
+    NotificationResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        user_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: User Id
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/NotificationStatus'
+          - type: 'null'
+        notification_type:
+          anyOf:
+          - $ref: '#/components/schemas/NotificationType'
+          - type: 'null'
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - user_id
+      - message
+      - status
+      - notification_type
+      - created_at
+      title: NotificationResponse
+    NotificationStatus:
+      type: string
+      enum:
+      - unread
+      - read
+      title: NotificationStatus
+    NotificationType:
+      type: string
+      enum:
+      - general
+      - test
+      - fees
+      - attendance
+      - certificate
+      title: NotificationType
+    OptionItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        text:
+          type: string
+          title: Text
+        is_correct:
+          type: boolean
+          title: Is Correct
+          default: false
+      type: object
+      required:
+      - id
+      - text
+      title: OptionItem
+    OptionItemPublic:
+      properties:
+        id:
+          type: string
+          title: Id
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - id
+      - text
+      title: OptionItemPublic
+    Page_ApprovalRequestResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ApprovalRequestResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[ApprovalRequestResponse]
+    Page_AssessmentResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AssessmentResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[AssessmentResponse]
+    Page_AttendanceResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AttendanceResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[AttendanceResponse]
+    Page_CertificateResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/CertificateResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[CertificateResponse]
+    Page_EnrollmentResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/EnrollmentResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[EnrollmentResponse]
+    Page_FeePlanResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/FeePlanResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[FeePlanResponse]
+    Page_ModuleResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ModuleResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[ModuleResponse]
+    Page_NotificationResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/NotificationResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[NotificationResponse]
+    Page_PaymentResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PaymentResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[PaymentResponse]
+    Page_QuestionResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/QuestionResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[QuestionResponse]
+    Page_SalaryPaymentResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SalaryPaymentResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[SalaryPaymentResponse]
+    Page_SessionResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SessionResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[SessionResponse]
+    Page_StudentFeeResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/StudentFeeResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[StudentFeeResponse]
+    Page_SubmissionResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SubmissionResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[SubmissionResponse]
+    Page_UserResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/UserResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[UserResponse]
+    Page_WorkshopResponse_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/WorkshopResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        offset:
+          type: integer
+          title: Offset
+        limit:
+          type: integer
+          title: Limit
+      type: object
+      required:
+      - items
+      - total
+      - offset
+      - limit
+      title: Page[WorkshopResponse]
+    ParentMessageRequest:
+      properties:
+        student_ids:
+          items:
+            type: string
+          type: array
+          title: Student Ids
+        subject:
+          type: string
+          title: Subject
+        body:
+          type: string
+          title: Body
+      type: object
+      required:
+      - student_ids
+      - subject
+      - body
+      title: ParentMessageRequest
+    ParentMessageResponse:
+      properties:
+        accepted:
+          type: integer
+          title: Accepted
+        failed:
+          type: integer
+          title: Failed
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - accepted
+      - failed
+      - message
+      title: ParentMessageResponse
+    PaymentCreate:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        amount:
+          type: integer
+          title: Amount
+        method:
+          type: string
+          title: Method
+        reference:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reference
+        student_fee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Fee Id
+      type: object
+      required:
+      - student_id
+      - amount
+      - method
+      title: PaymentCreate
+    PaymentResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        student_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Id
+        amount:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Amount
+        method:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Method
+        reference:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reference
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - student_id
+      - amount
+      - method
+      - reference
+      - created_at
+      title: PaymentResponse
+    QuestionCreate:
+      properties:
+        assessment_id:
+          type: string
+          title: Assessment Id
+        text:
+          type: string
+          title: Text
+        type:
+          $ref: '#/components/schemas/QuestionType'
+        marks:
+          type: integer
+          title: Marks
+          default: 1
+        options:
+          items:
+            $ref: '#/components/schemas/OptionItem'
+          type: array
+          title: Options
+          default: []
+      type: object
+      required:
+      - assessment_id
+      - text
+      - type
+      title: QuestionCreate
+    QuestionPublicResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        assessment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assessment Id
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        type:
+          anyOf:
+          - $ref: '#/components/schemas/QuestionType'
+          - type: 'null'
+        marks:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Marks
+        options:
+          items:
+            $ref: '#/components/schemas/OptionItemPublic'
+          type: array
+          title: Options
+          default: []
+      type: object
+      required:
+      - id
+      - assessment_id
+      - text
+      - type
+      - marks
+      title: QuestionPublicResponse
+    QuestionResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        assessment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assessment Id
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        type:
+          anyOf:
+          - $ref: '#/components/schemas/QuestionType'
+          - type: 'null'
+        marks:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Marks
+        options:
+          items:
+            $ref: '#/components/schemas/OptionItem'
+          type: array
+          title: Options
+          default: []
+      type: object
+      required:
+      - id
+      - assessment_id
+      - text
+      - type
+      - marks
+      title: QuestionResponse
+    QuestionType:
+      type: string
+      enum:
+      - mcq
+      - msq
+      title: QuestionType
+    QuestionUpdate:
+      properties:
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        type:
+          anyOf:
+          - $ref: '#/components/schemas/QuestionType'
+          - type: 'null'
+        marks:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Marks
+        options:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/OptionItem'
+            type: array
+          - type: 'null'
+          title: Options
+      type: object
+      title: QuestionUpdate
+    RefreshTokenRequest:
+      properties:
+        refresh_token:
+          type: string
+          title: Refresh Token
+      type: object
+      required:
+      - refresh_token
+      title: RefreshTokenRequest
+    ResetPasswordRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        new_password:
+          type: string
+          title: New Password
+      type: object
+      required:
+      - email
+      - new_password
+      title: ResetPasswordRequest
+    SalaryPaymentCreate:
+      properties:
+        educator_id:
+          type: string
+          title: Educator Id
+        month:
+          type: string
+          title: Month
+        amount:
+          type: integer
+          title: Amount
+          default: 0
+      type: object
+      required:
+      - educator_id
+      - month
+      title: SalaryPaymentCreate
+    SalaryPaymentResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        educator_id:
+          type: string
+          title: Educator Id
+        month:
+          type: string
+          title: Month
+        amount:
+          type: integer
+          title: Amount
+        status:
+          type: string
+          title: Status
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - educator_id
+      - month
+      - amount
+      - status
+      - created_at
+      title: SalaryPaymentResponse
+    ScoreTrendPoint:
+      properties:
+        assessment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assessment Id
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+        percentage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Percentage
+        pass_fail:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Pass Fail
+        submitted_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Submitted At
+      type: object
+      title: ScoreTrendPoint
+    SessionCreate:
+      properties:
+        workshop_id:
+          type: string
+          title: Workshop Id
+        title:
+          type: string
+          title: Title
+        start_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Time
+        end_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Time
+      type: object
+      required:
+      - workshop_id
+      - title
+      title: SessionCreate
+    SessionResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        workshop_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        start_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Time
+        end_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Time
+      type: object
+      required:
+      - id
+      - workshop_id
+      - title
+      - start_time
+      - end_time
+      title: SessionResponse
+    SessionUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        start_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Time
+        end_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Time
+      type: object
+      title: SessionUpdate
+    StudentAnalyticsResponse:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        enrolled_workshops:
+          type: integer
+          title: Enrolled Workshops
+          default: 0
+        assessment:
+          $ref: '#/components/schemas/StudentAssessmentAnalytics'
+          default:
+            total_submissions: 0
+            avg_score: 0.0
+            avg_percentage: 0.0
+            passed: 0
+            failed: 0
+            score_trend: []
+        attendance:
+          $ref: '#/components/schemas/StudentAttendanceAnalytics'
+          default:
+            total_sessions: 0
+            present: 0
+            late: 0
+            absent: 0
+            attendance_percentage: 0.0
+      type: object
+      required:
+      - student_id
+      title: StudentAnalyticsResponse
+    StudentAssessmentAnalytics:
+      properties:
+        total_submissions:
+          type: integer
+          title: Total Submissions
+          default: 0
+        avg_score:
+          type: number
+          title: Avg Score
+          default: 0.0
+        avg_percentage:
+          type: number
+          title: Avg Percentage
+          default: 0.0
+        passed:
+          type: integer
+          title: Passed
+          default: 0
+        failed:
+          type: integer
+          title: Failed
+          default: 0
+        score_trend:
+          items:
+            $ref: '#/components/schemas/ScoreTrendPoint'
+          type: array
+          title: Score Trend
+          default: []
+      type: object
+      title: StudentAssessmentAnalytics
+    StudentAttendanceAnalytics:
+      properties:
+        total_sessions:
+          type: integer
+          title: Total Sessions
+          default: 0
+        present:
+          type: integer
+          title: Present
+          default: 0
+        late:
+          type: integer
+          title: Late
+          default: 0
+        absent:
+          type: integer
+          title: Absent
+          default: 0
+        attendance_percentage:
+          type: number
+          title: Attendance Percentage
+          default: 0.0
+      type: object
+      title: StudentAttendanceAnalytics
+    StudentAttendanceRecord:
+      properties:
+        attendance_id:
+          type: string
+          title: Attendance Id
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        session_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Title
+        start_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Time
+        workshop_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Id
+        workshop_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workshop Title
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      required:
+      - attendance_id
+      title: StudentAttendanceRecord
+    StudentAttendanceResponse:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        total_sessions:
+          type: integer
+          title: Total Sessions
+          default: 0
+        present:
+          type: integer
+          title: Present
+          default: 0
+        late:
+          type: integer
+          title: Late
+          default: 0
+        absent:
+          type: integer
+          title: Absent
+          default: 0
+        attendance_percentage:
+          type: number
+          title: Attendance Percentage
+          default: 0.0
+        records:
+          items:
+            $ref: '#/components/schemas/StudentAttendanceRecord'
+          type: array
+          title: Records
+          default: []
+      type: object
+      required:
+      - student_id
+      title: StudentAttendanceResponse
+    StudentDashboardStats:
+      properties:
+        enrolled_workshops:
+          type: integer
+          title: Enrolled Workshops
+        completed_assessments:
+          type: integer
+          title: Completed Assessments
+        average_score:
+          type: number
+          title: Average Score
+        certificates_earned:
+          type: integer
+          title: Certificates Earned
+      type: object
+      required:
+      - enrolled_workshops
+      - completed_assessments
+      - average_score
+      - certificates_earned
+      title: StudentDashboardStats
+    StudentFeeAssign:
+      properties:
+        student_id:
+          type: string
+          title: Student Id
+        fee_plan_id:
+          type: string
+          title: Fee Plan Id
+        initial_balance:
+          type: integer
+          title: Initial Balance
+          default: 0
+      type: object
+      required:
+      - student_id
+      - fee_plan_id
+      title: StudentFeeAssign
+      description: "Body for POST /fees/assign \u2014 assign a fee-plan to a student."
+    StudentFeeResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        student_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Id
+        fee_plan_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fee Plan Id
+        balance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Balance
+        fee_plan:
+          anyOf:
+          - $ref: '#/components/schemas/FeePlanResponse'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - student_id
+      - fee_plan_id
+      - balance
+      title: StudentFeeResponse
+    SubmissionResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        student_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Student Id
+        assessment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assessment Id
+        score:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Score
+        percentage:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Percentage
+        pass_fail:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Pass Fail
+        answers:
+          items:
+            $ref: '#/components/schemas/AnswerItem'
+          type: array
+          title: Answers
+          default: []
+        submitted_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Submitted At
+      type: object
+      required:
+      - id
+      - student_id
+      - assessment_id
+      - score
+      - percentage
+      - submitted_at
+      title: SubmissionResponse
+    SubmissionReviewQuestion:
+      properties:
+        question_id:
+          type: string
+          title: Question Id
+        question_text:
+          type: string
+          title: Question Text
+        selected_option_ids:
+          items:
+            type: string
+          type: array
+          title: Selected Option Ids
+          default: []
+        selected_option_texts:
+          items:
+            type: string
+          type: array
+          title: Selected Option Texts
+          default: []
+        correct_option_ids:
+          items:
+            type: string
+          type: array
+          title: Correct Option Ids
+          default: []
+        correct_option_texts:
+          items:
+            type: string
+          type: array
+          title: Correct Option Texts
+          default: []
+        earned_marks:
+          type: integer
+          title: Earned Marks
+        max_marks:
+          type: integer
+          title: Max Marks
+        is_correct:
+          type: boolean
+          title: Is Correct
+      type: object
+      required:
+      - question_id
+      - question_text
+      - earned_marks
+      - max_marks
+      - is_correct
+      title: SubmissionReviewQuestion
+    SubmissionReviewResponse:
+      properties:
+        submission_id:
+          type: string
+          title: Submission Id
+        assessment_id:
+          type: string
+          title: Assessment Id
+        student_id:
+          type: string
+          title: Student Id
+        score:
+          type: integer
+          title: Score
+        total_marks:
+          type: integer
+          title: Total Marks
+        percentage:
+          type: number
+          title: Percentage
+        pass_fail:
+          type: boolean
+          title: Pass Fail
+        questions:
+          items:
+            $ref: '#/components/schemas/SubmissionReviewQuestion'
+          type: array
+          title: Questions
+          default: []
+      type: object
+      required:
+      - submission_id
+      - assessment_id
+      - student_id
+      - score
+      - total_marks
+      - percentage
+      - pass_fail
+      title: SubmissionReviewResponse
+    TestStartResponse:
+      properties:
+        submission_id:
+          type: string
+          title: Submission Id
+        assessment_id:
+          type: string
+          title: Assessment Id
+        title:
+          type: string
+          title: Title
+        total_marks:
+          type: integer
+          title: Total Marks
+        questions:
+          items:
+            $ref: '#/components/schemas/QuestionPublicResponse'
+          type: array
+          title: Questions
+      type: object
+      required:
+      - submission_id
+      - assessment_id
+      - title
+      - total_marks
+      - questions
+      title: TestStartResponse
+      description: Returned when a student starts a test (hides correct answers).
+    Token:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        refresh_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refresh Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+      type: object
+      required:
+      - access_token
+      title: Token
+    UserCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          title: Password
+        role:
+          $ref: '#/components/schemas/UserRole'
+          default: student
+        institution_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Institution Id
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+      type: object
+      required:
+      - name
+      - email
+      - password
+      title: UserCreate
+    UserResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        email:
+          type: string
+          title: Email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        institution_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Institution Id
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        profile_photo:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profile Photo
+        theme:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Theme
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - email
+      - role
+      - institution_id
+      - phone
+      - profile_photo
+      - theme
+      - created_at
+      title: UserResponse
+    UserRole:
+      type: string
+      enum:
+      - admin
+      - institution_admin
+      - educator
+      - student
+      title: UserRole
+    UserUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        profile_photo:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profile Photo
+        theme:
+          anyOf:
+          - type: string
+            enum:
+            - light
+            - dark
+          - type: 'null'
+          title: Theme
+        institution_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Institution Id
+      type: object
+      title: UserUpdate
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    WorkshopAnalyticsResponse:
+      properties:
+        workshop_id:
+          type: string
+          title: Workshop Id
+        enrollment:
+          $ref: '#/components/schemas/WorkshopEnrollmentAnalytics'
+          default:
+            total_enrolled: 0
+            completed: 0
+            dropped: 0
+            active: 0
+        assessment:
+          $ref: '#/components/schemas/WorkshopAssessmentAnalytics'
+          default:
+            total_submissions: 0
+            avg_score: 0.0
+            avg_percentage: 0.0
+            pass_rate_percentage: 0.0
+        attendance:
+          $ref: '#/components/schemas/WorkshopAttendanceAnalytics'
+          default:
+            total_attendance_records: 0
+            avg_attendance_percentage: 0.0
+      type: object
+      required:
+      - workshop_id
+      title: WorkshopAnalyticsResponse
+    WorkshopAssessmentAnalytics:
+      properties:
+        total_submissions:
+          type: integer
+          title: Total Submissions
+          default: 0
+        avg_score:
+          type: number
+          title: Avg Score
+          default: 0.0
+        avg_percentage:
+          type: number
+          title: Avg Percentage
+          default: 0.0
+        pass_rate_percentage:
+          type: number
+          title: Pass Rate Percentage
+          default: 0.0
+      type: object
+      title: WorkshopAssessmentAnalytics
+    WorkshopAttendanceAnalytics:
+      properties:
+        total_attendance_records:
+          type: integer
+          title: Total Attendance Records
+          default: 0
+        avg_attendance_percentage:
+          type: number
+          title: Avg Attendance Percentage
+          default: 0.0
+      type: object
+      title: WorkshopAttendanceAnalytics
+    WorkshopCreate:
+      properties:
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        start_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Date
+        institution_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Institution Id
+      type: object
+      required:
+      - title
+      title: WorkshopCreate
+    WorkshopEnrollmentAnalytics:
+      properties:
+        total_enrolled:
+          type: integer
+          title: Total Enrolled
+          default: 0
+        completed:
+          type: integer
+          title: Completed
+          default: 0
+        dropped:
+          type: integer
+          title: Dropped
+          default: 0
+        active:
+          type: integer
+          title: Active
+          default: 0
+      type: object
+      title: WorkshopEnrollmentAnalytics
+    WorkshopLeaderboardResponse:
+      properties:
+        workshop_id:
+          type: string
+          title: Workshop Id
+        entries:
+          items:
+            $ref: '#/components/schemas/LeaderboardEntry'
+          type: array
+          title: Entries
+          default: []
+      type: object
+      required:
+      - workshop_id
+      title: WorkshopLeaderboardResponse
+    WorkshopResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        start_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Date
+        institution_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Institution Id
+      type: object
+      required:
+      - id
+      - title
+      - description
+      - start_date
+      - end_date
+      - institution_id
+      title: WorkshopResponse
+    WorkshopUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        start_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start Date
+        end_date:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End Date
+      type: object
+      title: WorkshopUpdate
+  securitySchemes:
+    OAuth2PasswordBearer:
+      type: oauth2
+      flows:
+        password:
+          scopes: {}
+          tokenUrl: /api/v1/auth/login

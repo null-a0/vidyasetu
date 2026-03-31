@@ -8,16 +8,8 @@ import VButton from "@/components/ui-custom/VButton";
 import VModal from "@/components/ui-custom/VModal";
 import VCard from "@/components/ui-custom/VCard";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchSubmissions } from "@/services/api";
+import { fetchSubmissionReview, fetchSubmissions } from "@/services/api";
 import type { Submission } from "@/mock/mockData";
-
-const mockQuestionBreakdown = [
-  { q: "What is the correct way to create a React component?", studentAnswer: "function App() {}", correctAnswer: "function App() {}", isCorrect: true, marksAwarded: 20, maxMarks: 20 },
-  { q: "Which hook is used for side effects?", studentAnswer: "useEffect", correctAnswer: "useEffect", isCorrect: true, marksAwarded: 20, maxMarks: 20 },
-  { q: "What does JSX stand for?", studentAnswer: "JavaScript XML", correctAnswer: "JavaScript XML", isCorrect: true, marksAwarded: 20, maxMarks: 20 },
-  { q: "Which method is used to update state?", studentAnswer: "setState()", correctAnswer: "useState setter", isCorrect: false, marksAwarded: 0, maxMarks: 20 },
-  { q: "What is the virtual DOM?", studentAnswer: "A browser API", correctAnswer: "A lightweight JS representation of the DOM", isCorrect: false, marksAwarded: 0, maxMarks: 20 },
-];
 
 const SubmissionsPage = () => {
   const { showToast } = useVToast();
@@ -32,6 +24,11 @@ const SubmissionsPage = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [selected, setSelected] = useState<Submission | null>(null);
   const [viewModal, setViewModal] = useState(false);
+  const submissionReviewQuery = useQuery({
+    queryKey: ["submissionReview", selected?.id],
+    queryFn: () => fetchSubmissionReview(selected?.id ?? ""),
+    enabled: Boolean(selected?.id && viewModal && selected?.status === "Graded"),
+  });
 
   const filtered = submissions.filter(s => {
     const matchSearch = s.studentName.toLowerCase().includes(search.toLowerCase()) || s.assessment.toLowerCase().includes(search.toLowerCase());
@@ -62,15 +59,6 @@ const SubmissionsPage = () => {
       </div>
     )},
   ];
-
-  // Adjust breakdown based on selected submission score
-  const getBreakdown = () => {
-    if (!selected) return mockQuestionBreakdown;
-    if (selected.score > 80) {
-      return mockQuestionBreakdown.map((q, i) => i < 4 ? { ...q, isCorrect: true, marksAwarded: q.maxMarks, studentAnswer: q.correctAnswer } : q);
-    }
-    return mockQuestionBreakdown;
-  };
 
   return (
     <DashboardLayout title="Submissions">
@@ -109,32 +97,29 @@ const SubmissionsPage = () => {
             {selected.status === "Graded" && (
               <div className="border-t border-border pt-4">
                 <h4 className="text-sm font-semibold text-foreground mb-3">Question-Level Breakdown</h4>
-                <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {getBreakdown().map((item, idx) => (
-                    <VCard key={idx} className={`p-3 border-l-4 ${item.isCorrect ? "border-l-success" : "border-l-destructive"}`}>
-                      <div className="flex items-start gap-2">
-                        {item.isCorrect ? <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> : <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground font-medium">{idx + 1}. {item.q}</p>
-                          <div className="mt-1 grid grid-cols-2 gap-x-4">
-                            <p className={`text-xs ${item.isCorrect ? "text-success" : "text-destructive"}`}>
-                              Student: {item.studentAnswer}
-                            </p>
-                            {!item.isCorrect && (
-                              <p className="text-xs text-success">Correct: {item.correctAnswer}</p>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">Marks: {item.marksAwarded}/{item.maxMarks}</p>
-                        </div>
-                      </div>
-                    </VCard>
-                  ))}
-                </div>
-                <div className="mt-3 flex justify-between items-center rounded-xl bg-muted p-3">
-                  <span className="text-sm font-medium text-foreground">Total Marks</span>
-                  <span className="text-lg font-bold text-foreground">
-                    {getBreakdown().reduce((s, q) => s + q.marksAwarded, 0)}/{getBreakdown().reduce((s, q) => s + q.maxMarks, 0)}
-                  </span>
+                <div className="rounded-xl bg-muted p-4">
+                  {submissionReviewQuery.isLoading && <p className="text-sm text-muted-foreground">Loading review...</p>}
+                  {!submissionReviewQuery.isLoading && submissionReviewQuery.data && (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {submissionReviewQuery.data.questions.map((question, index) => (
+                        <VCard key={question.question_id} className={`p-3 ${question.is_correct ? "border-success/40" : "border-destructive/40"}`}>
+                          <p className="text-sm font-medium text-foreground">{index + 1}. {question.question_text}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Selected: {question.selected_option_texts.join(", ") || "Not answered"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Correct: {question.correct_option_texts.join(", ") || "—"}
+                          </p>
+                          <p className={`text-xs mt-1 ${question.is_correct ? "text-success" : "text-destructive"}`}>
+                            Marks: {question.earned_marks}/{question.max_marks}
+                          </p>
+                        </VCard>
+                      ))}
+                    </div>
+                  )}
+                  {!submissionReviewQuery.isLoading && !submissionReviewQuery.data && (
+                    <p className="text-sm text-muted-foreground">Detailed review unavailable for this submission.</p>
+                  )}
                 </div>
               </div>
             )}
