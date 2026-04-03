@@ -61,6 +61,9 @@ export interface Certificate {
   workshop: string;
   completionDate: string;
   status: "Issued" | "Pending";
+  studentId?: string;
+  workshopId?: string;
+  downloadUrl?: string;
 }
 
 export interface Notification {

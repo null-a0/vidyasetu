@@ -102,6 +102,62 @@ class WorkshopLeaderboardResponse(BaseModel):
     entries: list[LeaderboardEntry] = []
 
 
+class LeaderboardAttemptQuestion(BaseModel):
+    question_id: str
+    question_text: str
+    selected_option_texts: list[str] = []
+    correct_option_texts: list[str] = []
+    earned_marks: int = 0
+    max_marks: int = 0
+    is_correct: bool = False
+
+
+class LeaderboardAttemptDetail(BaseModel):
+    submission_id: str
+    submitted_at: Optional[str] = None
+    score: float = 0
+    percentage: float = 0
+    pass_fail: bool = False
+    questions: list[LeaderboardAttemptQuestion] = []
+
+
+class LeaderboardStudentDrilldownResponse(BaseModel):
+    context_type: str
+    context_id: str
+    student_id: str
+    student_name: str
+    attempts: list[LeaderboardAttemptDetail] = []
+    average_percentage: float = 0.0
+    total_attempts: int = 0
+
+
+class InstitutionStudentRosterItem(BaseModel):
+    id: str
+    name: str
+    email: str
+    workshop: str
+    status: str
+
+
+class InstitutionStudentRosterResponse(BaseModel):
+    items: list[InstitutionStudentRosterItem] = []
+    total: int = 0
+
+
+class InstitutionAttendanceRow(BaseModel):
+    student: str
+    mon: bool = False
+    tue: bool = False
+    wed: bool = False
+    thu: bool = False
+    fri: bool = False
+
+
+class InstitutionAttendanceReportResponse(BaseModel):
+    rows: list[InstitutionAttendanceRow] = []
+    total: int = 0
+
+
 class DashboardAlertItem(BaseModel):
     id: str
     text: str

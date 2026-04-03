@@ -15,6 +15,7 @@ import {
   fetchAllUsers,
   fetchEnrollments,
   fetchInstitutions,
+  sendParentEmailMessage,
   fetchWorkshops,
 } from "@/services/api";
 
@@ -164,6 +165,24 @@ const StudentManagement = () => {
     },
     onError: (err: unknown) => {
       showToast("destructive", "Request Failed", err instanceof Error ? err.message : "Unable to send request.");
+    },
+  });
+  const parentEmailMutation = useMutation({
+    mutationFn: async (payload: { studentId: string; subject: string; body: string; parentEmail: string }) => {
+      const response = await sendParentEmailMessage({
+        studentIds: [payload.studentId],
+        subject: payload.subject,
+        body: payload.body,
+      });
+      return { ...response, parentEmail: payload.parentEmail };
+    },
+    onSuccess: (result) => {
+      showToast("success", "Email Sent", `${result.accepted} message delivered to ${result.parentEmail}.`);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      setEmailModal(false);
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Send Failed", err instanceof Error ? err.message : "Unable to send parent email.");
     },
   });
 
@@ -345,10 +364,16 @@ const StudentManagement = () => {
             </VButton>
             <VButton
               onClick={() => {
-                setEmailModal(false);
-                showToast("success", "Email Sent", `Email sent to ${selected?.parentEmail}`);
+                if (!selected) return;
+                parentEmailMutation.mutate({
+                  studentId: selected.id,
+                  parentEmail: selected.parentEmail,
+                  subject: emailSubject,
+                  body: emailBody,
+                });
               }}
-              disabled={!emailSubject || !emailBody}
+              isLoading={parentEmailMutation.isPending}
+              disabled={!emailSubject || !emailBody || parentEmailMutation.isPending}
             >
               <Mail className="h-4 w-4" /> Send Email
             </VButton>

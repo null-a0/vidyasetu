@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -18,11 +19,12 @@ from app.crud import (
     get_workshops,
     update_workshop,
 )
-from app.models import User, UserRole
+from app.models import Institution, User, UserRole
 from app.schemas.base import Page
 from app.schemas.workshop import (
     ModuleResponse,
     WorkshopCreate,
+    WorkshopEducatorProfileResponse,
     WorkshopResponse,
     WorkshopUpdate,
 )
@@ -121,6 +123,61 @@ async def get_one(
         if workshop.institution_id != current_user.institution_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     return WorkshopResponse.model_validate(workshop)
+
+
+@router.get(
+    "/{workshop_id}/educator-profile",
+    response_model=WorkshopEducatorProfileResponse,
+    summary="Get primary educator profile for a workshop",
+)
+async def get_workshop_educator_profile(
+    workshop_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> WorkshopEducatorProfileResponse:
+    workshop = await get_workshop(db, workshop_id)
+    if not workshop:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    institution_name = (
+        await db.execute(select(Institution.name).where(Institution.id == workshop.institution_id))
+    ).scalar_one_or_none() or "Institution"
+    primary_educator = (
+        await db.execute(
+            select(User)
+            .where(User.role == UserRole.EDUCATOR)
+            .where(User.institution_id == workshop.institution_id)
+            .order_by(User.created_at.asc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not primary_educator:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No educator profile found for this workshop institution.",
+        )
+
+    department = "Academics"
+    email = primary_educator.email or ""
+    if "cs" in email:
+        department = "Computer Science"
+    elif "data" in email:
+        department = "Data Science"
+    elif "cloud" in email:
+        department = "Cloud Computing"
+
+    return WorkshopEducatorProfileResponse(
+        workshop_id=workshop_id,
+        educator_id=primary_educator.id,
+        name=primary_educator.name or primary_educator.email,
+        email=primary_educator.email,
+        department=department,
+        institution=institution_name,
+        bio=f"{primary_educator.name or 'Educator'} supports this workshop from {institution_name}.",
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -280,6 +280,17 @@ def test_student_certificates_notifications_and_profile(client_and_state):
     assert me.status_code == 200
     assert me.json()["id"] == "student-1"
 
+    profile_upload = client.post(
+        "/api/v1/users/student-1/profile-photo",
+        files={"file": ("avatar.png", b"avatar-bytes", "image/png")},
+    )
+    assert profile_upload.status_code == 200
+    assert profile_upload.json()["profile_photo"].startswith("media/avatars/")
+
+    certificate_download = client.get("/api/v1/certificates/certificate-1/download")
+    assert certificate_download.status_code == 200
+    assert "/media/certificates/certificate-1.pdf" in certificate_download.json()["download_url"]
+
 
 def test_student_forbidden_from_other_student_data(client_and_state):
     client, state = client_and_state
@@ -290,6 +301,12 @@ def test_student_forbidden_from_other_student_data(client_and_state):
 
     other_dashboard = client.get("/api/v1/dashboard/student/student-2")
     assert other_dashboard.status_code == 403
+
+    other_upload = client.post(
+        "/api/v1/users/student-2/profile-photo",
+        files={"file": ("avatar.png", b"avatar-bytes", "image/png")},
+    )
+    assert other_upload.status_code == 403
 
 
 def test_student_leaderboard_access_and_staff_only_guards(client_and_state):
@@ -303,6 +320,14 @@ def test_student_leaderboard_access_and_staff_only_guards(client_and_state):
     workshop_lb = client.get("/api/v1/analytics/leaderboard/workshop/workshop-1")
     assert workshop_lb.status_code == 200
     assert workshop_lb.json()["workshop_id"] == "workshop-1"
+
+    assessment_drilldown = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1/student/student-1")
+    assert assessment_drilldown.status_code == 200
+    assert assessment_drilldown.json()["student_id"] == "student-1"
+
+    workshop_drilldown = client.get("/api/v1/analytics/leaderboard/workshop/workshop-1/student/student-1")
+    assert workshop_drilldown.status_code == 200
+    assert workshop_drilldown.json()["context_type"] == "workshop"
 
     review_forbidden = client.get("/api/v1/submissions/submission-graded/review")
     assert review_forbidden.status_code == 403

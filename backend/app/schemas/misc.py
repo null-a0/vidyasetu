@@ -227,3 +227,20 @@ class ParentMessageResponse(BaseModel):
     accepted: int
     failed: int
     message: str
+
+
+class CertificateRecommendationRequest(BaseModel):
+    student_id: str
+    workshop_id: str
+    note: Optional[str] = None
+
+
+class CertificateRecommendationResponse(BaseModel):
+    accepted: int
+    failed: int
+    message: str
+
+
+class CertificateDownloadResponse(BaseModel):
+    certificate_id: str
+    download_url: str

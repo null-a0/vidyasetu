@@ -296,3 +296,82 @@ export interface BackendParentMessageResponse {
   failed: number;
   message: string;
 }
+
+export interface BackendWorkshopEducatorProfile {
+  workshop_id: string;
+  educator_id?: string | null;
+  name: string;
+  email: string;
+  department: string;
+  institution: string;
+  bio: string;
+}
+
+export interface BackendInstitutionStudentRosterItem {
+  id: string;
+  name: string;
+  email: string;
+  workshop: string;
+  status: string;
+}
+
+export interface BackendInstitutionStudentRoster {
+  items: BackendInstitutionStudentRosterItem[];
+  total: number;
+}
+
+export interface BackendInstitutionAttendanceRow {
+  student: string;
+  mon: boolean;
+  tue: boolean;
+  wed: boolean;
+  thu: boolean;
+  fri: boolean;
+}
+
+export interface BackendInstitutionAttendanceReport {
+  rows: BackendInstitutionAttendanceRow[];
+  total: number;
+}
+
+export interface BackendLeaderboardAttemptQuestion {
+  question_id: string;
+  question_text: string;
+  selected_option_texts: string[];
+  correct_option_texts: string[];
+  earned_marks: number;
+  max_marks: number;
+  is_correct: boolean;
+}
+
+export interface BackendLeaderboardAttemptDetail {
+  submission_id: string;
+  submitted_at?: string | null;
+  score: number;
+  percentage: number;
+  pass_fail: boolean;
+  questions: BackendLeaderboardAttemptQuestion[];
+}
+
+export interface BackendLeaderboardStudentDrilldown {
+  context_type: string;
+  context_id: string;
+  student_id: string;
+  student_name: string;
+  attempts: BackendLeaderboardAttemptDetail[];
+  average_percentage: number;
+  total_attempts: number;
+}
+
+
+
+export interface BackendCertificateRecommendationResponse {
+  accepted: number;
+  failed: number;
+  message: string;
+}
+
+export interface BackendCertificateDownloadResponse {
+  certificate_id: string;
+  download_url: string;
+}

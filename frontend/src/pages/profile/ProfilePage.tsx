@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { User, Mail, Building2, GraduationCap, Camera, Save, Shield } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -7,8 +7,8 @@ import VButton from "@/components/ui-custom/VButton";
 import VBadge from "@/components/ui-custom/VBadge";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchInstitutions, updateUser } from "@/services/api";
-import { useQuery } from "@tanstack/react-query";
+import { fetchInstitutions, resolveBackendMediaUrl, updateUser, uploadUserProfilePhoto } from "@/services/api";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 const ProfilePage = () => {
   const { user, refreshUser } = useAuth();
@@ -22,6 +22,8 @@ const ProfilePage = () => {
   const [institutionName, setInstitutionName] = useState("");
   const [department, setDepartment] = useState("");
   const [avatarInitials, setAvatarInitials] = useState("VS");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Institution admin extra fields
   const [instName, setInstName] = useState("");
@@ -32,6 +34,20 @@ const ProfilePage = () => {
   const institutionsQuery = useQuery({
     queryKey: ["institutions"],
     queryFn: fetchInstitutions,
+  });
+  const uploadAvatarMutation = useMutation({
+    mutationFn: (file: File) => {
+      if (!user) throw new Error("User not found.");
+      return uploadUserProfilePhoto(user.id, file);
+    },
+    onSuccess: async (updatedUser) => {
+      setAvatarUrl(resolveBackendMediaUrl(updatedUser.profile_photo));
+      await refreshUser();
+      showToast("success", "Profile Image Updated");
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Upload Failed", err instanceof Error ? err.message : "Unable to upload profile image.");
+    },
   });
 
   useEffect(() => {
@@ -46,6 +62,7 @@ const ProfilePage = () => {
       .map((n) => n[0])
       .join("")
       .slice(0, 2));
+    setAvatarUrl(resolveBackendMediaUrl(user.profile_photo));
     setPhone(user.phone || "+91 98765 43210");
     setInstName(instNameLookup || user.institution_id || "IIT Delhi");
     setInstAddress("Hauz Khas, New Delhi, 110016");
@@ -66,19 +83,34 @@ const ProfilePage = () => {
     }
   };
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    uploadAvatarMutation.mutate(file);
+    event.target.value = "";
+  };
+
   return (
     <DashboardLayout title="Profile">
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Avatar & Header */}
         <VCard className="p-6">
-          <p className="text-xs text-muted-foreground mb-4">Fallback: profile image upload endpoint is not available yet.</p>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarSelected} />
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="relative group">
               <div className="h-24 w-24 rounded-full vidya-gradient flex items-center justify-center text-primary-foreground text-2xl font-bold">
-                {avatarInitials}
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={name || "Profile"} className="h-24 w-24 rounded-full object-cover" />
+                ) : (
+                  avatarInitials
+                )}
               </div>
               <button
-                onClick={() => showToast("info", "Upload", "Profile image upload simulated")}
+                onClick={handleUploadClick}
                 className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
               >
                 <Camera className="h-4 w-4" />

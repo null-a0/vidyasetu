@@ -278,6 +278,17 @@ def test_admin_new_analytics_endpoints(client_and_state):
     assert "weekly_activity" in payload
     assert "activity_feed" in payload
 
+    institution_students = client.get("/api/v1/analytics/institution/students")
+    assert institution_students.status_code == 200
+    assert institution_students.json()["total"] >= 1
+
+    institution_attendance = client.get("/api/v1/analytics/institution/attendance-report")
+    assert institution_attendance.status_code == 200
+
+    assessment_drilldown = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1/student/user-student")
+    assert assessment_drilldown.status_code == 200
+    assert assessment_drilldown.json()["context_type"] == "assessment"
+
 
 def test_admin_parent_communication_dispatch(client_and_state):
     client, state = client_and_state

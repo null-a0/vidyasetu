@@ -14,10 +14,12 @@ from app.models import (
     ApprovalRequestStatus,
     ApprovalRequestType,
     Assessment,
+    Attendance,
     Base,
     Enrollment,
     Institution,
     Module,
+    Session,
     Submission,
     User,
     UserRole,
@@ -125,6 +127,19 @@ def client_and_state():
                 workshop_id="workshop-own",
                 status="active",
             )
+            session_one = Session(
+                id="session-1",
+                workshop_id="workshop-own",
+                title="Session One",
+                start_time=datetime.now(timezone.utc) - timedelta(days=1),
+                end_time=datetime.now(timezone.utc) - timedelta(days=1) + timedelta(hours=1),
+            )
+            attendance_one = Attendance(
+                id="attendance-1",
+                session_id="session-1",
+                student_id="student-1",
+                status="present",
+            )
             approval = ApprovalRequest(
                 id="approval-existing",
                 request_type=ApprovalRequestType.DELETE_STUDENT,
@@ -148,6 +163,8 @@ def client_and_state():
                     assessment,
                     submission,
                     enrollment,
+                    session_one,
+                    attendance_one,
                     approval,
                 ]
             )
@@ -266,6 +283,31 @@ def test_institution_admin_dashboard_aggregate_and_leaderboards(client_and_state
     workshop_lb = client.get("/api/v1/analytics/leaderboard/workshop/workshop-own")
     assert workshop_lb.status_code == 200
     assert workshop_lb.json()["workshop_id"] == "workshop-own"
+
+    assessment_drilldown = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1/student/student-1")
+    assert assessment_drilldown.status_code == 200
+    assert assessment_drilldown.json()["student_id"] == "student-1"
+
+    workshop_drilldown = client.get("/api/v1/analytics/leaderboard/workshop/workshop-own/student/student-1")
+    assert workshop_drilldown.status_code == 200
+    assert workshop_drilldown.json()["context_type"] == "workshop"
+
+
+def test_institution_admin_student_roster_and_attendance_report(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    students = client.get("/api/v1/analytics/institution/students")
+    assert students.status_code == 200
+    payload = students.json()
+    assert payload["total"] >= 1
+    assert any(item["id"] == "student-1" for item in payload["items"])
+
+    attendance = client.get("/api/v1/analytics/institution/attendance-report")
+    assert attendance.status_code == 200
+    attendance_payload = attendance.json()
+    assert attendance_payload["total"] >= 1
+    assert any(item["student"] == "Student One" for item in attendance_payload["rows"])
 
 
 def test_institution_admin_parent_message_dispatch(client_and_state):

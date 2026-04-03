@@ -7,15 +7,7 @@ import VTabs from "@/components/ui-custom/VTabs";
 import VTable from "@/components/ui-custom/VTable";
 import VBadge from "@/components/ui-custom/VBadge";
 import { adaptModulesToMaterials, adaptAssessments } from "@/api/adapters";
-import { fetchWorkshop, fetchWorkshopModules, fetchWorkshopAssessments } from "@/services/api";
-
-const mockEducatorInfo = {
-  name: "Dr. Anand Kumar",
-  email: "anand@iitd.ac.in",
-  department: "Computer Science",
-  institution: "IIT Delhi",
-  bio: "Expert in modern web technologies with 15+ years of teaching experience. Specializes in React, TypeScript, and cloud-native architectures.",
-};
+import { fetchWorkshop, fetchWorkshopAssessments, fetchWorkshopEducatorProfile, fetchWorkshopModules } from "@/services/api";
 
 const WorkshopDetails = () => {
   const { id } = useParams();
@@ -34,6 +26,11 @@ const WorkshopDetails = () => {
   const { data: workshopAssessments } = useQuery({
     queryKey: ["workshopAssessments", id],
     queryFn: () => fetchWorkshopAssessments(id ?? ""),
+    enabled: Boolean(id),
+  });
+  const educatorQuery = useQuery({
+    queryKey: ["workshopEducatorProfile", id],
+    queryFn: () => fetchWorkshopEducatorProfile(id ?? ""),
     enabled: Boolean(id),
   });
 
@@ -74,20 +71,23 @@ const WorkshopDetails = () => {
       label: "Educator",
       content: (
         <VCard className="p-6">
-          <p className="text-xs text-muted-foreground mb-4">Fallback educator profile: backend workshop-to-educator contract is not available yet.</p>
+          {educatorQuery.isLoading && <p className="text-xs text-muted-foreground mb-4">Loading educator profile...</p>}
+          {educatorQuery.isError && <p className="text-xs text-muted-foreground mb-4">Unable to load educator profile.</p>}
+          {educatorQuery.data && (
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="h-20 w-20 rounded-full vidya-gradient flex items-center justify-center text-primary-foreground text-2xl font-bold shrink-0">
-              {mockEducatorInfo.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+              {educatorQuery.data.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
             </div>
             <div className="text-center sm:text-left">
-              <h3 className="text-xl font-bold text-foreground">{mockEducatorInfo.name}</h3>
+              <h3 className="text-xl font-bold text-foreground">{educatorQuery.data.name}</h3>
               <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground justify-center sm:justify-start">
-                <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {mockEducatorInfo.email}</span>
-                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {mockEducatorInfo.department}</span>
+                <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {educatorQuery.data.email}</span>
+                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {educatorQuery.data.department}</span>
               </div>
-              <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{mockEducatorInfo.bio}</p>
+              <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{educatorQuery.data.bio}</p>
             </div>
           </div>
+          )}
         </VCard>
       ),
     },

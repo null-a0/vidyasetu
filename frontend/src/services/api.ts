@@ -29,10 +29,16 @@ import type {
   BackendSubmission,
   BackendAssessmentLeaderboard,
   BackendWorkshopLeaderboard,
+  BackendLeaderboardStudentDrilldown,
   BackendAdminDashboardInsights,
   BackendInstitutionDashboardAggregate,
+  BackendInstitutionStudentRoster,
+  BackendInstitutionAttendanceReport,
   BackendParentMessageResponse,
+  BackendCertificateRecommendationResponse,
+  BackendCertificateDownloadResponse,
   BackendSubmissionReview,
+  BackendWorkshopEducatorProfile,
   TokenResponse,
   AdminStatsResponse,
   StudentStatsResponse,
@@ -51,6 +57,7 @@ import type {
 } from '@/mock/mockData';
 
 const WORKSHOP_LIMIT = 25;
+const API_ORIGIN = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
 
 const buildWorkshopLookup = (workshops: Workshop[]) => Object.fromEntries(workshops.map((w) => [w.id, w.name]));
 
@@ -59,6 +66,13 @@ const formatDateTime = (value?: string | null) => {
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) return value;
   return new Date(parsed).toISOString().slice(0, 16).replace('T', ' ');
+};
+
+export const resolveBackendMediaUrl = (relativePath?: string | null) => {
+  if (!relativePath) return '';
+  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) return relativePath;
+  const normalized = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${API_ORIGIN}${normalized}`;
 };
 
 export const fetchWorkshops = async (): Promise<Workshop[]> => {
@@ -80,6 +94,11 @@ export const fetchWorkshop = async (workshopId: string): Promise<Workshop> => {
   const data = await apiGet<BackendWorkshop>('/workshops/' + workshopId);
   return adaptWorkshopsPage({ items: [data], total: 1, offset: 0, limit: 1 })[0];
 };
+
+export const fetchWorkshopEducatorProfile = async (workshopId: string): Promise<BackendWorkshopEducatorProfile> => {
+  return apiGet<BackendWorkshopEducatorProfile>(`/workshops/${workshopId}/educator-profile`);
+};
+
 export const createWorkshop = async (payload: {
   title: string;
   description?: string | null;
@@ -471,6 +490,14 @@ export const updateUser = async (
   return apiPatch<BackendUser>('/users/' + userId, payload);
 };
 
+export const uploadUserProfilePhoto = async (userId: string, file: File): Promise<BackendUser> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiPost<BackendUser>(`/users/${userId}/profile-photo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 export const loginUser = async (payload: { email: string; password: string }) => {
   return apiPost<TokenResponse>('/auth/login', payload);
 };
@@ -490,6 +517,22 @@ export const generateCertificate = async (payload: {
     student_id: payload.studentId,
     workshop_id: payload.workshopId,
   });
+};
+
+export const recommendCertificate = async (payload: {
+  studentId: string;
+  workshopId: string;
+  note?: string;
+}): Promise<BackendCertificateRecommendationResponse> => {
+  return apiPost<BackendCertificateRecommendationResponse>('/certificates/recommend', {
+    student_id: payload.studentId,
+    workshop_id: payload.workshopId,
+    note: payload.note,
+  });
+};
+
+export const fetchCertificateDownload = async (certificateId: string): Promise<BackendCertificateDownloadResponse> => {
+  return apiGet<BackendCertificateDownloadResponse>(`/certificates/${certificateId}/download`);
 };
 
 export const fetchInstitutions = async (): Promise<BackendInstitution[]> => {
@@ -574,12 +617,34 @@ export const fetchWorkshopLeaderboard = async (workshopId: string): Promise<Back
   return apiGet<BackendWorkshopLeaderboard>(`/analytics/leaderboard/workshop/${workshopId}`);
 };
 
+export const fetchAssessmentLeaderboardDrilldown = async (
+  assessmentId: string,
+  studentId: string
+): Promise<BackendLeaderboardStudentDrilldown> => {
+  return apiGet<BackendLeaderboardStudentDrilldown>(`/analytics/leaderboard/assessment/${assessmentId}/student/${studentId}`);
+};
+
+export const fetchWorkshopLeaderboardDrilldown = async (
+  workshopId: string,
+  studentId: string
+): Promise<BackendLeaderboardStudentDrilldown> => {
+  return apiGet<BackendLeaderboardStudentDrilldown>(`/analytics/leaderboard/workshop/${workshopId}/student/${studentId}`);
+};
+
 export const fetchInstitutionDashboardAggregate = async (): Promise<BackendInstitutionDashboardAggregate> => {
   return apiGet<BackendInstitutionDashboardAggregate>('/analytics/institution/dashboard');
 };
 
 export const fetchAdminDashboardInsights = async (): Promise<BackendAdminDashboardInsights> => {
   return apiGet<BackendAdminDashboardInsights>('/analytics/admin/insights');
+};
+
+export const fetchInstitutionStudentRoster = async (): Promise<BackendInstitutionStudentRoster> => {
+  return apiGet<BackendInstitutionStudentRoster>('/analytics/institution/students');
+};
+
+export const fetchInstitutionAttendanceReport = async (): Promise<BackendInstitutionAttendanceReport> => {
+  return apiGet<BackendInstitutionAttendanceReport>('/analytics/institution/attendance-report');
 };
 
 export const sendParentEmailMessage = async (payload: {
@@ -597,6 +662,11 @@ export const sendParentEmailMessage = async (payload: {
 export const fetchSubmissionReview = async (submissionId: string): Promise<BackendSubmissionReview> => {
   return apiGet<BackendSubmissionReview>(`/submissions/${submissionId}/review`);
 };
+
+
+
+
+
 
 
 

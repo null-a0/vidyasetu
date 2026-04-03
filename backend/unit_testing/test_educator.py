@@ -12,6 +12,7 @@ from app.main import app
 from app.models import (
     Assessment,
     Base,
+    Certificate,
     Enrollment,
     Institution,
     Module,
@@ -44,6 +45,14 @@ def client_and_state():
                 email="admin@vidyasetu.edu",
                 password="hashed",
                 role=UserRole.ADMIN,
+                institution_id="inst-1",
+            )
+            institution_admin = User(
+                id="inst-admin-1",
+                name="Institution Admin",
+                email="inst-admin@vidyasetu.edu",
+                password="hashed",
+                role=UserRole.INSTITUTION_ADMIN,
                 institution_id="inst-1",
             )
             educator = User(
@@ -133,12 +142,19 @@ def client_and_state():
                 user_id="educator-1",
                 message="New submission pending",
             )
+            certificate = Certificate(
+                id="certificate-1",
+                student_id="student-1",
+                workshop_id="workshop-own",
+                verification_code="VERIFY-EDU-1",
+            )
 
             session.add_all(
                 [
                     inst_one,
                     inst_two,
                     admin,
+                    institution_admin,
                     educator,
                     student,
                     own_workshop,
@@ -150,6 +166,7 @@ def client_and_state():
                     submission,
                     graded_submission,
                     notification,
+                    certificate,
                 ]
             )
             await session.commit()
@@ -260,6 +277,44 @@ def test_educator_can_view_review_and_dispatch_parent_message(client_and_state):
 
     assessment_lb = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1")
     assert assessment_lb.status_code == 200
+
+    assessment_drilldown = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1/student/student-1")
+    assert assessment_drilldown.status_code == 200
+    assert assessment_drilldown.json()["student_id"] == "student-1"
+
+    workshop_drilldown = client.get("/api/v1/analytics/leaderboard/workshop/workshop-own/student/student-1")
+    assert workshop_drilldown.status_code == 200
+    assert workshop_drilldown.json()["context_id"] == "workshop-own"
+
+
+def test_educator_workshop_educator_profile_contract(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    own_profile = client.get("/api/v1/workshops/workshop-own/educator-profile")
+    assert own_profile.status_code == 200
+    payload = own_profile.json()
+    assert payload["workshop_id"] == "workshop-own"
+    assert payload["email"] == "educator@vidyasetu.edu"
+
+    cross_institution = client.get("/api/v1/workshops/workshop-other/educator-profile")
+    assert cross_institution.status_code == 403
+
+
+def test_educator_certificate_recommend_and_download(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    recommend = client.post(
+        "/api/v1/certificates/recommend",
+        json={"student_id": "student-1", "workshop_id": "workshop-own", "note": "Ready for certificate."},
+    )
+    assert recommend.status_code == 200
+    assert recommend.json()["accepted"] >= 1
+
+    download = client.get("/api/v1/certificates/certificate-1/download")
+    assert download.status_code == 200
+    assert "/media/certificates/certificate-1.pdf" in download.json()["download_url"]
 
 
 def test_educator_forbidden_admin_and_delete_routes(client_and_state):

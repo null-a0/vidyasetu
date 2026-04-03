@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Users, ClipboardList, Award, TrendingUp, TrendingDown, Plus, AlertCircle, Eye, Calendar, CheckSquare } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
@@ -12,7 +12,13 @@ import VModal from "@/components/ui-custom/VModal";
 import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchInstitutionDashboardAggregate, fetchWorkshops } from "@/services/api";
+import {
+  createWorkshop,
+  fetchInstitutionAttendanceReport,
+  fetchInstitutionDashboardAggregate,
+  fetchInstitutionStudentRoster,
+  fetchWorkshops,
+} from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
 
 const iconColors = [
@@ -33,26 +39,10 @@ const FALLBACK_ALERTS: Array<{ id: string; text: string; type: "warning" | "info
 const FALLBACK_ACTIVITY: Array<{ id: string; text: string; time: string }> = [];
 const FALLBACK_ENROLLMENT_DATA: Array<{ month: string; students: number }> = [];
 
-const studentData = [
-  { id: "1", name: "Aarav Sharma", email: "aarav@student.com", workshop: "React Fundamentals", status: "Active" },
-  { id: "2", name: "Priya Patel", email: "priya@student.com", workshop: "React Fundamentals", status: "Active" },
-  { id: "3", name: "Rohan Gupta", email: "rohan@student.com", workshop: "Python for Data Science", status: "Active" },
-  { id: "4", name: "Sneha Reddy", email: "sneha@student.com", workshop: "Cloud Computing Basics", status: "Inactive" },
-  { id: "5", name: "Vikram Singh", email: "vikram@student.com", workshop: "UI/UX Design Principles", status: "Completed" },
-  { id: "6", name: "Ananya Iyer", email: "ananya@student.com", workshop: "React Fundamentals", status: "Active" },
-];
-
-const attendanceData = [
-  { student: "Aarav Sharma", mon: true, tue: true, wed: false, thu: true, fri: true },
-  { student: "Priya Patel", mon: true, tue: true, wed: true, thu: true, fri: true },
-  { student: "Rohan Gupta", mon: false, tue: true, wed: true, thu: false, fri: true },
-  { student: "Sneha Reddy", mon: true, tue: false, wed: true, thu: true, fri: false },
-  { student: "Vikram Singh", mon: true, tue: true, wed: true, thu: true, fri: true },
-];
-
 const InstitutionDashboard = () => {
   const navigate = useNavigate();
   const { showToast } = useVToast();
+  const queryClient = useQueryClient();
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
   const institutionAggregateQuery = useQuery({
     queryKey: ["institutionDashboardAggregate"],
@@ -61,7 +51,42 @@ const InstitutionDashboard = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "attendance" | "reports">("overview");
   const [createModal, setCreateModal] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [createName, setCreateName] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createStatus, setCreateStatus] = useState("Upcoming");
+
+  const studentRosterQuery = useQuery({
+    queryKey: ["institutionStudentRoster"],
+    queryFn: fetchInstitutionStudentRoster,
+    enabled: activeTab === "students",
+  });
+  const attendanceReportQuery = useQuery({
+    queryKey: ["institutionAttendanceReport"],
+    queryFn: fetchInstitutionAttendanceReport,
+    enabled: activeTab === "attendance",
+  });
+  const createWorkshopMutation = useMutation({
+    mutationFn: createWorkshop,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workshops"] }),
+        queryClient.invalidateQueries({ queryKey: ["institutionDashboardAggregate"] }),
+      ]);
+      setCreateName("");
+      setCreateDescription("");
+      setCreateStatus("Upcoming");
+      setCreateModal(false);
+      showToast("success", "Workshop Created", "New workshop added successfully");
+    },
+    onError: (error: unknown) => {
+      showToast("destructive", "Create Failed", error instanceof Error ? error.message : "Unable to create workshop.");
+    },
+  });
+
   const aggregate = institutionAggregateQuery.data;
+  const studentData = studentRosterQuery.data?.items ?? [];
+  const attendanceData = attendanceReportQuery.data?.rows ?? [];
+
   const statsData = aggregate
     ? [
         {
@@ -116,16 +141,17 @@ const InstitutionDashboard = () => {
   };
 
   const toggleStudent = (id: string) => {
-    setSelectedStudents(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedStudents((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const toggleAll = () => {
     if (selectedStudents.size === studentData.length) setSelectedStudents(new Set());
-    else setSelectedStudents(new Set(studentData.map(s => s.id)));
+    else setSelectedStudents(new Set(studentData.map((student) => student.id)));
   };
 
   const columns = [
@@ -133,16 +159,24 @@ const InstitutionDashboard = () => {
     { key: "startDate", header: "Start" },
     { key: "endDate", header: "End" },
     { key: "studentsEnrolled", header: "Students" },
-    { key: "status", header: "Status", render: (r: Workshop) => (
-      <VBadge variant={r.status === "Active" ? "success" : r.status === "Upcoming" ? "warning" : "outline"}>
-        {r.status}
-      </VBadge>
-    )},
-    { key: "actions", header: "", render: (r: Workshop) => (
-      <VButton variant="secondary" size="sm" onClick={() => { navigate(`/workshops/${r.id}`); }}>
-        <Eye className="h-3.5 w-3.5" /> View
-      </VButton>
-    )},
+    {
+      key: "status",
+      header: "Status",
+      render: (row: Workshop) => (
+        <VBadge variant={row.status === "Active" ? "success" : row.status === "Upcoming" ? "warning" : "outline"}>
+          {row.status}
+        </VBadge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (row: Workshop) => (
+        <VButton variant="secondary" size="sm" onClick={() => { navigate(`/workshops/${row.id}`); }}>
+          <Eye className="h-3.5 w-3.5" /> View
+        </VButton>
+      ),
+    },
   ];
 
   const tabs = [
@@ -154,12 +188,11 @@ const InstitutionDashboard = () => {
 
   return (
     <DashboardLayout title="Institution Dashboard">
-      {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
+            onClick={() => setActiveTab(tab.key as "overview" | "students" | "attendance" | "reports")}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === tab.key
                 ? "border-primary text-primary"
@@ -171,17 +204,16 @@ const InstitutionDashboard = () => {
         ))}
       </div>
 
-      {/* ═══ OVERVIEW ═══ */}
       {activeTab === "overview" && (
         <>
           {institutionAggregateQuery.isLoading && (
             <p className="text-xs text-muted-foreground mb-3">Loading institution aggregate metrics...</p>
           )}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-8">
-            {statsData.map(({ label, value, icon: Icon, trend, up }, i) => (
+            {statsData.map(({ label, value, icon: Icon, trend, up }, index) => (
               <VCard key={label} hover className="p-5 cursor-pointer" onClick={() => showToast("info", label, `Showing ${label.toLowerCase()} details`)}>
                 <div className="flex items-center justify-between mb-4">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconColors[i]}`}>
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconColors[index]}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${up ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
@@ -196,14 +228,13 @@ const InstitutionDashboard = () => {
           </div>
 
           <div className="grid gap-5 lg:grid-cols-2 mb-8">
-            {/* Alerts */}
             <VCard className="p-5">
               <h3 className="text-base font-semibold text-foreground mb-4">Alerts & Reminders</h3>
               <div className="space-y-2">
                 {alerts.map((alert) => (
                   <button
                     key={alert.id}
-                    onClick={() => showToast(alert.type as any, alert.text)}
+                    onClick={() => showToast(alert.type as "warning" | "success" | "info", alert.text)}
                     className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-accent transition-colors"
                   >
                     <AlertCircle className={`h-5 w-5 mt-0.5 shrink-0 ${
@@ -215,7 +246,6 @@ const InstitutionDashboard = () => {
               </div>
             </VCard>
 
-            {/* Recent Activity */}
             <VCard className="p-5">
               <h3 className="text-base font-semibold text-foreground mb-4">Recent Activity</h3>
               <div className="space-y-1">
@@ -248,10 +278,11 @@ const InstitutionDashboard = () => {
         </>
       )}
 
-      {/* ═══ STUDENTS ═══ */}
       {activeTab === "students" && (
         <>
-          <p className="text-xs text-muted-foreground mb-3">Fallback panel: institution-wide student roster/report contract is not fully available yet.</p>
+          {studentRosterQuery.isLoading && (
+            <p className="text-xs text-muted-foreground mb-3">Loading students...</p>
+          )}
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">{selectedStudents.size} selected</p>
             <div className="flex gap-2">
@@ -272,7 +303,7 @@ const InstitutionDashboard = () => {
               <thead>
                 <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left">
-                    <input type="checkbox" checked={selectedStudents.size === studentData.length} onChange={toggleAll} className="rounded border-border" />
+                    <input type="checkbox" checked={studentData.length > 0 && selectedStudents.size === studentData.length} onChange={toggleAll} className="rounded border-border" />
                   </th>
                   <th className="vidya-table-header px-4 py-3 text-left">Name</th>
                   <th className="vidya-table-header px-4 py-3 text-left">Email</th>
@@ -282,36 +313,44 @@ const InstitutionDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {studentData.map((s) => (
-                  <tr key={s.id} className={`border-b border-border last:border-0 transition-colors ${selectedStudents.has(s.id) ? "bg-primary/5" : "hover:bg-accent/50"}`}>
+                {studentData.map((student) => (
+                  <tr key={student.id} className={`border-b border-border last:border-0 transition-colors ${selectedStudents.has(student.id) ? "bg-primary/5" : "hover:bg-accent/50"}`}>
                     <td className="px-4 py-4">
-                      <input type="checkbox" checked={selectedStudents.has(s.id)} onChange={() => toggleStudent(s.id)} className="rounded border-border" />
+                      <input type="checkbox" checked={selectedStudents.has(student.id)} onChange={() => toggleStudent(student.id)} className="rounded border-border" />
                     </td>
-                    <td className="px-4 py-4 font-medium text-foreground">{s.name}</td>
-                    <td className="px-4 py-4 text-muted-foreground">{s.email}</td>
-                    <td className="px-4 py-4 text-foreground">{s.workshop}</td>
+                    <td className="px-4 py-4 font-medium text-foreground">{student.name}</td>
+                    <td className="px-4 py-4 text-muted-foreground">{student.email}</td>
+                    <td className="px-4 py-4 text-foreground">{student.workshop}</td>
                     <td className="px-4 py-4">
-                      <VBadge variant={s.status === "Active" ? "success" : s.status === "Completed" ? "default" : "warning"}>
-                        {s.status}
+                      <VBadge variant={student.status === "Active" ? "success" : student.status === "Completed" ? "default" : "warning"}>
+                        {student.status}
                       </VBadge>
                     </td>
                     <td className="px-4 py-4">
-                      <VButton variant="secondary" size="sm" onClick={() => showToast("info", `Viewing ${s.name}'s profile`)}>
+                      <VButton variant="secondary" size="sm" onClick={() => showToast("info", `Viewing ${student.name}'s profile`)}>
                         <Eye className="h-3.5 w-3.5" /> View
                       </VButton>
                     </td>
                   </tr>
                 ))}
+                {studentData.length === 0 && !studentRosterQuery.isLoading && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      No students found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </VCard>
         </>
       )}
 
-      {/* ═══ ATTENDANCE ═══ */}
       {activeTab === "attendance" && (
         <VCard className="overflow-hidden">
-          <p className="text-xs text-muted-foreground px-5 pt-4">Fallback panel: attendance report contract for this widget is not available yet.</p>
+          {attendanceReportQuery.isLoading && (
+            <p className="text-xs text-muted-foreground px-5 pt-4">Loading attendance report...</p>
+          )}
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h3 className="text-base font-semibold text-foreground">Weekly Attendance — React Fundamentals</h3>
             <VButton variant="secondary" size="sm" onClick={() => showToast("info", "Attendance exported")}>
@@ -322,8 +361,8 @@ const InstitutionDashboard = () => {
             <thead>
               <tr className="border-b border-border">
                 <th className="vidya-table-header px-4 py-3 text-left">Student</th>
-                {["Mon", "Tue", "Wed", "Thu", "Fri"].map(d => (
-                  <th key={d} className="vidya-table-header px-4 py-3 text-center">{d}</th>
+                {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => (
+                  <th key={day} className="vidya-table-header px-4 py-3 text-center">{day}</th>
                 ))}
               </tr>
             </thead>
@@ -334,20 +373,26 @@ const InstitutionDashboard = () => {
                   {["mon", "tue", "wed", "thu", "fri"].map((day) => (
                     <td key={day} className="px-4 py-4 text-center">
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
-                        (row as any)[day] ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                        (row as Record<string, boolean | string>)[day] ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
                       }`}>
-                        {(row as any)[day] ? <CheckSquare className="h-4 w-4" /> : "✗"}
+                        {(row as Record<string, boolean | string>)[day] ? <CheckSquare className="h-4 w-4" /> : "×"}
                       </span>
                     </td>
                   ))}
                 </tr>
               ))}
+              {attendanceData.length === 0 && !attendanceReportQuery.isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    No attendance rows available for this week.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </VCard>
       )}
 
-      {/* ═══ REPORTS ═══ */}
       {activeTab === "reports" && (
         <>
           <div className="flex items-center justify-between mb-4">
@@ -385,18 +430,34 @@ const InstitutionDashboard = () => {
         </>
       )}
 
-      {/* Create Workshop Modal */}
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Workshop">
         <div className="space-y-4">
-          <VInput id="inst-w-name" label="Workshop Name" placeholder="e.g. React Fundamentals" />
-          <div className="space-y-1.5"><label className="vidya-label">Description</label><textarea placeholder="Workshop description..." rows={3} className="vidya-input resize-none" /></div>
-          <VSelect id="inst-w-status" label="Status" options={[
+          <VInput id="inst-w-name" label="Workshop Name" placeholder="e.g. React Fundamentals" value={createName} onChange={(event) => setCreateName(event.target.value)} />
+          <div className="space-y-1.5"><label className="vidya-label">Description</label><textarea value={createDescription} onChange={(event) => setCreateDescription(event.target.value)} placeholder="Workshop description..." rows={3} className="vidya-input resize-none" /></div>
+          <VSelect id="inst-w-status" label="Status" value={createStatus} onChange={(event) => setCreateStatus(event.target.value)} options={[
             { value: "Upcoming", label: "Upcoming" },
             { value: "Active", label: "Active" },
           ]} />
           <div className="flex justify-end gap-3 pt-2">
             <VButton variant="ghost" onClick={() => setCreateModal(false)}>Cancel</VButton>
-            <VButton onClick={() => { setCreateModal(false); showToast("success", "Workshop Created", "New workshop added successfully"); }}>
+            <VButton
+              onClick={() => {
+                if (!createName.trim()) {
+                  showToast("warning", "Workshop Name Required", "Enter a workshop name before creating.");
+                  return;
+                }
+                const now = new Date();
+                const startDate = createStatus === "Active" ? now : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+                createWorkshopMutation.mutate({
+                  title: createName.trim(),
+                  description: createDescription.trim() || undefined,
+                  start_date: startDate.toISOString(),
+                  end_date: endDate.toISOString(),
+                });
+              }}
+              disabled={createWorkshopMutation.isPending}
+            >
               Create Workshop
             </VButton>
           </div>

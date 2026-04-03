@@ -70,6 +70,16 @@ class WorkshopResponse(BaseModel):
     institution_id: Optional[str]
 
 
+class WorkshopEducatorProfileResponse(BaseModel):
+    workshop_id: str
+    educator_id: Optional[str] = None
+    name: str
+    email: str
+    department: str
+    institution: str
+    bio: str
+
+
 # ---------------------------------------------------------------------------
 # Module
 # ---------------------------------------------------------------------------

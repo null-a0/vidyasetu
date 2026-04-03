@@ -145,6 +145,9 @@ export const adaptCertificates = (
     workshop: cert.workshop_title ?? workshopLookup[cert.workshop_id ?? ''] ?? 'Workshop',
     completionDate: formatDate(cert.issue_date),
     status: cert.qr_url ? 'Issued' : 'Pending',
+    studentId: cert.student_id ?? undefined,
+    workshopId: cert.workshop_id ?? undefined,
+    downloadUrl: cert.pdf_path ?? undefined,
   }));
 
 const notificationVisualType: Record<string, Notification['type']> = {
@@ -224,4 +227,6 @@ export const adaptWorkshopAnalytics = (analytics: BackendWorkshopAnalytics): Wor
   passRatePercentage: Math.round(analytics.assessment.pass_rate_percentage ?? 0),
   attendancePercentage: Math.round(analytics.attendance.avg_attendance_percentage ?? 0),
 });
+
+
 

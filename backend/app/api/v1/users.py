@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -13,6 +13,7 @@ from app.crud import get_user, get_users, update_user
 from app.models import User, UserRole
 from app.schemas.base import Page
 from app.schemas.user import UserResponse, UserUpdate
+from app.services.storage import delete_upload, save_upload
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -110,4 +111,35 @@ async def patch_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     updated = await update_user(db, user, payload)
+    return UserResponse.model_validate(updated)
+
+
+@router.post(
+    "/{user_id}/profile-photo",
+    response_model=UserResponse,
+    summary="Upload and persist profile photo for a user",
+)
+async def upload_profile_photo(
+    user_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    if current_user.role not in (UserRole.ADMIN,) and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    user = await get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    filename = file.filename or "avatar.jpg"
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    relative_path = await save_upload(content, filename, subfolder="avatars")
+    if user.profile_photo:
+        delete_upload(user.profile_photo)
+
+    updated = await update_user(db, user, UserUpdate(profile_photo=relative_path))
     return UserResponse.model_validate(updated)

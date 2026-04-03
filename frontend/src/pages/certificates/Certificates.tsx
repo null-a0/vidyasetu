@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+ï»¿import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Download, Award, Send, Plus, Trophy, Sparkles, CheckCircle2 } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import VTable from '@/components/ui-custom/VTable';
@@ -8,13 +8,20 @@ import VCard from '@/components/ui-custom/VCard';
 import VModal from '@/components/ui-custom/VModal';
 import VSelect from '@/components/ui-custom/VSelect';
 import { useVToast } from '@/components/ui-custom/VToast';
-import { fetchCertificates, fetchWorkshops, fetchStudents, generateCertificate } from '@/services/api';
+import {
+  fetchCertificateDownload,
+  fetchCertificates,
+  fetchWorkshops,
+  fetchStudents,
+  generateCertificate,
+  recommendCertificate,
+} from '@/services/api';
 import { useRole } from '@/hooks/useRole';
 import { useAuth } from '@/hooks/useAuth';
 import type { Certificate } from '@/mock/mockData';
 import { useEffect, useState } from 'react';
 
-const adminColumns = [
+const adminColumns = (onDownload: (certificate: Certificate) => void, downloadingId: string | null) => [
   { key: 'certificateId', header: 'Certificate ID' },
   { key: 'studentName', header: 'Student' },
   { key: 'workshop', header: 'Workshop' },
@@ -29,16 +36,20 @@ const adminColumns = [
     header: 'Actions',
     render: (r: Certificate) =>
       r.status === 'Issued' ? (
-        <VButton variant="secondary" size="sm">
+        <VButton variant="secondary" size="sm" onClick={() => onDownload(r)} disabled={downloadingId === r.id}>
           <Download className="h-3.5 w-3.5" /> Download
         </VButton>
       ) : (
-        <span className="text-sm text-muted-foreground">—</span>
+        <span className="text-sm text-muted-foreground">-</span>
       ),
   },
 ];
 
-const educatorColumns = [
+const educatorColumns = (
+  onRecommend: (certificate: Certificate) => void,
+  onDownload: (certificate: Certificate) => void,
+  downloadingId: string | null
+) => [
   { key: 'certificateId', header: 'Certificate ID' },
   { key: 'studentName', header: 'Student' },
   { key: 'workshop', header: 'Workshop' },
@@ -52,18 +63,24 @@ const educatorColumns = [
     header: 'Actions',
     render: (r: Certificate) =>
       r.status === 'Pending' ? (
-        <VButton variant="primary" size="sm">
+        <VButton variant="primary" size="sm" onClick={() => onRecommend(r)}>
           <Send className="h-3.5 w-3.5" /> Recommend
         </VButton>
       ) : (
-        <VButton variant="secondary" size="sm">
+        <VButton variant="secondary" size="sm" onClick={() => onDownload(r)} disabled={downloadingId === r.id}>
           <Download className="h-3.5 w-3.5" /> Download
         </VButton>
       ),
   },
 ];
 
-const StudentCertificates = ({ certificates }: { certificates: Certificate[] }) => {
+const StudentCertificates = ({
+  certificates,
+  onDownload,
+}: {
+  certificates: Certificate[];
+  onDownload: (certificate: Certificate) => void;
+}) => {
   const myCerts = certificates.filter((c) => c.status === 'Issued');
 
   if (myCerts.length === 0) {
@@ -74,7 +91,7 @@ const StudentCertificates = ({ certificates }: { certificates: Certificate[] }) 
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-3">Your Trophy Case Awaits!</h2>
         <p className="text-muted-foreground max-w-md mb-6 leading-relaxed">
-          You haven't earned any certificates yet — complete a workshop and ace the assessments to earn your first certificate.
+          You haven't earned any certificates yet - complete a workshop and ace the assessments to earn your first certificate.
         </p>
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <VButton onClick={() => (window.location.href = '/workshops')}>
@@ -88,7 +105,7 @@ const StudentCertificates = ({ certificates }: { certificates: Certificate[] }) 
           <p className="text-sm italic text-muted-foreground leading-relaxed">
             "The beautiful thing about learning is that nobody can take it away from you."
           </p>
-          <p className="text-xs text-primary font-semibold mt-3">— B.B. King</p>
+          <p className="text-xs text-primary font-semibold mt-3">- B.B. King</p>
         </div>
       </div>
     );
@@ -112,7 +129,7 @@ const StudentCertificates = ({ certificates }: { certificates: Certificate[] }) 
               <h3 className="text-base font-bold text-foreground mb-1">{cert.workshop}</h3>
               <p className="text-xs text-muted-foreground mb-1">ID: {cert.certificateId}</p>
               <p className="text-xs text-muted-foreground mb-4">Completed: {cert.completionDate}</p>
-              <VButton variant="secondary" size="sm" className="w-full">
+              <VButton variant="secondary" size="sm" className="w-full" onClick={() => onDownload(cert)}>
                 <Download className="h-3.5 w-3.5" /> Download Certificate
               </VButton>
             </div>
@@ -200,6 +217,8 @@ const Certificates = () => {
 
   const role = useRole();
   const { user } = useAuth();
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { data: certificates = [] } = useQuery({
     queryKey: ['certificates', user?.id, role],
@@ -213,7 +232,17 @@ const Certificates = () => {
     enabled: Boolean(user),
   });
 
-  const [showGenerate, setShowGenerate] = useState(false);
+  const downloadMutation = useMutation({ mutationFn: fetchCertificateDownload });
+  const recommendMutation = useMutation({
+    mutationFn: recommendCertificate,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['certificates'] });
+      showToast('success', 'Recommendation Sent', 'Certificate recommendation dispatched to institution admins.');
+    },
+    onError: (err: unknown) => {
+      showToast('destructive', 'Recommend Failed', err instanceof Error ? err.message : 'Unable to send recommendation.');
+    },
+  });
 
   const handleIssue = async (payload: { workshopId: string; studentId: string }) => {
     try {
@@ -226,10 +255,34 @@ const Certificates = () => {
     }
   };
 
+  const handleDownload = async (certificate: Certificate) => {
+    try {
+      setDownloadingId(certificate.id);
+      const response = await downloadMutation.mutateAsync(certificate.id);
+      window.open(response.download_url, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      showToast('destructive', 'Download Failed', err instanceof Error ? err.message : 'Unable to download certificate.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleRecommend = (certificate: Certificate) => {
+    if (!certificate.studentId || !certificate.workshopId) {
+      showToast('destructive', 'Recommend Failed', 'Student/workshop mapping missing for this certificate.');
+      return;
+    }
+    recommendMutation.mutate({
+      studentId: certificate.studentId,
+      workshopId: certificate.workshopId,
+      note: `Recommended from educator certificates panel (${certificate.id}).`,
+    });
+  };
+
   if (role === 'student') {
     return (
       <DashboardLayout title="My Certificates">
-        <StudentCertificates certificates={certificates} />
+        <StudentCertificates certificates={certificates} onDownload={handleDownload} />
       </DashboardLayout>
     );
   }
@@ -240,7 +293,7 @@ const Certificates = () => {
         <p className="text-sm text-muted-foreground mb-4">
           Review and recommend students for certification. Institutions will issue the final certificate.
         </p>
-        <VTable columns={educatorColumns} data={certificates} />
+        <VTable columns={educatorColumns(handleRecommend, handleDownload, downloadingId)} data={certificates} />
       </DashboardLayout>
     );
   }
@@ -255,7 +308,7 @@ const Certificates = () => {
           </VButton>
         )}
       </div>
-      <VTable columns={adminColumns} data={certificates} />
+      <VTable columns={adminColumns(handleDownload, downloadingId)} data={certificates} />
       <GenerateCertificateModal isOpen={showGenerate} onClose={() => setShowGenerate(false)} onIssue={handleIssue} />
     </DashboardLayout>
   );

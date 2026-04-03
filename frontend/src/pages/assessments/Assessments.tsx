@@ -17,6 +17,7 @@ import {
   createAssessmentQuestion,
   deleteAssessment,
   fetchAssessmentLeaderboard,
+  fetchAssessmentLeaderboardDrilldown,
   fetchAssessmentQuestions,
   fetchAssessments,
   fetchWorkshops,
@@ -76,6 +77,12 @@ const AssessmentsPage = () => {
   });
   const leaderboardEntries = leaderboardQuery.data?.entries ?? [];
   const selectedStudent = selectedStudentIndex !== null ? leaderboardEntries[selectedStudentIndex] : null;
+  const selectedStudentId = selectedStudent?.student_id ?? "";
+  const studentDrilldownQuery = useQuery({
+    queryKey: ["assessmentLeaderboardDrilldown", selected?.id, selectedStudentId],
+    queryFn: () => fetchAssessmentLeaderboardDrilldown(selected?.id ?? "", selectedStudentId),
+    enabled: Boolean(studentPerfModal && perfTab === "detailed" && selected?.id && selectedStudentId),
+  });
 
   const questionsQuery = useQuery({
     queryKey: ["assessmentQuestions", selected?.id],
@@ -418,7 +425,28 @@ const AssessmentsPage = () => {
 
             {perfTab === "detailed" && (
               <div className="space-y-2 max-h-72 overflow-y-auto">
-                <p className="text-sm text-muted-foreground">Detailed attempt-by-attempt leaderboard review is not exposed by backend yet.</p>
+                {studentDrilldownQuery.isLoading && <p className="text-sm text-muted-foreground">Loading detailed review...</p>}
+                {!studentDrilldownQuery.isLoading && studentDrilldownQuery.data?.attempts?.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No graded attempts available for this student.</p>
+                )}
+                {studentDrilldownQuery.data?.attempts?.map((attempt) => (
+                  <VCard key={attempt.submission_id} className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-foreground">{Math.round(attempt.percentage)}% ({attempt.score})</p>
+                      <VBadge variant={attempt.pass_fail ? "success" : "destructive"}>{attempt.pass_fail ? "Pass" : "Fail"}</VBadge>
+                    </div>
+                    <div className="space-y-2">
+                      {attempt.questions.map((question, idx) => (
+                        <div key={question.question_id} className={`rounded-lg px-3 py-2 ${question.is_correct ? "bg-success/5" : "bg-destructive/5"}`}>
+                          <p className="text-sm text-foreground">{idx + 1}. {question.question_text}</p>
+                          <p className="text-xs text-muted-foreground">Selected: {question.selected_option_texts.join(", ") || "Not answered"}</p>
+                          <p className="text-xs text-muted-foreground">Correct: {question.correct_option_texts.join(", ") || "—"}</p>
+                          <p className={`text-xs ${question.is_correct ? "text-success" : "text-destructive"}`}>Marks: {question.earned_marks}/{question.max_marks}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </VCard>
+                ))}
               </div>
             )}
 

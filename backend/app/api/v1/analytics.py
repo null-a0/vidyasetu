@@ -18,6 +18,7 @@ from app.models import (
     Attendance,
     Enrollment,
     Institution,
+    Question,
     Session,
     Submission,
     User,
@@ -31,7 +32,14 @@ from app.schemas.analytics import (
     DashboardAlertItem,
     DashboardSeriesPoint,
     InstitutionDashboardAggregateResponse,
+    InstitutionAttendanceReportResponse,
+    InstitutionAttendanceRow,
+    InstitutionStudentRosterItem,
+    InstitutionStudentRosterResponse,
     LeaderboardEntry,
+    LeaderboardAttemptDetail,
+    LeaderboardAttemptQuestion,
+    LeaderboardStudentDrilldownResponse,
     StudentAnalyticsResponse,
     StudentAttendanceResponse,
     WorkshopLeaderboardResponse,
@@ -192,6 +200,139 @@ async def workshop_leaderboard(
         for index, row in enumerate(rows)
     ]
     return WorkshopLeaderboardResponse(workshop_id=workshop_id, entries=entries)
+
+
+async def _build_student_leaderboard_drilldown(
+    db: AsyncSession,
+    *,
+    student_id: str,
+    context_type: str,
+    context_id: str,
+    assessment_ids: list[str],
+) -> LeaderboardStudentDrilldownResponse:
+    student_name = (
+        await db.execute(select(func.coalesce(User.name, User.email)).where(User.id == student_id))
+    ).scalar_one_or_none()
+    if not student_name:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+
+    submissions = (
+        await db.execute(
+            select(Submission)
+            .where(Submission.student_id == student_id)
+            .where(Submission.assessment_id.in_(assessment_ids))
+            .where(Submission.pass_fail.is_not(None))
+            .order_by(Submission.submitted_at.desc())
+            .limit(10)
+        )
+    ).scalars().all()
+
+    attempt_details: list[LeaderboardAttemptDetail] = []
+    percentages: list[float] = []
+    for submission in submissions:
+        questions = (
+            await db.execute(select(Question).where(Question.assessment_id == submission.assessment_id))
+        ).scalars().all()
+        answers_lookup = {
+            item.get("question_id"): item.get("selected_option_ids", [])
+            for item in (submission.answers or [])
+            if isinstance(item, dict)
+        }
+
+        question_rows: list[LeaderboardAttemptQuestion] = []
+        for question in questions:
+            options = question.options or []
+            correct_ids = [opt.get("id") for opt in options if opt.get("is_correct")]
+            selected_ids = answers_lookup.get(question.id, [])
+            selected_texts = [opt.get("text", "") for opt in options if opt.get("id") in selected_ids]
+            correct_texts = [opt.get("text", "") for opt in options if opt.get("id") in correct_ids]
+            max_marks = int(question.marks or 0)
+            is_correct = sorted(selected_ids) == sorted(correct_ids)
+            question_rows.append(
+                LeaderboardAttemptQuestion(
+                    question_id=question.id,
+                    question_text=question.text or "",
+                    selected_option_texts=selected_texts,
+                    correct_option_texts=correct_texts,
+                    earned_marks=max_marks if is_correct else 0,
+                    max_marks=max_marks,
+                    is_correct=is_correct,
+                )
+            )
+
+        percentage = float(submission.percentage or 0)
+        percentages.append(percentage)
+        attempt_details.append(
+            LeaderboardAttemptDetail(
+                submission_id=submission.id,
+                submitted_at=submission.submitted_at.isoformat() if submission.submitted_at else None,
+                score=float(submission.score or 0),
+                percentage=percentage,
+                pass_fail=bool(submission.pass_fail),
+                questions=question_rows,
+            )
+        )
+
+    average = round(sum(percentages) / len(percentages), 2) if percentages else 0.0
+    return LeaderboardStudentDrilldownResponse(
+        context_type=context_type,
+        context_id=context_id,
+        student_id=student_id,
+        student_name=student_name,
+        attempts=attempt_details,
+        average_percentage=average,
+        total_attempts=len(attempt_details),
+    )
+
+
+@router.get(
+    "/leaderboard/assessment/{assessment_id}/student/{student_id}",
+    response_model=LeaderboardStudentDrilldownResponse,
+    summary="Detailed leaderboard drilldown for one student in an assessment",
+)
+async def assessment_leaderboard_drilldown(
+    assessment_id: str,
+    student_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> LeaderboardStudentDrilldownResponse:
+    assessment = await db.get(Assessment, assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+    return await _build_student_leaderboard_drilldown(
+        db,
+        student_id=student_id,
+        context_type="assessment",
+        context_id=assessment_id,
+        assessment_ids=[assessment_id],
+    )
+
+
+@router.get(
+    "/leaderboard/workshop/{workshop_id}/student/{student_id}",
+    response_model=LeaderboardStudentDrilldownResponse,
+    summary="Detailed leaderboard drilldown for one student across a workshop",
+)
+async def workshop_leaderboard_drilldown(
+    workshop_id: str,
+    student_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> LeaderboardStudentDrilldownResponse:
+    workshop = await get_workshop(db, workshop_id)
+    if not workshop:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+    assessment_ids = [
+        row[0]
+        for row in (await db.execute(select(Assessment.id).where(Assessment.workshop_id == workshop_id))).all()
+    ]
+    return await _build_student_leaderboard_drilldown(
+        db,
+        student_id=student_id,
+        context_type="workshop",
+        context_id=workshop_id,
+        assessment_ids=assessment_ids,
+    )
 
 
 @router.get(
@@ -391,6 +532,119 @@ async def institution_dashboard_aggregate(
             "top_workshop": top_workshop[0] if top_workshop else "—",
         },
     )
+
+
+@router.get(
+    "/institution/students",
+    response_model=InstitutionStudentRosterResponse,
+    summary="Institution-wide student roster for dashboard students tab",
+)
+async def institution_student_roster(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> InstitutionStudentRosterResponse:
+    institution_id = current_user.institution_id if current_user.role == UserRole.INSTITUTION_ADMIN else None
+    students_query = select(User).where(User.role == UserRole.STUDENT)
+    if institution_id:
+        students_query = students_query.where(User.institution_id == institution_id)
+    students = (await db.execute(students_query.order_by(User.name.asc()))).scalars().all()
+    if not students:
+        return InstitutionStudentRosterResponse(items=[], total=0)
+
+    student_ids = [student.id for student in students]
+    enrollment_rows = (
+        await db.execute(
+            select(Enrollment.student_id, Enrollment.status, Workshop.title)
+            .join(Workshop, Workshop.id == Enrollment.workshop_id)
+            .where(Enrollment.student_id.in_(student_ids))
+            .order_by(Enrollment.enrolled_at.desc())
+        )
+    ).all()
+    first_enrollment_by_student: dict[str, tuple[str, str]] = {}
+    for row in enrollment_rows:
+        if row.student_id not in first_enrollment_by_student:
+            status_text = (row.status.value if hasattr(row.status, "value") else str(row.status or "")).lower()
+            if status_text == "active":
+                ui_status = "Active"
+            elif status_text == "completed":
+                ui_status = "Completed"
+            else:
+                ui_status = "Inactive"
+            first_enrollment_by_student[row.student_id] = (row.title or "—", ui_status)
+
+    items = []
+    for student in students:
+        workshop_title, ui_status = first_enrollment_by_student.get(student.id, ("—", "Inactive"))
+        items.append(
+            InstitutionStudentRosterItem(
+                id=student.id,
+                name=student.name or student.email,
+                email=student.email,
+                workshop=workshop_title,
+                status=ui_status,
+            )
+        )
+    return InstitutionStudentRosterResponse(items=items, total=len(items))
+
+
+@router.get(
+    "/institution/attendance-report",
+    response_model=InstitutionAttendanceReportResponse,
+    summary="Institution attendance report rows for dashboard attendance tab",
+)
+async def institution_attendance_report(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> InstitutionAttendanceReportResponse:
+    institution_id = current_user.institution_id if current_user.role == UserRole.INSTITUTION_ADMIN else None
+    workshop_query = select(Workshop.id)
+    if institution_id:
+        workshop_query = workshop_query.where(Workshop.institution_id == institution_id)
+    workshop_ids = [row[0] for row in (await db.execute(workshop_query)).all()]
+    if not workshop_ids:
+        return InstitutionAttendanceReportResponse(rows=[], total=0)
+
+    now = datetime.now(timezone.utc)
+    week_start = now.date() - timedelta(days=now.date().weekday())
+    week_end = week_start + timedelta(days=4)
+
+    attendance_rows = (
+        await db.execute(
+            select(User.name, Session.start_time, Attendance.status)
+            .join(Attendance, Attendance.student_id == User.id)
+            .join(Session, Session.id == Attendance.session_id)
+            .where(User.role == UserRole.STUDENT)
+            .where(Session.workshop_id.in_(workshop_ids))
+            .where(Session.start_time.is_not(None))
+            .where(Session.start_time >= datetime.combine(week_start, datetime.min.time(), tzinfo=timezone.utc))
+            .where(Session.start_time <= datetime.combine(week_end, datetime.max.time(), tzinfo=timezone.utc))
+            .order_by(User.name.asc(), Session.start_time.asc())
+        )
+    ).all()
+
+    status_by_student_day: dict[str, dict[int, bool]] = {}
+    for row in attendance_rows:
+        student_name = row.name or "Student"
+        weekday = (row.start_time or now).weekday()
+        if weekday > 4:
+            continue
+        status_text = (row.status or "").lower()
+        present = status_text in {"present", "late"}
+        status_by_student_day.setdefault(student_name, {})[weekday] = present
+
+    rows: list[InstitutionAttendanceRow] = []
+    for student_name, day_map in status_by_student_day.items():
+        rows.append(
+            InstitutionAttendanceRow(
+                student=student_name,
+                mon=bool(day_map.get(0, False)),
+                tue=bool(day_map.get(1, False)),
+                wed=bool(day_map.get(2, False)),
+                thu=bool(day_map.get(3, False)),
+                fri=bool(day_map.get(4, False)),
+            )
+        )
+    return InstitutionAttendanceReportResponse(rows=rows, total=len(rows))
 
 
 @router.get(
