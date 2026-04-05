@@ -73,8 +73,17 @@ export interface BackendUser {
   name?: string | null;
   email: string;
   role: string;
+  educator_type?: string | null;
   phone?: string | null;
   institution_id?: string | null;
+  profile_photo?: string | null;
+  bio?: string | null;
+  department?: string | null;
+  parent_name?: string | null;
+  parent_email?: string | null;
+  institution_admin_name?: string | null;
+  institution_admin_address?: string | null;
+  institution_admin_code?: string | null;
   theme?: string | null;
 }
 
@@ -296,6 +305,16 @@ export interface BackendParentMessageResponse {
   failed: number;
   message: string;
 }
+export interface BackendParentContactItem {
+  student_id: string;
+  parent_name?: string | null;
+  parent_email?: string | null;
+}
+
+export interface BackendParentContactDirectory {
+  items: BackendParentContactItem[];
+  total: number;
+}
 
 export interface BackendWorkshopEducatorProfile {
   workshop_id: string;
@@ -375,3 +394,26 @@ export interface BackendCertificateDownloadResponse {
   certificate_id: string;
   download_url: string;
 }
+
+
+export interface BackendMaterialDownloadResponse {
+  module_id: string;
+  material_id: string;
+  download_url: string;
+}
+
+
+export interface BackendExportFileResponse {
+  file_name: string;
+  file_type: string;
+  download_url: string;
+}
+
+export interface BackendInstitutionStudentBulkActionResponse {
+  requested_students: number;
+  affected_students: number;
+  updated_enrollments: number;
+  message: string;
+}
+
+

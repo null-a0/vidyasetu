@@ -229,6 +229,17 @@ class ParentMessageResponse(BaseModel):
     message: str
 
 
+class ParentContactItem(BaseModel):
+    student_id: str
+    parent_name: Optional[str] = None
+    parent_email: Optional[str] = None
+
+
+class ParentContactDirectoryResponse(BaseModel):
+    items: list[ParentContactItem]
+    total: int
+
+
 class CertificateRecommendationRequest(BaseModel):
     student_id: str
     workshop_id: str
@@ -243,4 +254,10 @@ class CertificateRecommendationResponse(BaseModel):
 
 class CertificateDownloadResponse(BaseModel):
     certificate_id: str
+    download_url: str
+
+
+class MaterialDownloadResponse(BaseModel):
+    module_id: str
+    material_id: str
     download_url: str

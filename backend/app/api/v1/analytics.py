@@ -1,21 +1,27 @@
 from __future__ import annotations
 
+import csv
+import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_role
+from app.config import settings
 from app.crud.crud_analytics import (
     get_student_analytics,
     get_student_attendance,
     get_workshop_analytics,
 )
+from app.crud.crud_workshop import update_enrollment
 from app.crud.crud_workshop import get_workshop
 from app.models import (
     Assessment,
     Attendance,
+    EnrollmentStatus,
     Enrollment,
     Institution,
     Question,
@@ -31,9 +37,12 @@ from app.schemas.analytics import (
     DashboardActivityItem,
     DashboardAlertItem,
     DashboardSeriesPoint,
+    ExportFileResponse,
     InstitutionDashboardAggregateResponse,
     InstitutionAttendanceReportResponse,
     InstitutionAttendanceRow,
+    InstitutionStudentBulkActionRequest,
+    InstitutionStudentBulkActionResponse,
     InstitutionStudentRosterItem,
     InstitutionStudentRosterResponse,
     LeaderboardEntry,
@@ -45,10 +54,28 @@ from app.schemas.analytics import (
     WorkshopLeaderboardResponse,
     WorkshopAnalyticsResponse,
 )
+from app.schemas.workshop import EnrollmentUpdate
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 _STAFF = (UserRole.ADMIN, UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR)
+
+
+def _build_export_csv(*, prefix: str, headers: list[str], rows: list[list[str]]) -> ExportFileResponse:
+    exports_dir = Path("media") / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"{prefix}_{uuid.uuid4().hex}.csv"
+    file_path = exports_dir / file_name
+    with file_path.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(headers)
+        writer.writerows(rows)
+    relative_path = f"media/exports/{file_name}"
+    return ExportFileResponse(
+        file_name=file_name,
+        file_type="csv",
+        download_url=f"{settings.BASE_URL}/{relative_path}",
+    )
 
 
 @router.get(
@@ -587,6 +614,94 @@ async def institution_student_roster(
     return InstitutionStudentRosterResponse(items=items, total=len(items))
 
 
+@router.post(
+    "/institution/students/bulk-action",
+    response_model=InstitutionStudentBulkActionResponse,
+    summary="Apply a bulk action to institution students",
+)
+async def institution_student_bulk_action(
+    payload: InstitutionStudentBulkActionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> InstitutionStudentBulkActionResponse:
+    action = (payload.action or "").strip().lower()
+    if action != "set_inactive":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported bulk action.")
+
+    institution_id = current_user.institution_id if current_user.role == UserRole.INSTITUTION_ADMIN else None
+    student_ids = [student_id for student_id in dict.fromkeys(payload.student_ids) if student_id]
+    if not student_ids:
+        return InstitutionStudentBulkActionResponse(
+            requested_students=0,
+            affected_students=0,
+            updated_enrollments=0,
+            message="No students selected.",
+        )
+
+    students_query = select(User).where(User.id.in_(student_ids)).where(User.role == UserRole.STUDENT)
+    if institution_id:
+        students_query = students_query.where(User.institution_id == institution_id)
+    students = (await db.execute(students_query)).scalars().all()
+    scoped_student_ids = [student.id for student in students]
+    if not scoped_student_ids:
+        return InstitutionStudentBulkActionResponse(
+            requested_students=len(student_ids),
+            affected_students=0,
+            updated_enrollments=0,
+            message="No scoped student records matched.",
+        )
+
+    enrollments_query = select(Enrollment).where(Enrollment.student_id.in_(scoped_student_ids))
+    if institution_id:
+        enrollments_query = enrollments_query.join(Workshop, Workshop.id == Enrollment.workshop_id).where(
+            Workshop.institution_id == institution_id
+        )
+    enrollments = (await db.execute(enrollments_query)).scalars().all()
+
+    touched_students: set[str] = set()
+    updated_count = 0
+    for enrollment in enrollments:
+        if enrollment.status == EnrollmentStatus.DROPPED:
+            continue
+        await update_enrollment(db, enrollment, EnrollmentUpdate(status=EnrollmentStatus.DROPPED))
+        touched_students.add(enrollment.student_id or "")
+        updated_count += 1
+
+    return InstitutionStudentBulkActionResponse(
+        requested_students=len(student_ids),
+        affected_students=len([student_id for student_id in touched_students if student_id]),
+        updated_enrollments=updated_count,
+        message="Bulk student action applied.",
+    )
+
+
+@router.get(
+    "/institution/students/export",
+    response_model=ExportFileResponse,
+    summary="Export institution student roster as CSV",
+)
+async def export_institution_students(
+    student_ids: list[str] = Query(default=[]),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> ExportFileResponse:
+    institution_id = current_user.institution_id if current_user.role == UserRole.INSTITUTION_ADMIN else None
+    query = select(User).where(User.role == UserRole.STUDENT)
+    if institution_id:
+        query = query.where(User.institution_id == institution_id)
+    unique_ids = [student_id for student_id in dict.fromkeys(student_ids) if student_id]
+    if unique_ids:
+        query = query.where(User.id.in_(unique_ids))
+    students = (await db.execute(query.order_by(User.name.asc()))).scalars().all()
+
+    rows = [[student.id, student.name or "", student.email, student.institution_id or ""] for student in students]
+    return _build_export_csv(
+        prefix="institution_students",
+        headers=["student_id", "name", "email", "institution_id"],
+        rows=rows,
+    )
+
+
 @router.get(
     "/institution/attendance-report",
     response_model=InstitutionAttendanceReportResponse,
@@ -645,6 +760,116 @@ async def institution_attendance_report(
             )
         )
     return InstitutionAttendanceReportResponse(rows=rows, total=len(rows))
+
+
+@router.get(
+    "/institution/attendance-report/export",
+    response_model=ExportFileResponse,
+    summary="Export institution attendance report as CSV",
+)
+async def export_institution_attendance(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> ExportFileResponse:
+    report = await institution_attendance_report(db=db, current_user=current_user)
+    rows = [
+        [
+            row.student,
+            "present" if row.mon else "absent",
+            "present" if row.tue else "absent",
+            "present" if row.wed else "absent",
+            "present" if row.thu else "absent",
+            "present" if row.fri else "absent",
+        ]
+        for row in report.rows
+    ]
+    return _build_export_csv(
+        prefix="institution_attendance",
+        headers=["student", "mon", "tue", "wed", "thu", "fri"],
+        rows=rows,
+    )
+
+
+@router.get(
+    "/institution/dashboard/export",
+    response_model=ExportFileResponse,
+    summary="Export institution dashboard report cards and KPIs as CSV",
+)
+async def export_institution_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> ExportFileResponse:
+    aggregate = await institution_dashboard_aggregate(db=db, current_user=current_user)
+    rows = [[key, str(value)] for key, value in aggregate.kpis.items()]
+    rows.extend([[f"report_{key}", str(value)] for key, value in aggregate.report_cards.items()])
+    return _build_export_csv(
+        prefix="institution_dashboard",
+        headers=["metric", "value"],
+        rows=rows,
+    )
+
+
+@router.get(
+    "/reports/performance/export",
+    response_model=ExportFileResponse,
+    summary="Export performance report snapshot as CSV",
+)
+async def export_performance_report(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*_STAFF)),
+) -> ExportFileResponse:
+    institution_id = current_user.institution_id if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR) else None
+
+    workshops_query = select(Workshop.id, Workshop.title)
+    if institution_id:
+        workshops_query = workshops_query.where(Workshop.institution_id == institution_id)
+    workshops = (await db.execute(workshops_query)).all()
+    workshop_ids = [row.id for row in workshops]
+    if not workshop_ids:
+        return _build_export_csv(
+            prefix="performance_report",
+            headers=["metric", "value"],
+            rows=[["note", "No workshops available for report scope"]],
+        )
+
+    avg_percentage_query = (
+        select(func.coalesce(func.avg(Submission.percentage), 0))
+        .join(Assessment, Assessment.id == Submission.assessment_id)
+        .where(Assessment.workshop_id.in_(workshop_ids))
+    )
+    pass_rate_query = (
+        select(
+            func.sum(case((Submission.pass_fail == True, 1), else_=0)),  # noqa: E712
+            func.count(Submission.id),
+        )
+        .join(Assessment, Assessment.id == Submission.assessment_id)
+        .where(Assessment.workshop_id.in_(workshop_ids))
+    )
+    completion_query = (
+        select(
+            func.sum(case((Enrollment.status == EnrollmentStatus.COMPLETED, 1), else_=0)),
+            func.count(Enrollment.id),
+        )
+        .where(Enrollment.workshop_id.in_(workshop_ids))
+    )
+
+    avg_percentage = float((await db.execute(avg_percentage_query)).scalar_one() or 0)
+    passed_count, total_submissions = (await db.execute(pass_rate_query)).one()
+    completed_count, total_enrollments = (await db.execute(completion_query)).one()
+    pass_rate = round((float(passed_count or 0) / float(total_submissions or 1)) * 100, 2) if total_submissions else 0.0
+    completion_rate = round((float(completed_count or 0) / float(total_enrollments or 1)) * 100, 2) if total_enrollments else 0.0
+
+    rows = [
+        ["average_score_percentage", f"{round(avg_percentage, 2)}"],
+        ["pass_rate_percentage", f"{pass_rate}"],
+        ["completion_rate_percentage", f"{completion_rate}"],
+        ["workshops_in_scope", f"{len(workshop_ids)}"],
+    ]
+    return _build_export_csv(
+        prefix="performance_report",
+        headers=["metric", "value"],
+        rows=rows,
+    )
 
 
 @router.get(

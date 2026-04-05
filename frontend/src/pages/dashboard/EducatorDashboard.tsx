@@ -1,15 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, FileText, ClipboardList, Inbox, TrendingUp, TrendingDown, Plus, Eye, Upload, BarChart3 } from "lucide-react";
+import { BookOpen, FileText, ClipboardList, Inbox, TrendingUp, TrendingDown, Eye, Upload, BarChart3 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VTable from "@/components/ui-custom/VTable";
 import VButton from "@/components/ui-custom/VButton";
 import VBadge from "@/components/ui-custom/VBadge";
-import VModal from "@/components/ui-custom/VModal";
-import VInput from "@/components/ui-custom/VInput";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { fetchDashboardStats, fetchWorkshops } from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
@@ -43,13 +41,12 @@ const EducatorDashboard = () => {
   const { showToast } = useVToast();
   const { data: stats } = useQuery({ queryKey: ["dashboardStats"], queryFn: fetchDashboardStats });
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
-  const [uploadModal, setUploadModal] = useState(false);
   const chartData = useMemo(() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const dayBuckets = days.map((day) => ({ day, scheduled: 0, completed: 0 }));
     workshops.forEach((workshop) => {
       const start = Date.parse(workshop.startDate);
-      const dayIndex = Number.isNaN(start) ? 0 : Math.max(0, Math.min(6, new Date(start).getDay() - 1));
+      const dayIndex = Number.isNaN(start) ? 0 : (new Date(start).getDay() + 6) % 7;
       dayBuckets[dayIndex].scheduled += 1;
       if (workshop.status === "Completed") dayBuckets[dayIndex].completed += 1;
       if (workshop.status === "Active") dayBuckets[dayIndex].completed += 0.5;

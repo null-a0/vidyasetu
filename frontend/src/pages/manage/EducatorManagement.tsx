@@ -27,20 +27,17 @@ interface EducatorRow {
   department: string;
   salary: number;
   monthlyStatus: "Paid" | "Unpaid";
-  type: "Internal" | "Visiting";
+  type: "Internal" | "Visiting" | "Unknown";
 }
 
 const currentMonthKey = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
-const guessDepartment = (email: string) => {
-  const domain = (email || "").split("@")[1] || "";
-  if (domain.includes("cs")) return "Computer Science";
-  if (domain.includes("data")) return "Data Science";
-  if (domain.includes("cloud")) return "Cloud Computing";
-  return "Academics";
+const normalizeEducatorType = (rawType?: string | null): EducatorRow["type"] => {
+  const value = (rawType || "").trim().toLowerCase();
+  if (value === "internal") return "Internal";
+  if (value === "visiting") return "Visiting";
+  return "Unknown";
 };
-
-const defaultSalary = (type: EducatorRow["type"]) => (type === "Internal" ? 50000 : 30000);
 
 const EducatorManagement = () => {
   const role = useRole();
@@ -93,15 +90,15 @@ const EducatorManagement = () => {
 
     return scoped.map((u) => {
       const institutionName = u.institution_id ? institutionLookup[u.institution_id] ?? u.institution_id : "";
-      const type: EducatorRow["type"] = "Internal";
+      const type = normalizeEducatorType(u.educator_type);
       const paid = !!paidLookup[u.id];
-      const salary = paidLookup[u.id]?.amount ?? defaultSalary(type);
+      const salary = paidLookup[u.id]?.amount ?? 0;
       return {
         id: u.id,
         name: u.name || u.email,
         email: u.email,
         institution: institutionName,
-        department: guessDepartment(u.email),
+        department: u.department?.trim() || "—",
         salary,
         monthlyStatus: paid ? "Paid" : "Unpaid",
         type,
@@ -202,7 +199,7 @@ const EducatorManagement = () => {
           <input type="text" placeholder="Search educators..." value={search} onChange={e => setSearch(e.target.value)} className="vidya-input pl-10" />
         </div>
         <div className="flex gap-2">
-          {["All", "Internal", "Visiting"].map((t) => (
+          {["All", "Internal", "Visiting", "Unknown"].map((t) => (
             <button key={t} onClick={() => setTypeFilter(t)} className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"}`}>
               {t}
             </button>

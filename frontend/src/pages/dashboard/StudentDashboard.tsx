@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, ClipboardList, Award, TrendingUp, Play, CheckCircle2, Clock, Star, Search, FileText, Users } from "lucide-react";
@@ -38,15 +38,6 @@ const statCards = [
   { key: "averageScore", label: "Average Score", icon: TrendingUp },
   { key: "certificatesEarned", label: "Certificates", icon: Award },
 ] as const;
-
-const FALLBACK_PROGRESS_DATA = [
-  { label: "W1", score: 65 },
-  { label: "W2", score: 72 },
-  { label: "W3", score: 70 },
-  { label: "W4", score: 85 },
-  { label: "W5", score: 82 },
-  { label: "W6", score: 90 },
-];
 
 type MyCourse = {
   id: string;
@@ -172,13 +163,10 @@ const StudentDashboard = () => {
   const modules: StudentLearningModule[] = selectedLearningData?.modules ?? [];
 
   const progressData = useMemo(() => {
-    if (studentAnalytics && studentAnalytics.trend.length > 0) {
-      return studentAnalytics.trend.map((point) => ({ week: point.label, score: point.score }));
-    }
-    return FALLBACK_PROGRESS_DATA.map((point) => ({ week: point.label, score: point.score }));
+    return (studentAnalytics?.trend ?? []).map((point) => ({ week: point.label, score: point.score }));
   }, [studentAnalytics]);
 
-  const isProgressFallback = !studentAnalytics || studentAnalytics.trend.length === 0;
+  const isProgressEmpty = progressData.length === 0;
 
   useEffect(() => {
     setActiveModule(0);
@@ -245,7 +233,7 @@ const StudentDashboard = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "�"}</p>
+                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "—"}</p>
               </VCard>
             ))}
           </div>
@@ -255,24 +243,30 @@ const StudentDashboard = () => {
               <div className="px-5 pt-5 pb-2">
                 <h3 className="text-base font-semibold text-foreground">My Progress</h3>
                 <p className="text-sm text-muted-foreground">
-                  {isProgressFallback ? "Score trend over weeks (fallback)" : "Score trend from student analytics"}
+                  {isProgressEmpty ? "No progress data available yet" : "Score trend from student analytics"}
                 </p>
               </div>
               <div className="h-48 px-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={progressData}>
-                    <defs>
-                      <linearGradient id="studentGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--foreground))" }} />
-                    <Area type="monotone" dataKey="score" stroke="hsl(var(--primary))" fill="url(#studentGrad)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {isProgressEmpty ? (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    No assessment attempts yet.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={progressData}>
+                      <defs>
+                        <linearGradient id="studentGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} domain={[0, 100]} />
+                      <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--foreground))" }} />
+                      <Area type="monotone" dataKey="score" stroke="hsl(var(--primary))" fill="url(#studentGrad)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </VCard>
 
@@ -523,4 +517,5 @@ const StudentDashboard = () => {
 };
 
 export default StudentDashboard;
+
 

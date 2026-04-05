@@ -64,6 +64,8 @@ def client_and_state():
                 password="hashed",
                 role=UserRole.STUDENT,
                 institution_id="inst-1",
+                parent_name="Parent One",
+                parent_email="parent1@example.com",
             )
             workshop = Workshop(
                 id="workshop-1",
@@ -276,7 +278,16 @@ def test_admin_new_analytics_endpoints(client_and_state):
     assert admin_insights.status_code == 200
     payload = admin_insights.json()
     assert "weekly_activity" in payload
+    assert len(payload["weekly_activity"]) == 7
+    assert all("label" in point and "value" in point for point in payload["weekly_activity"])
+    assert "demographics" in payload
+    assert isinstance(payload["demographics"], list)
+    if payload["demographics"]:
+        assert all({"range", "male", "female"}.issubset(item.keys()) for item in payload["demographics"])
     assert "activity_feed" in payload
+    assert isinstance(payload["activity_feed"], list)
+    if payload["activity_feed"]:
+        assert all({"id", "text", "time", "type"}.issubset(item.keys()) for item in payload["activity_feed"])
 
     institution_students = client.get("/api/v1/analytics/institution/students")
     assert institution_students.status_code == 200
@@ -288,6 +299,10 @@ def test_admin_new_analytics_endpoints(client_and_state):
     assessment_drilldown = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1/student/user-student")
     assert assessment_drilldown.status_code == 200
     assert assessment_drilldown.json()["context_type"] == "assessment"
+
+    state["user_id"] = "user-inst-admin"
+    forbidden_insights = client.get("/api/v1/analytics/admin/insights")
+    assert forbidden_insights.status_code == 403
 
 
 def test_admin_parent_communication_dispatch(client_and_state):

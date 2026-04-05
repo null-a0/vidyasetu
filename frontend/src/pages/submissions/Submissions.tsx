@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, CheckCircle2, Search, XCircle } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VTable from "@/components/ui-custom/VTable";
@@ -8,11 +8,12 @@ import VButton from "@/components/ui-custom/VButton";
 import VModal from "@/components/ui-custom/VModal";
 import VCard from "@/components/ui-custom/VCard";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchSubmissionReview, fetchSubmissions } from "@/services/api";
+import { fetchSubmissionReview, fetchSubmissions, gradeSubmission } from "@/services/api";
 import type { Submission } from "@/mock/mockData";
 
 const SubmissionsPage = () => {
   const { showToast } = useVToast();
+  const queryClient = useQueryClient();
   const { data: submissions = [], isLoading, isError, error, refetch } = useQuery({ queryKey: ["submissions"], queryFn: fetchSubmissions });
 
   const tableEmptyText = isLoading
@@ -28,6 +29,17 @@ const SubmissionsPage = () => {
     queryKey: ["submissionReview", selected?.id],
     queryFn: () => fetchSubmissionReview(selected?.id ?? ""),
     enabled: Boolean(selected?.id && viewModal && selected?.status === "Graded"),
+  });
+  const gradeMutation = useMutation({
+    mutationFn: gradeSubmission,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["submissions"] });
+      showToast("success", "Graded", "Submission has been graded.");
+      setViewModal(false);
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Grade Failed", err instanceof Error ? err.message : "Unable to grade submission.");
+    },
   });
 
   const filtered = submissions.filter(s => {
@@ -52,7 +64,7 @@ const SubmissionsPage = () => {
           <Eye className="h-4 w-4" />
         </button>
         {r.status === "Pending" && (
-          <button onClick={() => showToast("success", "Graded", `${r.studentName}'s submission has been graded`)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-success/10 hover:text-success transition-colors">
+          <button onClick={() => gradeMutation.mutate(r.id)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-success/10 hover:text-success transition-colors">
             <CheckCircle2 className="h-4 w-4" />
           </button>
         )}
@@ -125,7 +137,7 @@ const SubmissionsPage = () => {
             )}
 
             {selected.status === "Pending" && (
-              <VButton className="w-full" onClick={() => { setViewModal(false); showToast("success", "Graded", `${selected.studentName}'s submission graded`); }}>
+              <VButton className="w-full" onClick={() => gradeMutation.mutate(selected.id)} isLoading={gradeMutation.isPending}>
                 <CheckCircle2 className="h-4 w-4" /> Grade Submission
               </VButton>
             )}

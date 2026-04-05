@@ -36,12 +36,26 @@ class UserCreate(BaseModel):
     role: UserRole = UserRole.STUDENT
     institution_id: Optional[str] = None
     phone: Optional[str] = None
+    bio: Optional[str] = None
+    department: Optional[str] = None
+    parent_name: Optional[str] = None
+    parent_email: Optional[EmailStr] = None
+    institution_admin_name: Optional[str] = None
+    institution_admin_address: Optional[str] = None
+    institution_admin_code: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     profile_photo: Optional[str] = None
+    bio: Optional[str] = None
+    department: Optional[str] = None
+    parent_name: Optional[str] = None
+    parent_email: Optional[EmailStr] = None
+    institution_admin_name: Optional[str] = None
+    institution_admin_address: Optional[str] = None
+    institution_admin_code: Optional[str] = None
     theme: Optional[Literal["light", "dark"]] = None
     institution_id: Optional[str] = None
 
@@ -56,6 +70,13 @@ class UserResponse(BaseModel):
     institution_id: Optional[str]
     phone: Optional[str]
     profile_photo: Optional[str]
+    bio: Optional[str]
+    department: Optional[str]
+    parent_name: Optional[str]
+    parent_email: Optional[EmailStr]
+    institution_admin_name: Optional[str]
+    institution_admin_address: Optional[str]
+    institution_admin_code: Optional[str]
     theme: Optional[str]
     created_at: Optional[datetime]
 

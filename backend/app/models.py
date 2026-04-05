@@ -92,6 +92,13 @@ class User(Base):
 
     phone = Column(String)
     profile_photo = Column(String)
+    bio = Column(Text)
+    department = Column(String)
+    parent_name = Column(String)
+    parent_email = Column(String)
+    institution_admin_name = Column(String)
+    institution_admin_address = Column(Text)
+    institution_admin_code = Column(String)
     theme = Column(String, default="light")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

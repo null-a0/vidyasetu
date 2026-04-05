@@ -33,32 +33,6 @@ const statCards = [
   { key: "totalStudents", label: "Students", icon: GraduationCap },
 ] as const;
 
-const FALLBACK_WEEKLY_ACTIVITY = [
-  { day: "Mon", value: 65 },
-  { day: "Tue", value: 80 },
-  { day: "Wed", value: 72 },
-  { day: "Thu", value: 90 },
-  { day: "Fri", value: 95 },
-  { day: "Sat", value: 55 },
-  { day: "Sun", value: 40 },
-];
-
-const FALLBACK_DEMOGRAPHIC_DATA = [
-  { range: "18-24", male: 340, female: 360 },
-  { range: "25-30", male: 280, female: 300 },
-  { range: "31-35", male: 220, female: 240 },
-  { range: "36-40", male: 200, female: 195 },
-  { range: "41+", male: 200, female: 200 },
-];
-
-const FALLBACK_ACTIVITY_FEED = [
-  { id: "1", text: "New workshop 'React Fundamentals' created by IIT Delhi", time: "5 min ago", type: "workshop" },
-  { id: "2", text: "Certificate issued to Aarav Sharma", time: "15 min ago", type: "certificate" },
-  { id: "3", text: "35 students enrolled in Python for Data Science", time: "1 hour ago", type: "enrollment" },
-  { id: "4", text: "Assessment 'Cloud Architecture Quiz' published", time: "2 hours ago", type: "assessment" },
-  { id: "5", text: "New educator Dr. Meera joined NIT Trichy", time: "3 hours ago", type: "educator" },
-];
-
 const AdminDashboard = () => {
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
@@ -68,13 +42,15 @@ const AdminDashboard = () => {
   const { data: institutions = [] } = useQuery({ queryKey: ["institutions"], queryFn: fetchInstitutions });
   const insights = insightsQuery.data;
   const weeklyActivity = (insights?.weekly_activity ?? []).map((point) => ({ day: point.label, value: point.value }));
-  const demographicData = insights?.demographics?.length ? insights.demographics : FALLBACK_DEMOGRAPHIC_DATA;
-  const activityFeed = (insights?.activity_feed ?? FALLBACK_ACTIVITY_FEED).map((item) => ({
+  const demographicData = insights?.demographics ?? [];
+  const activityFeed = (insights?.activity_feed ?? []).map((item) => ({
     id: item.id,
     text: item.text,
     time: item.time,
     type: item.type,
   }));
+  const weeklyTotal = Math.round(weeklyActivity.reduce((sum, item) => sum + item.value, 0));
+  const weeklyPeak = Math.round(Math.max(...weeklyActivity.map((item) => item.value), 0));
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWorkshop, setSelectedWorkshop] = useState<Workshop | null>(null);
@@ -305,16 +281,16 @@ const AdminDashboard = () => {
           <div className="flex gap-3 px-5 pb-3 flex-wrap">
             <div className="rounded-xl bg-primary/10 px-4 py-2">
               <p className="text-xs text-primary font-semibold">This Week</p>
-              <p className="text-lg font-bold text-foreground">{Math.round((weeklyActivity.length ? weeklyActivity : FALLBACK_WEEKLY_ACTIVITY).reduce((sum, item) => sum + item.value, 0))}</p>
+              <p className="text-lg font-bold text-foreground">{weeklyTotal}</p>
             </div>
             <div className="rounded-xl bg-muted px-4 py-2">
               <p className="text-xs text-muted-foreground">Peak Day</p>
-              <p className="text-lg font-bold text-foreground">{Math.round(Math.max(...(weeklyActivity.length ? weeklyActivity : FALLBACK_WEEKLY_ACTIVITY).map((item) => item.value), 0))}</p>
+              <p className="text-lg font-bold text-foreground">{weeklyPeak}</p>
             </div>
           </div>
           <div className="h-52 px-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={weeklyActivity.length ? weeklyActivity : FALLBACK_WEEKLY_ACTIVITY}>
+              <AreaChart data={weeklyActivity}>
                 <defs>
                   <linearGradient id="adminAreaGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
@@ -351,12 +327,12 @@ const AdminDashboard = () => {
         </VCard>
       </div>
 
-      {/* Demographics + Activity Feed (fallback) */}
+      {/* Demographics + Activity Feed */}
       <div className="grid gap-5 lg:grid-cols-2 mb-8">
         <VCard className="p-0">
           <div className="px-5 pt-5 pb-4">
             <h3 className="text-base font-semibold text-foreground">Student Demographics</h3>
-            <p className="text-sm text-muted-foreground">{insights?.demographics?.length ? "Institution distribution" : "Age distribution (fallback)"}</p>
+            <p className="text-sm text-muted-foreground">Institution distribution</p>
           </div>
           <div className="h-52 px-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -373,28 +349,32 @@ const AdminDashboard = () => {
 
         <VCard className="p-5">
           <h3 className="text-base font-semibold text-foreground mb-4">Activity Feed</h3>
-          <div className="space-y-1">
-            {activityFeed.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setHighlightedActivity(item.id); showToast("info", item.text); }}
-                className={`flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
-                  highlightedActivity === item.id ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-accent"
-                }`}
-              >
-                <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                  item.type === "workshop" ? "bg-primary" :
-                  item.type === "certificate" ? "bg-success" :
-                  item.type === "enrollment" ? "bg-info" :
-                  item.type === "assessment" ? "bg-warning" : "bg-muted-foreground"
-                }`} />
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground truncate">{item.text}</p>
-                  <p className="text-xs text-muted-foreground">{item.time}</p>
-                </div>
-              </button>
-            ))}
-          </div>
+          {activityFeed.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent activity available yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {activityFeed.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setHighlightedActivity(item.id); showToast("info", item.text); }}
+                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
+                    highlightedActivity === item.id ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-accent"
+                  }`}
+                >
+                  <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
+                    item.type === "workshop" ? "bg-primary" :
+                    item.type === "certificate" ? "bg-success" :
+                    item.type === "enrollment" ? "bg-info" :
+                    item.type === "assessment" ? "bg-warning" : "bg-muted-foreground"
+                  }`} />
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground truncate">{item.text}</p>
+                    <p className="text-xs text-muted-foreground">{item.time}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </VCard>
       </div>
 

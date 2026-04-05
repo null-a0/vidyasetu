@@ -72,6 +72,8 @@ def client_and_state():
                 password="hashed",
                 role=UserRole.STUDENT,
                 institution_id="inst-1",
+                parent_name="Parent One",
+                parent_email="parent1@example.com",
             )
             external_student = User(
                 id="student-2",
@@ -324,3 +326,72 @@ def test_institution_admin_parent_message_dispatch(client_and_state):
     )
     assert response.status_code == 200
     assert response.json()["accepted"] == 1
+
+
+def test_institution_admin_bulk_and_export_endpoints(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    bulk_action = client.post(
+        "/api/v1/analytics/institution/students/bulk-action",
+        json={"student_ids": ["student-1"], "action": "set_inactive"},
+    )
+    assert bulk_action.status_code == 200
+    payload = bulk_action.json()
+    assert payload["requested_students"] == 1
+    assert payload["updated_enrollments"] >= 1
+
+    students = client.get("/api/v1/analytics/institution/students")
+    assert students.status_code == 200
+    student_row = next(item for item in students.json()["items"] if item["id"] == "student-1")
+    assert student_row["status"] == "Inactive"
+
+    students_export = client.get("/api/v1/analytics/institution/students/export?student_ids=student-1")
+    assert students_export.status_code == 200
+    assert "/media/exports/" in students_export.json()["download_url"]
+
+    attendance_export = client.get("/api/v1/analytics/institution/attendance-report/export")
+    assert attendance_export.status_code == 200
+    assert attendance_export.json()["file_type"] == "csv"
+
+    dashboard_export = client.get("/api/v1/analytics/institution/dashboard/export")
+    assert dashboard_export.status_code == 200
+    assert dashboard_export.json()["file_type"] == "csv"
+
+def test_institution_admin_parent_contact_lookup(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.get("/api/v1/communication/parent-contacts?student_ids=student-1&student_ids=student-2")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["student_id"] == "student-1"
+    assert payload["items"][0]["parent_email"] == "parent1@example.com"
+
+
+def test_institution_admin_profile_metadata_update_self_only(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    update_self = client.patch(
+        "/api/v1/users/inst-admin-1",
+        json={
+            "bio": "Leads institutional operations.",
+            "department": "Administration",
+            "institution_admin_name": "IIT Delhi South Campus",
+            "institution_admin_address": "Hauz Khas, New Delhi",
+            "institution_admin_code": "IITD-SA",
+        },
+    )
+    assert update_self.status_code == 200
+    payload = update_self.json()
+    assert payload["bio"] == "Leads institutional operations."
+    assert payload["department"] == "Administration"
+    assert payload["institution_admin_code"] == "IITD-SA"
+
+    update_other = client.patch(
+        "/api/v1/users/student-1",
+        json={"bio": "Should fail"},
+    )
+    assert update_other.status_code == 403

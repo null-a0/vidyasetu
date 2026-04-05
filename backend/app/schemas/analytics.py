@@ -189,3 +189,21 @@ class AdminDashboardInsightsResponse(BaseModel):
     weekly_activity: list[DashboardSeriesPoint] = []
     demographics: list[dict]
     activity_feed: list[DashboardActivityItem] = []
+
+
+class ExportFileResponse(BaseModel):
+    file_name: str
+    file_type: str
+    download_url: str
+
+
+class InstitutionStudentBulkActionRequest(BaseModel):
+    student_ids: list[str]
+    action: str = "set_inactive"
+
+
+class InstitutionStudentBulkActionResponse(BaseModel):
+    requested_students: int
+    affected_students: int
+    updated_enrollments: int
+    message: str

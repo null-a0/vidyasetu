@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Play, Eye, ClipboardList, Trophy, BarChart3, Clock } from "lucide-react";
@@ -23,7 +23,7 @@ import {
   fetchWorkshops,
   updateAssessment,
 } from "@/services/api";
-import type { Assessment } from "@/mock/mockData";
+type AssessmentRow = Awaited<ReturnType<typeof fetchAssessments>>[number];
 
 type QuestionType = "MCQ" | "MSQ" | "Integer";
 
@@ -45,7 +45,7 @@ const AssessmentsPage = () => {
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
-  const [selected, setSelected] = useState<Assessment | null>(null);
+  const [selected, setSelected] = useState<AssessmentRow | null>(null);
   const [formTitle, setFormTitle] = useState("");
   const [formWorkshop, setFormWorkshop] = useState("");
   const [formTotal, setFormTotal] = useState("100");
@@ -306,7 +306,7 @@ const AssessmentsPage = () => {
       </VModal>
 
       {/* Question Builder Modal */}
-      <VModal isOpen={questionModal} onClose={() => setQuestionModal(false)} title={`Questions — ${selected?.title || ""}`} className="max-w-2xl">
+      <VModal isOpen={questionModal} onClose={() => setQuestionModal(false)} title={`Questions â€” ${selected?.title || ""}`} className="max-w-2xl">
         <div className="space-y-4 max-h-96 overflow-y-auto">
           {displayQuestions.map((q, i) => (
             <VCard key={i} className="p-4">
@@ -367,7 +367,7 @@ const AssessmentsPage = () => {
         </div>
       </VModal>
 
-      {/* Leaderboard Modal — FIXED: unique state per student */}
+      {/* Leaderboard Modal */}
       <VModal isOpen={leaderboardModal} onClose={() => setLeaderboardModal(false)} title="Assessment Leaderboard" className="max-w-lg">
         <div className="space-y-2">
           {!selected?.id && <p className="text-xs text-muted-foreground px-1">Choose an assessment to load leaderboard data.</p>}
@@ -390,7 +390,7 @@ const AssessmentsPage = () => {
         </div>
       </VModal>
 
-      {/* Student Performance Modal — FIXED: uses index-based selection, basic+detailed tabs */}
+      {/* Student Performance Modal */}
       <VModal isOpen={studentPerfModal} onClose={() => { setStudentPerfModal(false); setSelectedStudentIndex(null); }} title="Student Performance" className="max-w-2xl">
         {selectedStudent ? (
           <div className="space-y-4">
@@ -477,4 +477,5 @@ const AssessmentsPage = () => {
 };
 
 export default AssessmentsPage;
+
 

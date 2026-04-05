@@ -12,7 +12,7 @@ import VDrawer from "@/components/ui-custom/VDrawer";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
-import { deleteModuleMaterial, fetchMaterials, fetchWorkshopModules, fetchWorkshops, uploadModuleMaterial } from "@/services/api";
+import { deleteModuleMaterial, fetchMaterialDownload, fetchMaterials, fetchWorkshopModules, fetchWorkshops, uploadModuleMaterial } from "@/services/api";
 import type { Material } from "@/mock/mockData";
 
 const fileIcons: Record<string, React.ElementType> = { PDF: FileText, PPTX: Presentation, DOC: FileText, TXT: FileText };
@@ -70,6 +70,19 @@ const MaterialsPage = () => {
       showToast("destructive", "Delete Failed", err instanceof Error ? err.message : "Unable to delete material.");
     },
   });
+  const downloadMutation = useMutation({
+    mutationFn: async (material: Material) => {
+      if (!material.moduleId) throw new Error("Missing module mapping for this material.");
+      return fetchMaterialDownload(material.moduleId, material.id);
+    },
+    onSuccess: (result) => {
+      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      showToast("success", "Downloaded", "Download started.");
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Download Failed", err instanceof Error ? err.message : "Unable to download material.");
+    },
+  });
 
   const columns = [
     { key: "title", header: "Title", render: (r: Material) => {
@@ -82,7 +95,7 @@ const MaterialsPage = () => {
     { key: "actions", header: "Actions", render: (r: Material) => (
       <div className="flex gap-1">
         <button onClick={() => { setSelected(r); setViewDrawer(true); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary transition-colors"><Eye className="h-4 w-4" /></button>
-        <button onClick={() => showToast("success", "Downloaded", `${r.title} downloaded`)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-info transition-colors"><Download className="h-4 w-4" /></button>
+        <button onClick={() => downloadMutation.mutate(r)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-info transition-colors"><Download className="h-4 w-4" /></button>
         {canUpload && <button onClick={() => { setSelected(r); setDeleteDialog(true); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"><Trash2 className="h-4 w-4" /></button>}
       </div>
     )},
@@ -123,7 +136,7 @@ const MaterialsPage = () => {
               <div><p className="text-xs text-muted-foreground mb-1">Type</p><VBadge variant="outline">{selected.fileType}</VBadge></div>
               <div><p className="text-xs text-muted-foreground mb-1">Uploaded</p><p className="text-sm text-foreground">{selected.uploadDate}</p></div>
             </div>
-            <VButton className="w-full" onClick={() => { showToast("success", "Downloaded", `${selected.title} downloaded`); }}><Download className="h-4 w-4" /> Download</VButton>
+            <VButton className="w-full" onClick={() => downloadMutation.mutate(selected)} isLoading={downloadMutation.isPending}><Download className="h-4 w-4" /> Download</VButton>
           </div>
         )}
       </VDrawer>

@@ -70,6 +70,8 @@ def client_and_state():
                 password="hashed",
                 role=UserRole.STUDENT,
                 institution_id="inst-1",
+                parent_name="Parent One",
+                parent_email="parent1@example.com",
             )
             own_workshop = Workshop(
                 id="workshop-own",
@@ -233,6 +235,29 @@ def test_educator_can_view_assessments_and_submissions(client_and_state):
     assert submissions_response.json()["total"] >= 1
 
 
+def test_educator_material_upload_and_delete(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    upload_response = client.post(
+        "/api/v1/modules/module-1/materials/upload",
+        files={"file": ("lecture-notes.txt", b"hello materials", "text/plain")},
+    )
+    assert upload_response.status_code == 200
+    materials = upload_response.json()["materials"]
+    uploaded = next((item for item in materials if item["title"] == "lecture-notes.txt"), None)
+    assert uploaded is not None
+
+    download_response = client.get(f"/api/v1/materials/module-1/{uploaded['id']}/download")
+    assert download_response.status_code == 200
+    assert "/media/modules/module-1/" in download_response.json()["download_url"]
+
+    delete_response = client.delete(f"/api/v1/materials/module-1/{uploaded['id']}")
+    assert delete_response.status_code == 200
+    remaining_ids = {item["id"] for item in delete_response.json()["materials"]}
+    assert uploaded["id"] not in remaining_ids
+
+
 def test_educator_can_fetch_workshop_analytics(client_and_state):
     client, state = client_and_state
     state["user_id"] = "educator-1"
@@ -287,6 +312,20 @@ def test_educator_can_view_review_and_dispatch_parent_message(client_and_state):
     assert workshop_drilldown.json()["context_id"] == "workshop-own"
 
 
+def test_educator_can_grade_pending_submission(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    response = client.post("/api/v1/submissions/submission-1/grade")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "submission-1"
+    assert payload["pass_fail"] is False
+
+    repeat = client.post("/api/v1/submissions/submission-1/grade")
+    assert repeat.status_code == 409
+
+
 def test_educator_workshop_educator_profile_contract(client_and_state):
     client, state = client_and_state
     state["user_id"] = "educator-1"
@@ -315,6 +354,17 @@ def test_educator_certificate_recommend_and_download(client_and_state):
     download = client.get("/api/v1/certificates/certificate-1/download")
     assert download.status_code == 200
     assert "/media/certificates/certificate-1.pdf" in download.json()["download_url"]
+
+
+def test_educator_performance_export_available(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    response = client.get("/api/v1/analytics/reports/performance/export")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["file_type"] == "csv"
+    assert "/media/exports/" in payload["download_url"]
 
 
 def test_educator_forbidden_admin_and_delete_routes(client_and_state):

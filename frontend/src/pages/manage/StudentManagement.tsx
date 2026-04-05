@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Eye, Search, Mail, Send } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VTable from "@/components/ui-custom/VTable";
@@ -16,6 +16,7 @@ import {
   fetchEnrollments,
   fetchInstitutions,
   sendParentEmailMessage,
+  fetchParentContactDirectory,
   fetchWorkshops,
 } from "@/services/api";
 
@@ -27,12 +28,9 @@ interface StudentRow {
   workshop: string;
   status: "Active" | "Inactive" | "Completed";
   parentEmail: string;
+  parentName: string;
 }
 
-const getParentEmail = (email: string) => {
-  const local = (email || "student").split("@")[0] || "student";
-  return `parent.${local}@mail.com`;
-};
 
 const mapEnrollmentStatus = (raw?: string | null): StudentRow["status"] => {
   const value = (raw || "").toLowerCase();
@@ -97,6 +95,11 @@ const StudentManagement = () => {
 
   const studentIdsKey = useMemo(() => studentUsers.map((s) => s.id).sort().join(","), [studentUsers]);
 
+  const parentContactsQuery = useQuery({
+    queryKey: ["parentContacts", studentIdsKey],
+    queryFn: () => fetchParentContactDirectory(studentUsers.map((student) => student.id)),
+    enabled: studentUsers.length > 0,
+  });
   const enrollmentsQuery = useQuery({
     queryKey: ["studentEnrollments", studentIdsKey],
     queryFn: async () => {
@@ -119,6 +122,11 @@ const StudentManagement = () => {
 
   const rows: StudentRow[] = useMemo(() => {
     const enrollmentMap = enrollmentsQuery.data ?? {};
+    const parentContacts = parentContactsQuery.data?.items ?? [];
+    const parentByStudentId = Object.fromEntries(
+      parentContacts.map((entry) => [entry.student_id, entry])
+    ) as Record<string, { parent_name?: string | null; parent_email?: string | null }>;
+
     return studentUsers.map((u) => {
       const enrollments = enrollmentMap[u.id] ?? [];
       const first = enrollments[0];
@@ -128,6 +136,10 @@ const StudentManagement = () => {
       const workshop =
         enrollments.length > 1 && firstWorkshop ? `${firstWorkshop} +${enrollments.length - 1}` : firstWorkshop || "—";
 
+      const contact = parentByStudentId[u.id];
+      const parentEmail = contact?.parent_email?.trim() || "";
+      const parentName = contact?.parent_name?.trim() || "Parent/Guardian";
+
       return {
         id: u.id,
         name: u.name || u.email,
@@ -135,10 +147,11 @@ const StudentManagement = () => {
         institution: u.institution_id ? institutionLookup[u.institution_id] ?? u.institution_id : "",
         workshop,
         status,
-        parentEmail: getParentEmail(u.email),
+        parentEmail,
+        parentName,
       };
     });
-  }, [enrollmentsQuery.data, institutionLookup, studentUsers, workshopLookup]);
+  }, [enrollmentsQuery.data, institutionLookup, parentContactsQuery.data?.items, studentUsers, workshopLookup]);
 
   const filtered = rows.filter((s) => {
     const matchSearch =
@@ -178,6 +191,9 @@ const StudentManagement = () => {
     },
     onSuccess: (result) => {
       showToast("success", "Email Sent", `${result.accepted} message delivered to ${result.parentEmail}.`);
+      if (result.failed > 0) {
+        showToast("warning", "Some recipients skipped", `${result.failed} recipient(s) missing parent contact details.`);
+      }
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       setEmailModal(false);
     },
@@ -248,7 +264,7 @@ const StudentManagement = () => {
   ];
 
   const emptyText =
-    usersQuery.isLoading || institutionsQuery.isLoading || workshopsQuery.isLoading || enrollmentsQuery.isLoading
+    usersQuery.isLoading || institutionsQuery.isLoading || workshopsQuery.isLoading || enrollmentsQuery.isLoading || parentContactsQuery.isLoading
       ? "Loading students..."
       : usersQuery.isError
         ? "Unable to load students."
@@ -316,7 +332,7 @@ const StudentManagement = () => {
               </div>
               <div className="rounded-xl bg-muted p-3">
                 <p className="text-xs text-muted-foreground">Parent Email</p>
-                <p className="text-sm text-foreground">{selected.parentEmail}</p>
+                <p className="text-sm text-foreground">{selected.parentEmail || "No parent email on file"}</p>
               </div>
             </div>
             {isInstitutionAdmin && (
@@ -339,9 +355,9 @@ const StudentManagement = () => {
       </VModal>
 
       {/* Custom Email Modal */}
-      <VModal isOpen={emailModal} onClose={() => setEmailModal(false)} title={`Email to ${selected?.parentEmail || "Parent"}`}>
+      <VModal isOpen={emailModal} onClose={() => setEmailModal(false)} title={`Email to ${selected?.parentEmail || "Parent/Guardian"}`}>
         <div className="space-y-4">
-          <VInput label="To" value={selected?.parentEmail || ""} disabled />
+          <VInput label="To" value={selected?.parentEmail || "No parent email on file"} disabled />
           <VInput
             label="Subject"
             value={emailSubject}
@@ -373,7 +389,7 @@ const StudentManagement = () => {
                 });
               }}
               isLoading={parentEmailMutation.isPending}
-              disabled={!emailSubject || !emailBody || parentEmailMutation.isPending}
+              disabled={!selected?.parentEmail || !emailSubject || !emailBody || parentEmailMutation.isPending}
             >
               <Mail className="h-4 w-4" /> Send Email
             </VButton>
@@ -417,3 +433,7 @@ const StudentManagement = () => {
 };
 
 export default StudentManagement;
+
+
+
+

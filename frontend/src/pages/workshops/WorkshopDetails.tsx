@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { User, Mail, Building2 } from "lucide-react";
+import { Mail, Building2 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VTabs from "@/components/ui-custom/VTabs";
@@ -8,6 +8,7 @@ import VTable from "@/components/ui-custom/VTable";
 import VBadge from "@/components/ui-custom/VBadge";
 import { adaptModulesToMaterials, adaptAssessments } from "@/api/adapters";
 import { fetchWorkshop, fetchWorkshopAssessments, fetchWorkshopEducatorProfile, fetchWorkshopModules } from "@/services/api";
+type WorkshopAssessmentRow = ReturnType<typeof adaptAssessments>[number];
 
 const WorkshopDetails = () => {
   const { id } = useParams();
@@ -113,7 +114,7 @@ const WorkshopDetails = () => {
           columns={[
             { key: "title", header: "Title" },
             { key: "totalMarks", header: "Total Marks" },
-            { key: "status", header: "Status", render: (r: any) => <VBadge variant={r.status === "Published" ? "success" : "outline"}>{r.status}</VBadge> },
+            { key: "status", header: "Status", render: (row: WorkshopAssessmentRow) => <VBadge variant={row.status === "Published" ? "success" : "outline"}>{row.status}</VBadge> },
           ]}
           data={relatedAssessments}
         />

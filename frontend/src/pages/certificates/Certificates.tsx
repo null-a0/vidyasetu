@@ -18,10 +18,10 @@ import {
 } from '@/services/api';
 import { useRole } from '@/hooks/useRole';
 import { useAuth } from '@/hooks/useAuth';
-import type { Certificate } from '@/mock/mockData';
 import { useEffect, useState } from 'react';
+type CertificateRow = Awaited<ReturnType<typeof fetchCertificates>>[number];
 
-const adminColumns = (onDownload: (certificate: Certificate) => void, downloadingId: string | null) => [
+const adminColumns = (onDownload: (certificate: CertificateRow) => void, downloadingId: string | null) => [
   { key: 'certificateId', header: 'Certificate ID' },
   { key: 'studentName', header: 'Student' },
   { key: 'workshop', header: 'Workshop' },
@@ -34,7 +34,7 @@ const adminColumns = (onDownload: (certificate: Certificate) => void, downloadin
   {
     key: 'actions',
     header: 'Actions',
-    render: (r: Certificate) =>
+    render: (r: CertificateRow) =>
       r.status === 'Issued' ? (
         <VButton variant="secondary" size="sm" onClick={() => onDownload(r)} disabled={downloadingId === r.id}>
           <Download className="h-3.5 w-3.5" /> Download
@@ -46,8 +46,8 @@ const adminColumns = (onDownload: (certificate: Certificate) => void, downloadin
 ];
 
 const educatorColumns = (
-  onRecommend: (certificate: Certificate) => void,
-  onDownload: (certificate: Certificate) => void,
+  onRecommend: (certificate: CertificateRow) => void,
+  onDownload: (certificate: CertificateRow) => void,
   downloadingId: string | null
 ) => [
   { key: 'certificateId', header: 'Certificate ID' },
@@ -61,7 +61,7 @@ const educatorColumns = (
   {
     key: 'actions',
     header: 'Actions',
-    render: (r: Certificate) =>
+    render: (r: CertificateRow) =>
       r.status === 'Pending' ? (
         <VButton variant="primary" size="sm" onClick={() => onRecommend(r)}>
           <Send className="h-3.5 w-3.5" /> Recommend
@@ -78,8 +78,8 @@ const StudentCertificates = ({
   certificates,
   onDownload,
 }: {
-  certificates: Certificate[];
-  onDownload: (certificate: Certificate) => void;
+  certificates: CertificateRow[];
+  onDownload: (certificate: CertificateRow) => void;
 }) => {
   const myCerts = certificates.filter((c) => c.status === 'Issued');
 
@@ -255,7 +255,7 @@ const Certificates = () => {
     }
   };
 
-  const handleDownload = async (certificate: Certificate) => {
+  const handleDownload = async (certificate: CertificateRow) => {
     try {
       setDownloadingId(certificate.id);
       const response = await downloadMutation.mutateAsync(certificate.id);
@@ -267,7 +267,7 @@ const Certificates = () => {
     }
   };
 
-  const handleRecommend = (certificate: Certificate) => {
+  const handleRecommend = (certificate: CertificateRow) => {
     if (!certificate.studentId || !certificate.workshopId) {
       showToast('destructive', 'Recommend Failed', 'Student/workshop mapping missing for this certificate.');
       return;

@@ -10,12 +10,16 @@ Routes:
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_role
+from app.config import settings
 from app.crud import get_module, update_module
 from app.models import User, UserRole
+from app.schemas.misc import MaterialDownloadResponse
 from app.schemas.workshop import (
     MaterialItem,
     MaterialItemUpdate,
@@ -109,3 +113,51 @@ async def delete_material(
 
     updated_module = await update_module(db, module, ModuleUpdate(materials=filtered))
     return ModuleResponse.model_validate(updated_module)
+
+
+@router.get(
+    "/{module_id}/{material_id}/download",
+    response_model=MaterialDownloadResponse,
+    summary="Get a download URL for one module material",
+)
+async def download_material(
+    module_id: str,
+    material_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR, UserRole.STUDENT)),
+) -> MaterialDownloadResponse:
+    module = await get_module(db, module_id)
+    if not module:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found.")
+
+    material: MaterialItem | None = None
+    for entry in list(module.materials or []):
+        item = MaterialItem(**entry) if isinstance(entry, dict) else entry
+        if item.id == material_id:
+            material = item
+            break
+
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Material '{material_id}' not found in module '{module_id}'.",
+        )
+
+    content = (material.content or "").strip()
+    if content.startswith("http://") or content.startswith("https://"):
+        return MaterialDownloadResponse(
+            module_id=module_id,
+            material_id=material_id,
+            download_url=content,
+        )
+
+    normalized = content.lstrip("/")
+    file_path = Path(normalized)
+    if not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Material file not found.")
+
+    return MaterialDownloadResponse(
+        module_id=module_id,
+        material_id=material_id,
+        download_url=f"{settings.BASE_URL}/{normalized.replace('\\', '/')}",
+    )

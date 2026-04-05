@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { User, Mail, Building2, GraduationCap, Camera, Save, Shield } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -63,17 +63,28 @@ const ProfilePage = () => {
       .join("")
       .slice(0, 2));
     setAvatarUrl(resolveBackendMediaUrl(user.profile_photo));
-    setPhone(user.phone || "+91 98765 43210");
-    setInstName(instNameLookup || user.institution_id || "IIT Delhi");
-    setInstAddress("Hauz Khas, New Delhi, 110016");
-    setInstCode("IITD-2026");
+    setPhone(user.phone || "");
+    setBio(user.bio || "");
+    setDepartment(user.department || "");
+    setInstName(user.institution_admin_name || instNameLookup || user.institution_id || "");
+    setInstAddress(user.institution_admin_address || "");
+    setInstCode(user.institution_admin_code || "");
   }, [user, institutionsQuery.data]);
 
   const handleSave = async () => {
     if (!user) return;
     setIsSaving(true);
     try {
-      await updateUser(user.id, { name, phone, institution_id: institution || undefined });
+      await updateUser(user.id, {
+        name,
+        phone,
+        bio,
+        department,
+        institution_admin_name: role === "institution_admin" ? instName : undefined,
+        institution_admin_address: role === "institution_admin" ? instAddress : undefined,
+        institution_admin_code: role === "institution_admin" ? instCode : undefined,
+        institution_id: institution || undefined,
+      });
       await refreshUser();
       showToast("success", "Profile Updated", "Your changes have been saved.");
     } catch (err: unknown) {
@@ -140,7 +151,7 @@ const ProfilePage = () => {
           </h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <VInput label="Full Name" value={name} onChange={e => setName(e.target.value)} />
-            <VInput label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+            <VInput label="Email" type="email" value={email} disabled />
             <VInput label="Phone" value={phone} onChange={e => setPhone(e.target.value)} />
             {(role === "educator" || role === "student") && (
               <VInput label="Department" value={department} onChange={e => setDepartment(e.target.value)} />
@@ -150,10 +161,10 @@ const ProfilePage = () => {
             <label className="vidya-label">Bio</label>
             <textarea
               value={bio}
-              onChange={e => setBio(e.target.value)}
               rows={3}
               className="vidya-input resize-none"
               placeholder="Tell us about yourself..."
+              onChange={e => setBio(e.target.value)}
             />
           </div>
         </VCard>
@@ -202,3 +213,7 @@ const ProfilePage = () => {
 };
 
 export default ProfilePage;
+
+
+
+

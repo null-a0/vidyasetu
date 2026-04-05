@@ -23,6 +23,13 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
         role=data.role,
         institution_id=data.institution_id,
         phone=data.phone,
+        bio=data.bio,
+        department=data.department,
+        parent_name=data.parent_name,
+        parent_email=str(data.parent_email) if data.parent_email else None,
+        institution_admin_name=data.institution_admin_name,
+        institution_admin_address=data.institution_admin_address,
+        institution_admin_code=data.institution_admin_code,
     )
     db.add(user)
     await db.flush()

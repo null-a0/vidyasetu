@@ -1,16 +1,26 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VButton from "@/components/ui-custom/VButton";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { Download } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchAllUsers, fetchStudentAnalytics, fetchWorkshopAnalytics, fetchWorkshops } from "@/services/api";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { exportPerformanceReport, fetchAllUsers, fetchStudentAnalytics, fetchWorkshopAnalytics, fetchWorkshops } from "@/services/api";
 
 const PerformanceReports = () => {
   const { showToast } = useVToast();
   const [hoveredStudent, setHoveredStudent] = useState<string | null>(null);
+  const exportMutation = useMutation({
+    mutationFn: exportPerformanceReport,
+    onSuccess: (result) => {
+      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      showToast("success", "Report Exported", "Performance CSV export started.");
+    },
+    onError: (error: unknown) => {
+      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export report.");
+    },
+  });
 
   const workshopsQuery = useQuery({
     queryKey: ["workshops"],
@@ -111,7 +121,7 @@ const PerformanceReports = () => {
     return [
       { label: "Average Score", value: `${avgScore}%`, description: "Across available assessments" },
       { label: "Completion Rate", value: `${completion}%`, description: "Workshop completion (enrollments)" },
-      { label: "Top Workshop", value: totals.topWorkshop || "�", description: "Highest enrollment (sampled)" },
+      { label: "Top Workshop", value: totals.topWorkshop || "—", description: "Highest enrollment (sampled)" },
       { label: "Pass Rate", value: `${passRate}%`, description: "Across available submissions" },
     ];
   }, [workshopAnalyticsQuery.data]);
@@ -177,8 +187,8 @@ const PerformanceReports = () => {
     <DashboardLayout title="Performance Reports">
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-muted-foreground">Comprehensive performance analytics {isLoading ? "(loading...)" : ""}</p>
-        <VButton variant="secondary" onClick={() => showToast("success", "Report Exported", "PDF report downloaded")}>
-          <Download className="h-4 w-4" /> Export PDF
+        <VButton variant="secondary" onClick={() => exportMutation.mutate()} isLoading={exportMutation.isPending}>
+          <Download className="h-4 w-4" /> Export CSV
         </VButton>
       </div>
 
@@ -279,3 +289,4 @@ const PerformanceReports = () => {
 };
 
 export default PerformanceReports;
+

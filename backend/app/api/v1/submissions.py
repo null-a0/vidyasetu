@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_current_user, get_db, require_role
 from app.crud.crud_assessment import (
+    apply_grade,
     append_answers,
     get_assessment,
     get_questions_by_assessment,
@@ -12,9 +13,11 @@ from app.crud.crud_assessment import (
     get_submissions_by_assessment,
     get_submissions_by_student,
 )
+from app.crud.crud_workshop import get_workshop
 from app.models import User, UserRole
 from app.schemas.assessment import AnswerBatch, SubmissionResponse, SubmissionReviewQuestion, SubmissionReviewResponse
 from app.schemas.base import Page
+from app.services.grading import grade_submission
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 
@@ -205,3 +208,44 @@ async def review_submission(
         pass_fail=bool(submission.pass_fail),
         questions=review_rows,
     )
+
+
+@router.post(
+    "/{submission_id}/grade",
+    response_model=SubmissionResponse,
+    summary="Auto-grade a pending submission (staff only)",
+)
+async def grade_pending_submission(
+    submission_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*_STAFF)),
+) -> SubmissionResponse:
+    submission = await get_submission(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+    if submission.pass_fail is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Submission already graded.")
+
+    assessment = await get_assessment(db, submission.assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        workshop = await get_workshop(db, assessment.workshop_id)
+        if not workshop or workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    questions, _ = await get_questions_by_assessment(db, submission.assessment_id, limit=500)
+    report = grade_submission(
+        questions=list(questions),
+        answers=submission.answers or [],
+        pass_mark=int(assessment.pass_mark or 0),
+    )
+    graded = await apply_grade(
+        db,
+        submission,
+        score=int(report.score),
+        total_marks=int(report.total_marks),
+        pass_fail=bool(report.pass_fail),
+    )
+    return SubmissionResponse.model_validate(graded)

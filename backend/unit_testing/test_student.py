@@ -4,26 +4,14 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from app.api.deps import get_current_user, get_db
 from app.core.security import hash_password
 from app.main import app
-from app.models import (
-    Assessment,
-    Base,
-    Certificate,
-    Enrollment,
-    Institution,
-    Module,
-    Notification,
-    Question,
-    Submission,
-    User,
-    UserRole,
-    Workshop,
-)
+from app.models import (Assessment, Base, Certificate, Enrollment, Institution,
+                        Module, Notification, Question, Submission, User,
+                        UserRole, Workshop)
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
 @pytest.fixture()
@@ -38,7 +26,8 @@ def client_and_state():
             await conn.run_sync(Base.metadata.create_all)
 
         async with session_local() as session:
-            institution = Institution(id="inst-1", name="IIT Delhi", address="Delhi")
+            institution = Institution(
+                id="inst-1", name="IIT Delhi", address="Delhi")
             student = User(
                 id="student-1",
                 name="Student One",
@@ -46,6 +35,8 @@ def client_and_state():
                 password=hash_password("student123"),
                 role=UserRole.STUDENT,
                 institution_id="inst-1",
+                parent_name="Parent One",
+                parent_email="parent1@example.com",
             )
             student_two = User(
                 id="student-2",
@@ -76,7 +67,8 @@ def client_and_state():
                 workshop_id="workshop-1",
                 title="Module One",
                 order_index=1,
-                materials=[{"id": "mat-1", "title": "Material", "type": "text", "content": "Read me"}],
+                materials=[{"id": "mat-1", "title": "Material",
+                            "type": "text", "content": "Read me"}],
             )
             assessment = Assessment(
                 id="assessment-1",
@@ -129,7 +121,8 @@ def client_and_state():
                 id="submission-graded",
                 student_id="student-1",
                 assessment_id="assessment-1",
-                answers=[{"question_id": "question-1", "selected_option_ids": ["q1-a"]}],
+                answers=[{"question_id": "question-1",
+                          "selected_option_ids": ["q1-a"]}],
                 score=10,
                 percentage=50,
                 pass_fail=True,
@@ -186,7 +179,8 @@ def test_student_auth_register_and_login(client_and_state):
 
     register_response = client.post(
         "/api/v1/auth/register",
-        json={"name": "New Student", "email": "newstudent@vidyasetu.edu", "password": "secret123", "role": "student"},
+        json={"name": "New Student", "email": "newstudent@vidyasetu.edu",
+              "password": "secret123", "role": "student"},
     )
     assert register_response.status_code == 201
 
@@ -213,6 +207,12 @@ def test_student_dashboard_and_analytics(client_and_state):
     assert payload["student_id"] == "student-1"
     assert "assessment" in payload
     assert "avg_percentage" in payload["assessment"]
+    assert "score_trend" in payload["assessment"]
+    assert isinstance(payload["assessment"]["score_trend"], list)
+    if payload["assessment"]["score_trend"]:
+        first_point = payload["assessment"]["score_trend"][0]
+        assert "percentage" in first_point
+        assert "submitted_at" in first_point
 
 
 def test_student_workshops_and_enrollments(client_and_state):
@@ -227,7 +227,8 @@ def test_student_workshops_and_enrollments(client_and_state):
     assert enrollments.status_code == 200
     assert enrollments.json()["total"] >= 1
 
-    forbidden_enroll = client.post("/api/v1/enrollments/", json={"student_id": "student-2", "workshop_id": "workshop-1"})
+    forbidden_enroll = client.post(
+        "/api/v1/enrollments/", json={"student_id": "student-2", "workshop_id": "workshop-1"})
     assert forbidden_enroll.status_code == 403
 
 
@@ -252,12 +253,14 @@ def test_student_attempt_start_save_submit_flow(client_and_state):
     )
     assert save_answers.status_code == 200
 
-    submit = client.post(f"/api/v1/tests/assessment-1/submit?submission_id={submission_id}")
+    submit = client.post(
+        f"/api/v1/tests/assessment-1/submit?submission_id={submission_id}")
     assert submit.status_code == 200
     assert submit.json()["score"] == 20
     assert submit.json()["pass_fail"] is True
 
-    re_submit = client.post(f"/api/v1/tests/assessment-1/submit?submission_id={submission_id}")
+    re_submit = client.post(
+        f"/api/v1/tests/assessment-1/submit?submission_id={submission_id}")
     assert re_submit.status_code == 409
 
 
@@ -276,9 +279,28 @@ def test_student_certificates_notifications_and_profile(client_and_state):
     assert notifications.status_code == 200
     assert notifications.json()["total"] >= 1
 
+    first_notification_id = notifications.json()["items"][0]["id"]
+    mark_read = client.patch(
+        f"/api/v1/notifications/{first_notification_id}/read")
+    assert mark_read.status_code == 200
+    assert mark_read.json()["status"] == "read"
+
+    delete_notification = client.delete(
+        f"/api/v1/notifications/{first_notification_id}")
+    assert delete_notification.status_code == 204
+
     me = client.get("/api/v1/users/me")
     assert me.status_code == 200
     assert me.json()["id"] == "student-1"
+
+    profile_update = client.patch(
+        "/api/v1/users/student-1",
+        json={"bio": "I love frontend engineering.",
+              "department": "Computer Science"},
+    )
+    assert profile_update.status_code == 200
+    assert profile_update.json()["bio"] == "I love frontend engineering."
+    assert profile_update.json()["department"] == "Computer Science"
 
     profile_upload = client.post(
         "/api/v1/users/student-1/profile-photo",
@@ -287,9 +309,11 @@ def test_student_certificates_notifications_and_profile(client_and_state):
     assert profile_upload.status_code == 200
     assert profile_upload.json()["profile_photo"].startswith("media/avatars/")
 
-    certificate_download = client.get("/api/v1/certificates/certificate-1/download")
+    certificate_download = client.get(
+        "/api/v1/certificates/certificate-1/download")
     assert certificate_download.status_code == 200
-    assert "/media/certificates/certificate-1.pdf" in certificate_download.json()["download_url"]
+    assert "/media/certificates/certificate-1.pdf" in certificate_download.json()[
+        "download_url"]
 
 
 def test_student_forbidden_from_other_student_data(client_and_state):
@@ -302,6 +326,9 @@ def test_student_forbidden_from_other_student_data(client_and_state):
     other_dashboard = client.get("/api/v1/dashboard/student/student-2")
     assert other_dashboard.status_code == 403
 
+    other_analytics = client.get("/api/v1/analytics/student/student-2")
+    assert other_analytics.status_code == 403
+
     other_upload = client.post(
         "/api/v1/users/student-2/profile-photo",
         files={"file": ("avatar.png", b"avatar-bytes", "image/png")},
@@ -313,27 +340,54 @@ def test_student_leaderboard_access_and_staff_only_guards(client_and_state):
     client, state = client_and_state
     state["user_id"] = "student-1"
 
-    assessment_lb = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1")
+    assessment_lb = client.get(
+        "/api/v1/analytics/leaderboard/assessment/assessment-1")
     assert assessment_lb.status_code == 200
     assert assessment_lb.json()["assessment_id"] == "assessment-1"
 
-    workshop_lb = client.get("/api/v1/analytics/leaderboard/workshop/workshop-1")
+    workshop_lb = client.get(
+        "/api/v1/analytics/leaderboard/workshop/workshop-1")
     assert workshop_lb.status_code == 200
     assert workshop_lb.json()["workshop_id"] == "workshop-1"
 
-    assessment_drilldown = client.get("/api/v1/analytics/leaderboard/assessment/assessment-1/student/student-1")
+    assessment_drilldown = client.get(
+        "/api/v1/analytics/leaderboard/assessment/assessment-1/student/student-1")
     assert assessment_drilldown.status_code == 200
     assert assessment_drilldown.json()["student_id"] == "student-1"
 
-    workshop_drilldown = client.get("/api/v1/analytics/leaderboard/workshop/workshop-1/student/student-1")
+    workshop_drilldown = client.get(
+        "/api/v1/analytics/leaderboard/workshop/workshop-1/student/student-1")
     assert workshop_drilldown.status_code == 200
     assert workshop_drilldown.json()["context_type"] == "workshop"
 
-    review_forbidden = client.get("/api/v1/submissions/submission-graded/review")
+    review_forbidden = client.get(
+        "/api/v1/submissions/submission-graded/review")
     assert review_forbidden.status_code == 403
+
+    grade_forbidden = client.post(
+        "/api/v1/submissions/submission-graded/grade")
+    assert grade_forbidden.status_code == 403
 
     communication_forbidden = client.post(
         "/api/v1/communication/parent-email",
         json={"student_ids": ["student-1"], "subject": "Hi", "body": "Test"},
     )
     assert communication_forbidden.status_code == 403
+
+    parent_contacts_forbidden = client.get(
+        "/api/v1/communication/parent-contacts?student_ids=student-1")
+    assert parent_contacts_forbidden.status_code == 403
+
+    institution_bulk_forbidden = client.post(
+        "/api/v1/analytics/institution/students/bulk-action",
+        json={"student_ids": ["student-1"], "action": "set_inactive"},
+    )
+    assert institution_bulk_forbidden.status_code == 403
+
+    attendance_export_forbidden = client.get(
+        "/api/v1/analytics/institution/attendance-report/export")
+    assert attendance_export_forbidden.status_code == 403
+
+    performance_export_forbidden = client.get(
+        "/api/v1/analytics/reports/performance/export")
+    assert performance_export_forbidden.status_code == 403

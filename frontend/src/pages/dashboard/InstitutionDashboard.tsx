@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Users, ClipboardList, Award, TrendingUp, TrendingDown, Plus, AlertCircle, Eye, Calendar, CheckSquare } from "lucide-react";
@@ -13,13 +13,25 @@ import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
 import { useVToast } from "@/components/ui-custom/VToast";
 import {
+  applyInstitutionStudentBulkAction,
   createWorkshop,
+  exportInstitutionAttendanceReport,
+  exportInstitutionDashboardReport,
+  exportInstitutionStudents,
   fetchInstitutionAttendanceReport,
   fetchInstitutionDashboardAggregate,
   fetchInstitutionStudentRoster,
   fetchWorkshops,
 } from "@/services/api";
-import type { Workshop } from "@/mock/mockData";
+
+type WorkshopRow = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  studentsEnrolled: number;
+  status: "Active" | "Upcoming" | "Completed";
+};
 
 const iconColors = [
   "bg-primary/10 text-primary",
@@ -27,17 +39,6 @@ const iconColors = [
   "bg-warning/10 text-warning",
   "bg-success/10 text-success",
 ];
-
-const FALLBACK_STATS_DATA = [
-  { label: "Institution Workshops", value: "0", icon: BookOpen, trend: "0", up: true },
-  { label: "Educators", value: "0", icon: Users, trend: "0", up: true },
-  { label: "Active Assessments", value: "0", icon: ClipboardList, trend: "0", up: true },
-  { label: "Students", value: "0", icon: Award, trend: "0", up: true },
-];
-
-const FALLBACK_ALERTS: Array<{ id: string; text: string; type: "warning" | "info" | "success" }> = [];
-const FALLBACK_ACTIVITY: Array<{ id: string; text: string; time: string }> = [];
-const FALLBACK_ENROLLMENT_DATA: Array<{ month: string; students: number }> = [];
 
 const InstitutionDashboard = () => {
   const navigate = useNavigate();
@@ -82,54 +83,72 @@ const InstitutionDashboard = () => {
       showToast("destructive", "Create Failed", error instanceof Error ? error.message : "Unable to create workshop.");
     },
   });
+  const bulkStudentActionMutation = useMutation({
+    mutationFn: (studentIds: string[]) => applyInstitutionStudentBulkAction({ studentIds, action: "set_inactive" }),
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["institutionStudentRoster"] }),
+        queryClient.invalidateQueries({ queryKey: ["institutionDashboardAggregate"] }),
+      ]);
+      setSelectedStudents(new Set());
+      showToast("success", "Bulk Action Applied", `${result.updated_enrollments} enrollments updated.`);
+    },
+    onError: (error: unknown) => {
+      showToast("destructive", "Bulk Action Failed", error instanceof Error ? error.message : "Unable to apply bulk action.");
+    },
+  });
+  const exportStudentsMutation = useMutation({
+    mutationFn: (studentIds: string[]) => exportInstitutionStudents(studentIds),
+    onSuccess: (result) => {
+      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      showToast("success", "Export Ready", "Student CSV export started.");
+    },
+    onError: (error: unknown) => {
+      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export students.");
+    },
+  });
+  const exportAttendanceMutation = useMutation({
+    mutationFn: exportInstitutionAttendanceReport,
+    onSuccess: (result) => {
+      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      showToast("success", "Attendance Export Ready", "Attendance CSV export started.");
+    },
+    onError: (error: unknown) => {
+      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export attendance report.");
+    },
+  });
+  const exportDashboardReportMutation = useMutation({
+    mutationFn: exportInstitutionDashboardReport,
+    onSuccess: (result) => {
+      window.open(result.download_url, "_blank", "noopener,noreferrer");
+      showToast("success", "Report Export Ready", "Dashboard CSV export started.");
+    },
+    onError: (error: unknown) => {
+      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export report.");
+    },
+  });
 
   const aggregate = institutionAggregateQuery.data;
   const studentData = studentRosterQuery.data?.items ?? [];
   const attendanceData = attendanceReportQuery.data?.rows ?? [];
 
-  const statsData = aggregate
-    ? [
-        {
-          label: "Institution Workshops",
-          value: String(aggregate.kpis.workshops ?? 0),
-          icon: BookOpen,
-          trend: String(aggregate.kpis.workshops ?? 0),
-          up: true,
-        },
-        {
-          label: "Educators",
-          value: String(aggregate.kpis.educators ?? 0),
-          icon: Users,
-          trend: String(aggregate.kpis.educators ?? 0),
-          up: true,
-        },
-        {
-          label: "Active Assessments",
-          value: String(aggregate.kpis.active_assessments ?? 0),
-          icon: ClipboardList,
-          trend: String(aggregate.kpis.active_assessments ?? 0),
-          up: true,
-        },
-        {
-          label: "Students",
-          value: String(aggregate.kpis.students ?? 0),
-          icon: Award,
-          trend: String(aggregate.kpis.students ?? 0),
-          up: true,
-        },
-      ]
-    : FALLBACK_STATS_DATA;
-  const alerts = (aggregate?.alerts ?? FALLBACK_ALERTS).map((item) => ({
+  const statsData = [
+    { label: "Institution Workshops", value: String(aggregate?.kpis.workshops ?? 0), icon: BookOpen, trend: String(aggregate?.kpis.workshops ?? 0), up: true },
+    { label: "Educators", value: String(aggregate?.kpis.educators ?? 0), icon: Users, trend: String(aggregate?.kpis.educators ?? 0), up: true },
+    { label: "Active Assessments", value: String(aggregate?.kpis.active_assessments ?? 0), icon: ClipboardList, trend: String(aggregate?.kpis.active_assessments ?? 0), up: true },
+    { label: "Students", value: String(aggregate?.kpis.students ?? 0), icon: Award, trend: String(aggregate?.kpis.students ?? 0), up: true },
+  ];
+  const alerts = (aggregate?.alerts ?? []).map((item) => ({
     id: item.id,
     text: item.text,
     type: ((item.level === "warning" || item.level === "success") ? item.level : "info") as "warning" | "success" | "info",
   }));
-  const recentActivity = (aggregate?.activity_feed ?? FALLBACK_ACTIVITY).map((item) => ({
+  const recentActivity = (aggregate?.activity_feed ?? []).map((item) => ({
     id: item.id,
     text: item.text,
     time: item.time,
   }));
-  const enrollmentData = (aggregate?.enrollment_trend ?? FALLBACK_ENROLLMENT_DATA).map((item) => ({
+  const enrollmentData = (aggregate?.enrollment_trend ?? []).map((item) => ({
     month: item.label,
     students: Math.round(item.value),
   }));
@@ -162,7 +181,7 @@ const InstitutionDashboard = () => {
     {
       key: "status",
       header: "Status",
-      render: (row: Workshop) => (
+      render: (row: WorkshopRow) => (
         <VBadge variant={row.status === "Active" ? "success" : row.status === "Upcoming" ? "warning" : "outline"}>
           {row.status}
         </VBadge>
@@ -171,7 +190,7 @@ const InstitutionDashboard = () => {
     {
       key: "actions",
       header: "",
-      render: (row: Workshop) => (
+      render: (row: WorkshopRow) => (
         <VButton variant="secondary" size="sm" onClick={() => { navigate(`/workshops/${row.id}`); }}>
           <Eye className="h-3.5 w-3.5" /> View
         </VButton>
@@ -288,10 +307,20 @@ const InstitutionDashboard = () => {
             <div className="flex gap-2">
               {selectedStudents.size > 0 && (
                 <>
-                  <VButton variant="secondary" size="sm" onClick={() => { showToast("info", "Export", `Exporting ${selectedStudents.size} student records`); }}>
+                  <VButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => exportStudentsMutation.mutate(Array.from(selectedStudents))}
+                    isLoading={exportStudentsMutation.isPending}
+                  >
                     Export Selected
                   </VButton>
-                  <VButton variant="destructive" size="sm" onClick={() => { showToast("warning", "Bulk Action", `Action applied to ${selectedStudents.size} students`); setSelectedStudents(new Set()); }}>
+                  <VButton
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => bulkStudentActionMutation.mutate(Array.from(selectedStudents))}
+                    isLoading={bulkStudentActionMutation.isPending}
+                  >
                     Bulk Action
                   </VButton>
                 </>
@@ -353,7 +382,12 @@ const InstitutionDashboard = () => {
           )}
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h3 className="text-base font-semibold text-foreground">Weekly Attendance — React Fundamentals</h3>
-            <VButton variant="secondary" size="sm" onClick={() => showToast("info", "Attendance exported")}>
+            <VButton
+              variant="secondary"
+              size="sm"
+              onClick={() => exportAttendanceMutation.mutate()}
+              isLoading={exportAttendanceMutation.isPending}
+            >
               <Calendar className="h-3.5 w-3.5" /> Export
             </VButton>
           </div>
@@ -397,7 +431,12 @@ const InstitutionDashboard = () => {
         <>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-foreground">Enrollment Trends</h3>
-            <VButton variant="secondary" size="sm" onClick={() => showToast("success", "Report Exported", "PDF report downloaded successfully")}>
+            <VButton
+              variant="secondary"
+              size="sm"
+              onClick={() => exportDashboardReportMutation.mutate()}
+              isLoading={exportDashboardReportMutation.isPending}
+            >
               Export Report
             </VButton>
           </div>

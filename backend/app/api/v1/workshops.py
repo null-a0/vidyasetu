@@ -145,38 +145,34 @@ async def get_workshop_educator_profile(
     institution_name = (
         await db.execute(select(Institution.name).where(Institution.id == workshop.institution_id))
     ).scalar_one_or_none() or "Institution"
-    primary_educator = (
+    educators = (
         await db.execute(
             select(User)
             .where(User.role == UserRole.EDUCATOR)
             .where(User.institution_id == workshop.institution_id)
             .order_by(User.created_at.asc())
-            .limit(1)
         )
-    ).scalar_one_or_none()
-    if not primary_educator:
+    ).scalars().all()
+    if not educators:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No educator profile found for this workshop institution.",
         )
-
-    department = "Academics"
-    email = primary_educator.email or ""
-    if "cs" in email:
-        department = "Computer Science"
-    elif "data" in email:
-        department = "Data Science"
-    elif "cloud" in email:
-        department = "Cloud Computing"
+    if len(educators) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Workshop-specific educator assignment is not configured for this workshop.",
+        )
+    primary_educator = educators[0]
 
     return WorkshopEducatorProfileResponse(
         workshop_id=workshop_id,
         educator_id=primary_educator.id,
         name=primary_educator.name or primary_educator.email,
         email=primary_educator.email,
-        department=department,
+        department=primary_educator.department or "Academics",
         institution=institution_name,
-        bio=f"{primary_educator.name or 'Educator'} supports this workshop from {institution_name}.",
+        bio=primary_educator.bio or f"{primary_educator.name or 'Educator'} supports this workshop from {institution_name}.",
     )
 
 

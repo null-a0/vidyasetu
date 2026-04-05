@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiDelete } from "@/api/client";
+﻿import { apiGet, apiPost, apiPatch, apiDelete } from "@/api/client";
 import {
     adaptWorkshopsPage,
     adaptModulesToMaterials,
@@ -35,8 +35,12 @@ import type {
     BackendInstitutionStudentRoster,
     BackendInstitutionAttendanceReport,
     BackendParentMessageResponse,
+    BackendParentContactDirectory,
     BackendCertificateRecommendationResponse,
     BackendCertificateDownloadResponse,
+    BackendMaterialDownloadResponse,
+    BackendExportFileResponse,
+    BackendInstitutionStudentBulkActionResponse,
     BackendSubmissionReview,
     BackendWorkshopEducatorProfile,
     TokenResponse,
@@ -701,6 +705,13 @@ export const updateUser = async (
         name?: string;
         phone?: string;
         profile_photo?: string;
+        bio?: string;
+        department?: string;
+        parent_name?: string;
+        parent_email?: string;
+        institution_admin_name?: string;
+        institution_admin_address?: string;
+        institution_admin_code?: string;
         theme?: string;
         institution_id?: string;
     },
@@ -939,6 +950,62 @@ export const fetchInstitutionAttendanceReport =
         );
     };
 
+
+export const applyInstitutionStudentBulkAction = async (payload: {
+    studentIds: string[];
+    action: "set_inactive";
+}): Promise<BackendInstitutionStudentBulkActionResponse> => {
+    return apiPost<BackendInstitutionStudentBulkActionResponse>(
+        "/analytics/institution/students/bulk-action",
+        {
+            student_ids: payload.studentIds,
+            action: payload.action,
+        },
+    );
+};
+
+export const exportInstitutionStudents = async (
+    studentIds: string[],
+): Promise<BackendExportFileResponse> => {
+    return apiGet<BackendExportFileResponse>(
+        "/analytics/institution/students/export",
+        {
+            params: { student_ids: studentIds },
+        },
+    );
+};
+
+export const exportInstitutionAttendanceReport =
+    async (): Promise<BackendExportFileResponse> => {
+        return apiGet<BackendExportFileResponse>(
+            "/analytics/institution/attendance-report/export",
+        );
+    };
+
+export const exportInstitutionDashboardReport =
+    async (): Promise<BackendExportFileResponse> => {
+        return apiGet<BackendExportFileResponse>(
+            "/analytics/institution/dashboard/export",
+        );
+    };
+
+export const exportPerformanceReport =
+    async (): Promise<BackendExportFileResponse> => {
+        return apiGet<BackendExportFileResponse>(
+            "/analytics/reports/performance/export",
+        );
+    };
+export const fetchParentContactDirectory = async (studentIds: string[]): Promise<BackendParentContactDirectory> => {
+    if (studentIds.length === 0) {
+        return { items: [], total: 0 };
+    }
+    return apiGet<BackendParentContactDirectory>(
+        "/communication/parent-contacts",
+        {
+            params: { student_ids: studentIds },
+        },
+    );
+};
 export const sendParentEmailMessage = async (payload: {
     studentIds: string[];
     subject: string;
@@ -961,3 +1028,20 @@ export const fetchSubmissionReview = async (
         `/submissions/${submissionId}/review`,
     );
 };
+
+export const gradeSubmission = async (
+    submissionId: string,
+): Promise<BackendSubmission> => {
+    return apiPost<BackendSubmission>(`/submissions/${submissionId}/grade`);
+};
+
+export const fetchMaterialDownload = async (
+    moduleId: string,
+    materialId: string,
+): Promise<BackendMaterialDownloadResponse> => {
+    return apiGet<BackendMaterialDownloadResponse>(
+        `/materials/${moduleId}/${materialId}/download`,
+    );
+};
+
+
