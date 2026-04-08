@@ -203,11 +203,47 @@ export const deleteWorkshop = async (workshopId: string): Promise<void> => {
     await apiDelete<void>("/workshops/" + workshopId);
 };
 
-export const fetchMaterials = async (): Promise<Material[]> => {
+const filterToStudentEnrollments = async (
+    workshops: Workshop[],
+    studentId?: string,
+): Promise<Workshop[]> => {
+    if (!studentId) return workshops;
+    const enrollmentPage = await fetchEnrollments(studentId);
+    const enrolledWorkshopIds = new Set(
+        (enrollmentPage.items ?? [])
+            .map((item) => item.workshop_id)
+            .filter(Boolean) as string[],
+    );
+    return workshops.filter((workshop) => enrolledWorkshopIds.has(workshop.id));
+};
+
+export const fetchMaterials = async (
+    options: { studentId?: string } = {},
+): Promise<Material[]> => {
     const workshops = await fetchWorkshops();
-    const workshopLookup = buildWorkshopLookup(workshops);
+    const scopedWorkshops = await filterToStudentEnrollments(
+        workshops,
+        options.studentId,
+    );
+    const workshopLookup = buildWorkshopLookup(scopedWorkshops);
+
+    if (options.studentId) {
+        const settled = await Promise.allSettled(
+            scopedWorkshops.map((workshop) =>
+                apiGet<ApiPage<BackendModule>>(
+                    "/workshops/" + workshop.id + "/modules",
+                    { params: { limit: 20 } },
+                ),
+            ),
+        );
+        const modules = settled.flatMap((result) =>
+            result.status === "fulfilled" ? result.value.items : [],
+        );
+        return adaptModulesToMaterials(modules, workshopLookup);
+    }
+
     const modulePages = await Promise.all(
-        workshops.map((workshop) =>
+        scopedWorkshops.map((workshop) =>
             apiGet<ApiPage<BackendModule>>(
                 "/workshops/" + workshop.id + "/modules",
                 { params: { limit: 20 } },
@@ -218,11 +254,33 @@ export const fetchMaterials = async (): Promise<Material[]> => {
     return adaptModulesToMaterials(modules, workshopLookup);
 };
 
-export const fetchAssessments = async (): Promise<Assessment[]> => {
+export const fetchAssessments = async (
+    options: { studentId?: string } = {},
+): Promise<Assessment[]> => {
     const workshops = await fetchWorkshops();
-    const workshopLookup = buildWorkshopLookup(workshops);
+    const scopedWorkshops = await filterToStudentEnrollments(
+        workshops,
+        options.studentId,
+    );
+    const workshopLookup = buildWorkshopLookup(scopedWorkshops);
+
+    if (options.studentId) {
+        const settled = await Promise.allSettled(
+            scopedWorkshops.map((workshop) =>
+                apiGet<ApiPage<BackendAssessment>>(
+                    "/assessments/workshop/" + workshop.id,
+                    { params: { limit: 20 } },
+                ),
+            ),
+        );
+        const assessments = settled.flatMap((result) =>
+            result.status === "fulfilled" ? result.value.items : [],
+        );
+        return adaptAssessments(assessments, workshopLookup);
+    }
+
     const assessmentPages = await Promise.all(
-        workshops.map((workshop) =>
+        scopedWorkshops.map((workshop) =>
             apiGet<ApiPage<BackendAssessment>>(
                 "/assessments/workshop/" + workshop.id,
                 { params: { limit: 20 } },

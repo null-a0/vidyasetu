@@ -11,6 +11,7 @@ import VSelect from "@/components/ui-custom/VSelect";
 import VDrawer from "@/components/ui-custom/VDrawer";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
+import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { deleteModuleMaterial, fetchMaterialDownload, fetchMaterials, fetchWorkshopModules, fetchWorkshops, uploadModuleMaterial } from "@/services/api";
 import type { Material } from "@/mock/mockData";
@@ -19,10 +20,23 @@ const fileIcons: Record<string, React.ElementType> = { PDF: FileText, PPTX: Pres
 
 const MaterialsPage = () => {
   const role = useRole();
+  const canUpload = role !== "student";
+  const { user } = useAuth();
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
-  const { data: all = [] } = useQuery({ queryKey: ["materials"], queryFn: fetchMaterials });
-  const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
+  const { data: all = [] } = useQuery({
+    queryKey: ["materials", role, user?.id],
+    queryFn: () =>
+      role === "student"
+        ? fetchMaterials({ studentId: user?.id })
+        : fetchMaterials(),
+    enabled: role !== "student" || Boolean(user?.id),
+  });
+  const { data: workshops = [] } = useQuery({
+    queryKey: ["workshops", "upload"],
+    queryFn: fetchWorkshops,
+    enabled: canUpload,
+  });
   const [search, setSearch] = useState("");
   const [uploadModal, setUploadModal] = useState(false);
   const [viewDrawer, setViewDrawer] = useState(false);
@@ -34,7 +48,6 @@ const MaterialsPage = () => {
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
   const filtered = all.filter(m => m.title.toLowerCase().includes(search.toLowerCase()) || m.workshop.toLowerCase().includes(search.toLowerCase()));
-  const canUpload = role !== "student";
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
