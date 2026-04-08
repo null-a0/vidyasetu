@@ -48,7 +48,7 @@ Add/update the following keys in `backend\.env`:
 
 ```env
 GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
-GEMINI_MODEL_NAME=gemini-2.5-flash
+GEMINI_MODEL_NAME=gemini-3.1-flash-lite-preview
 GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
 AI_MAX_RETRIES=3
 AI_RETRY_BASE_DELAY_SECONDS=0.5

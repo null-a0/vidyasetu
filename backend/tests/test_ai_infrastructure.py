@@ -83,7 +83,7 @@ async def test_ai_generation_persistence_and_update(db_session):
         source_entity_type="institution",
         source_entity_id="inst-1",
         prompt_version="v1",
-        model_name="gemini-1.5-pro-002",
+        model_name="gemini-3.1-flash-lite-preview",
         raw_prompt_input={"date_from": "2026-01-01", "date_to": "2026-01-31"},
     )
     created = await create_ai_generation(
@@ -95,7 +95,7 @@ async def test_ai_generation_persistence_and_update(db_session):
             source_entity_type="institution",
             source_entity_id="inst-1",
             prompt_version="v1",
-            model_name="gemini-1.5-pro-002",
+            model_name="gemini-3.1-flash-lite-preview",
             raw_prompt_input={"scope": "monthly"},
             request_fingerprint=fingerprint,
             cache_expires_at=compute_cache_expiry(ttl_seconds=300),
@@ -128,7 +128,7 @@ async def test_ai_generation_cache_and_dedupe_helpers(db_session):
         source_entity_type="institution",
         source_entity_id="inst-1",
         prompt_version="v1",
-        model_name="gemini-1.5-pro-002",
+        model_name="gemini-3.1-flash-lite-preview",
         raw_prompt_input={"period": "2026-Q1"},
     )
 
@@ -141,7 +141,7 @@ async def test_ai_generation_cache_and_dedupe_helpers(db_session):
             source_entity_type="institution",
             source_entity_id="inst-1",
             prompt_version="v1",
-            model_name="gemini-1.5-pro-002",
+            model_name="gemini-3.1-flash-lite-preview",
             raw_prompt_input={"period": "2026-Q1"},
             request_fingerprint=fingerprint,
             cache_expires_at=compute_cache_expiry(ttl_seconds=300),
@@ -207,7 +207,7 @@ def test_admin_report_fingerprint_is_deterministic():
         source_entity_type="institution",
         source_entity_id="inst-1",
         prompt_version="v1",
-        model_name="gemini-1.5-pro-002",
+        model_name="gemini-3.1-flash-lite-preview",
         raw_prompt_input=payload_a,
     )
     key_b = build_admin_report_request_fingerprint(
@@ -215,7 +215,7 @@ def test_admin_report_fingerprint_is_deterministic():
         source_entity_type="institution",
         source_entity_id="inst-1",
         prompt_version="v1",
-        model_name="gemini-1.5-pro-002",
+        model_name="gemini-3.1-flash-lite-preview",
         raw_prompt_input=payload_b,
     )
     key_c = build_admin_report_request_fingerprint(
@@ -223,7 +223,7 @@ def test_admin_report_fingerprint_is_deterministic():
         source_entity_type="institution",
         source_entity_id="inst-1",
         prompt_version="v2",
-        model_name="gemini-1.5-pro-002",
+        model_name="gemini-3.1-flash-lite-preview",
         raw_prompt_input=payload_b,
     )
     assert key_a == key_b

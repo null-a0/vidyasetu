@@ -133,7 +133,7 @@ class GeminiClient:
             raise GeminiError(
                 "Gemini model not found for generateContent. "
                 f"Configured GEMINI_MODEL_NAME='{self.model_name}'. "
-                "Set a currently available stable model (for example: gemini-2.5-flash) "
+                "Set a currently available stable model (for example: gemini-3.1-flash-lite-preview) "
                 "and verify with the ListModels endpoint. "
                 f"Raw: {response.text[:500]}"
             )

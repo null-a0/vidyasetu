@@ -51,7 +51,7 @@ Required env vars:
 
 ```env
 GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
-GEMINI_MODEL_NAME=gemini-2.5-flash
+GEMINI_MODEL_NAME=gemini-3.1-flash-lite-preview
 GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
 GEMINI_TIMEOUT_SECONDS=30
 AI_MAX_RETRIES=3
@@ -68,7 +68,7 @@ AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
 
 Production notes:
 
-- Keep `GEMINI_MODEL_NAME` on a stable version (`gemini-2.5-flash`).
+- Keep `GEMINI_MODEL_NAME` on a stable version (`gemini-3.1-flash-lite-preview`).
 - Keep `AI_RATE_LIMIT_BACKEND=database` for multi-instance-safe limits.
 - `AI_RATE_LIMIT_BACKEND=memory` is only for local/single-process dev.
 - Do not put Gemini keys in frontend env files.
