@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     AI_ADMIN_REPORT_INSTITUTION_RATE_LIMIT: int = 10
     AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS: int = 600
     AI_ADMIN_REPORT_STALE_AFTER_SECONDS: int = 900
+    AI_STUDENT_EXPLANATION_PROMPT_VERSION: str = "v1"
+    AI_STUDENT_EXPLANATION_CACHE_TTL_SECONDS: int = 86400
+    AI_STUDENT_EXPLANATION_USER_RATE_LIMIT: int = 12
+    AI_STUDENT_EXPLANATION_RATE_LIMIT_WINDOW_SECONDS: int = 600
+    AI_STUDENT_EXPLANATION_STALE_AFTER_SECONDS: int = 900
     # "database" is safe for multi-instance deployments sharing the primary DB.
     # "memory" is per-process and should be used only for local/dev.
     AI_RATE_LIMIT_BACKEND: str = "database"

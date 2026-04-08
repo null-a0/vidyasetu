@@ -54,6 +54,8 @@ import type {
     BackendAdminAIReportStatusResponse,
     BackendAdminAIReportResultResponse,
     BackendAdminAIReportHistoryItem,
+    BackendStudentExplanationRequest,
+    BackendStudentExplanationResponse,
 } from "@/api/types";
 import type {
     Workshop,
@@ -1082,6 +1084,12 @@ export const fetchAdminAIReportsHistory = async (
             ...(institutionId ? { institution_id: institutionId } : {}),
         },
     });
+};
+
+export const createStudentAnswerExplanation = async (
+    payload: BackendStudentExplanationRequest,
+): Promise<BackendStudentExplanationResponse> => {
+    return apiPost<BackendStudentExplanationResponse>("/ai/student-explanations/", payload);
 };
 
 

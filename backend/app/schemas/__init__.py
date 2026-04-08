@@ -62,6 +62,10 @@ from app.schemas.ai import (
     AITokenUsage,
     AdminReportStructuredOutput,
     ADMIN_REPORT_RESPONSE_JSON_SCHEMA,
+    StudentExplanationStructuredOutput,
+    STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA,
+    StudentExplanationCreateRequest,
+    StudentExplanationCreateResponse,
 )
 
 __all__ = [
@@ -92,4 +96,6 @@ __all__ = [
     # ai
     "AIGenerationCreate", "AIGenerationUpdate", "AITokenUsage",
     "AdminReportStructuredOutput", "ADMIN_REPORT_RESPONSE_JSON_SCHEMA",
+    "StudentExplanationStructuredOutput", "STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA",
+    "StudentExplanationCreateRequest", "StudentExplanationCreateResponse",
 ]

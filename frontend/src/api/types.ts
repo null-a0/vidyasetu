@@ -486,3 +486,25 @@ export interface BackendAdminAIReportHistoryItem {
   created_at?: string | null;
   updated_at?: string | null;
 }
+
+export interface BackendStudentExplanationRequest {
+  submission_id: string;
+  question_id: string;
+  force_regenerate?: boolean;
+}
+
+export interface BackendStudentExplanationResult {
+  why_it_was_wrong: string;
+  correct_reasoning: string;
+  common_mistake: string;
+  hint_for_retry: string;
+  confidence: number;
+  follow_up_questions: string[];
+}
+
+export interface BackendStudentExplanationResponse {
+  explanation_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  from_cache: boolean;
+  explanation: BackendStudentExplanationResult;
+}

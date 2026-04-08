@@ -63,6 +63,18 @@ class AdminReportStructuredOutput(BaseModel):
 ADMIN_REPORT_RESPONSE_JSON_SCHEMA = AdminReportStructuredOutput.model_json_schema()
 
 
+class StudentExplanationStructuredOutput(BaseModel):
+    why_it_was_wrong: str
+    correct_reasoning: str
+    common_mistake: str
+    hint_for_retry: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    follow_up_questions: list[str] = Field(default_factory=list)
+
+
+STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA = StudentExplanationStructuredOutput.model_json_schema()
+
+
 class AdminAIReportCreateRequest(BaseModel):
     institution_id: str | None = None
     date_from: date | None = None
@@ -107,3 +119,16 @@ class AdminAIReportListItem(BaseModel):
     summary_preview: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class StudentExplanationCreateRequest(BaseModel):
+    submission_id: str
+    question_id: str
+    force_regenerate: bool = False
+
+
+class StudentExplanationCreateResponse(BaseModel):
+    explanation_id: str
+    status: AIGenerationStatus
+    from_cache: bool
+    explanation: StudentExplanationStructuredOutput

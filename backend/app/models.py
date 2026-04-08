@@ -58,6 +58,7 @@ class NotificationType(str, Enum):
 
 class AIFeatureType(str, Enum):
     ADMIN_REPORT = "admin_report"
+    STUDENT_EXPLANATION = "student_explanation"
 
 
 class AIGenerationStatus(str, Enum):
