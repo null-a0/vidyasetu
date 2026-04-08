@@ -16,6 +16,7 @@ import {
   CheckSquare,
   DollarSign,
   User,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { to: "/submissions", label: "Submissions", icon: Inbox, roles: ["admin", "institution_admin", "educator"] },
   { to: "/certificates", label: "Certificates", icon: Award, roles: ["admin", "institution_admin", "educator", "student"] },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "institution_admin", "educator"] },
+  { to: "/reports/ai", label: "AI Reports", icon: Sparkles, roles: ["admin", "institution_admin"] },
   { to: "/notifications", label: "Notifications", icon: Bell, roles: ["admin", "institution_admin", "educator", "student"] },
   // Management items
   { to: "/manage/students", label: "Students", icon: Users, roles: ["admin", "institution_admin"] },
@@ -155,3 +157,4 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
 };
 
 export default Sidebar;
+

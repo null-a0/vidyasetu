@@ -7,11 +7,12 @@ from typing import Callable, Optional
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
 from app.db import AsyncSessionLocal
-from app.models import User, UserRole, Workshop
+from app.models import Enrollment, User, UserRole, Workshop
 
 # OAuth2 bearer scheme – points at the login endpoint (update path when created)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -201,6 +202,52 @@ def verify_workshop_access(raise_on_mismatch: bool = True) -> Callable:
         return current_user
 
     return _check
+
+
+async def ensure_user_can_read_assessments_for_workshop(
+    db: AsyncSession,
+    current_user: User,
+    workshop_id: str,
+) -> None:
+    """Enforce workshop boundary for assessment/submission reads (admin: any; staff: same institution; student: enrolled)."""
+
+    if current_user.role == UserRole.ADMIN:
+        return
+
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        workshop = await db.get(Workshop, workshop_id)
+        if workshop is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workshop not found.",
+            )
+        if workshop.institution_id != current_user.institution_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied.",
+            )
+        return
+
+    if current_user.role == UserRole.STUDENT:
+        row = (
+            await db.execute(
+                select(Enrollment.id).where(
+                    Enrollment.student_id == current_user.id,
+                    Enrollment.workshop_id == workshop_id,
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied.",
+            )
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied.",
+    )
 
 
 def verify_student_self(param_name: str = "student_id") -> Callable:

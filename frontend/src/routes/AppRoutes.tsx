@@ -16,6 +16,7 @@ import SubmissionsPage from "@/pages/submissions/Submissions";
 import Certificates from "@/pages/certificates/Certificates";
 import VerifyCertificate from "@/pages/certificates/VerifyCertificate";
 import PerformanceReports from "@/pages/reports/PerformanceReports";
+import AdminAIReports from "@/pages/reports/AdminAIReports";
 import Notifications from "@/pages/notifications/Notifications";
 import ProfilePage from "@/pages/profile/ProfilePage";
 import EducatorManagement from "@/pages/manage/EducatorManagement";
@@ -48,6 +49,7 @@ const AppRoutes = () => (
     <Route path="/submissions" element={<ProtectedRoute allowedRoles={["admin", "institution_admin", "educator"]}><SubmissionsPage /></ProtectedRoute>} />
     <Route path="/certificates" element={<ProtectedRoute><Certificates /></ProtectedRoute>} />
     <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "institution_admin", "educator"]}><PerformanceReports /></ProtectedRoute>} />
+    <Route path="/reports/ai" element={<ProtectedRoute allowedRoles={["admin", "institution_admin"]}><AdminAIReports /></ProtectedRoute>} />
     <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
@@ -71,4 +73,5 @@ const AppRoutes = () => (
 );
 
 export default AppRoutes;
+
 

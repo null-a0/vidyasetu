@@ -99,6 +99,15 @@ from app.crud.crud_admin import (
     get_salary_payment,
     list_salary_payments,
 )
+from app.crud.crud_ai_generation import (
+    create_ai_generation,
+    get_ai_generation,
+    update_ai_generation,
+    fail_stale_active_generations,
+    find_active_generation_by_fingerprint,
+    find_cached_completed_generation,
+    list_ai_generations,
+)
 
 __all__ = [
     # user / institution
@@ -195,4 +204,12 @@ __all__ = [
     "create_salary_payment",
     "get_salary_payment",
     "list_salary_payments",
+    # ai generation
+    "create_ai_generation",
+    "get_ai_generation",
+    "update_ai_generation",
+    "fail_stale_active_generations",
+    "find_active_generation_by_fingerprint",
+    "find_cached_completed_generation",
+    "list_ai_generations",
 ]

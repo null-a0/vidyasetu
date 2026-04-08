@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Award, ArrowRight, CheckCircle2, XCircle, Trophy, Star, MessageSquare } from "lucide-react";
+import { Award, ArrowRight, CheckCircle2, XCircle, Trophy, Star, MessageSquare, Sparkles } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VButton from "@/components/ui-custom/VButton";
@@ -10,7 +10,9 @@ import VBadge from "@/components/ui-custom/VBadge";
 import VModal from "@/components/ui-custom/VModal";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
-import { fetchAssessmentLeaderboard } from "@/services/api";
+import StudentExplanationPanel from "@/components/assessments/StudentExplanationPanel";
+import { createStudentAnswerExplanation, fetchAssessmentLeaderboard } from "@/services/api";
+import type { BackendStudentExplanationResult } from "@/api/types";
 
 type ResultState = {
   assessmentId?: string;
@@ -45,6 +47,9 @@ const Results = () => {
   const [feedbackModal, setFeedbackModal] = useState(false);
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
+  const [explanationsByQuestion, setExplanationsByQuestion] = useState<Record<string, BackendStudentExplanationResult>>({});
+  const [explanationErrorsByQuestion, setExplanationErrorsByQuestion] = useState<Record<string, string>>({});
+  const [loadingExplanationForQuestion, setLoadingExplanationForQuestion] = useState<string | null>(null);
 
   const backendResult = state?.result;
   const score = backendResult?.score ?? state?.score ?? 0;
@@ -65,6 +70,43 @@ const Results = () => {
     enabled: Boolean(showLeaderboard && passed && assessmentId),
   });
   const leaderboardEntries = leaderboardQuery.data?.entries ?? [];
+  const explanationMutation = useMutation({
+    mutationFn: (payload: { submissionId: string; questionId: string }) =>
+      createStudentAnswerExplanation({
+        submission_id: payload.submissionId,
+        question_id: payload.questionId,
+      }),
+    onSuccess: (data, variables) => {
+      setExplanationsByQuestion((prev) => ({
+        ...prev,
+        [variables.questionId]: data.explanation,
+      }));
+      setExplanationErrorsByQuestion((prev) => {
+        const next = { ...prev };
+        delete next[variables.questionId];
+        return next;
+      });
+      showToast(
+        data.from_cache ? "info" : "success",
+        data.from_cache ? "Loaded Cached Explanation" : "Explanation Ready",
+        data.from_cache ? "Reused a previous explanation." : "Generated a new explanation.",
+      );
+    },
+    onError: (error, variables) => {
+      setExplanationErrorsByQuestion((prev) => ({
+        ...prev,
+        [variables.questionId]: error instanceof Error ? error.message : "Unable to generate explanation.",
+      }));
+      showToast(
+        "destructive",
+        "Explanation Failed",
+        error instanceof Error ? error.message : "Unable to generate explanation.",
+      );
+    },
+    onSettled: () => {
+      setLoadingExplanationForQuestion(null);
+    },
+  });
 
   useEffect(() => {
     if (!state) return;
@@ -182,6 +224,9 @@ const Results = () => {
               const userAnswer = q.options.find((opt) => opt.id === userAnswerId)?.text ?? "Not answered";
               const grading = perQuestionMap[q.id];
               const isCorrect = grading ? grading.earned === grading.max : false;
+              const canRequestExplanation = Boolean(
+                role === "student" && !isCorrect && backendResult?.submission_id,
+              );
               return (
                 <VCard key={q.id} className={`p-5 border-l-4 ${isCorrect ? "border-l-success" : "border-l-destructive"}`}>
                   <div className="flex items-start gap-3">
@@ -193,6 +238,31 @@ const Results = () => {
                       <p className="text-sm"><span className="text-muted-foreground">Your answer: </span><span className="text-foreground font-medium">{userAnswer}</span></p>
                       {grading && (
                         <p className="text-sm mt-1"><span className="text-muted-foreground">Marks awarded: </span><span className={isCorrect ? "text-success font-medium" : "text-destructive font-medium"}>{grading.earned}/{grading.max}</span></p>
+                      )}
+                      {canRequestExplanation && (
+                        <div className="mt-3">
+                          <VButton
+                            size="sm"
+                            variant="secondary"
+                            isLoading={loadingExplanationForQuestion === q.id}
+                            onClick={() => {
+                              if (!backendResult?.submission_id) return;
+                              setLoadingExplanationForQuestion(q.id);
+                              explanationMutation.mutate({
+                                submissionId: backendResult.submission_id,
+                                questionId: q.id,
+                              });
+                            }}
+                          >
+                            <Sparkles className="h-4 w-4" /> Explain This
+                          </VButton>
+                          {explanationErrorsByQuestion[q.id] && (
+                            <p className="text-xs text-destructive mt-2">{explanationErrorsByQuestion[q.id]}</p>
+                          )}
+                          {explanationsByQuestion[q.id] && (
+                            <StudentExplanationPanel explanation={explanationsByQuestion[q.id]} />
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

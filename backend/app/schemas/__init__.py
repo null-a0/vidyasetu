@@ -56,6 +56,17 @@ from app.schemas.misc import (
     StudentFeeResponse,
     StudentFeeUpdate,
 )
+from app.schemas.ai import (
+    AIGenerationCreate,
+    AIGenerationUpdate,
+    AITokenUsage,
+    AdminReportStructuredOutput,
+    ADMIN_REPORT_RESPONSE_JSON_SCHEMA,
+    StudentExplanationStructuredOutput,
+    STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA,
+    StudentExplanationCreateRequest,
+    StudentExplanationCreateResponse,
+)
 
 __all__ = [
     # pagination
@@ -82,4 +93,9 @@ __all__ = [
     "StudentFeeCreate", "StudentFeeUpdate", "StudentFeeResponse",
     "PaymentCreate", "PaymentResponse",
     "NotificationCreate", "NotificationUpdate", "NotificationResponse",
+    # ai
+    "AIGenerationCreate", "AIGenerationUpdate", "AITokenUsage",
+    "AdminReportStructuredOutput", "ADMIN_REPORT_RESPONSE_JSON_SCHEMA",
+    "StudentExplanationStructuredOutput", "STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA",
+    "StudentExplanationCreateRequest", "StudentExplanationCreateResponse",
 ]

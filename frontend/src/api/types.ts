@@ -417,3 +417,94 @@ export interface BackendInstitutionStudentBulkActionResponse {
 }
 
 
+
+export interface BackendAdminAIReportCreateRequest {
+  institution_id?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  focus_areas?: string[];
+  force_regenerate?: boolean;
+}
+
+export interface BackendAdminAIReportCreateResponse {
+  report_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  from_cache: boolean;
+  deduplicated: boolean;
+}
+
+export interface BackendAdminAIReportStatusResponse {
+  report_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  error_details?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface BackendAdminAIReportRecommendation {
+  title: string;
+  action: string;
+  rationale: string;
+  priority: string;
+}
+
+export interface BackendAdminAIReportDataWindow {
+  start_date?: string | null;
+  end_date?: string | null;
+  scope: string;
+}
+
+export interface BackendAdminAIReportResult {
+  summary: string;
+  key_insights: string[];
+  risk_flags: string[];
+  recommendations: BackendAdminAIReportRecommendation[];
+  trend_highlights: string[];
+  data_window: BackendAdminAIReportDataWindow;
+  caveats: string[];
+}
+
+export interface BackendAdminAIReportResultResponse {
+  report_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  result: BackendAdminAIReportResult;
+  created_at?: string | null;
+  updated_at?: string | null;
+  prompt_version: string;
+  model_name: string;
+}
+
+export interface BackendAdminAIReportHistoryItem {
+  report_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  institution_id?: string | null;
+  source_entity_type: string;
+  source_entity_id: string;
+  prompt_version: string;
+  model_name: string;
+  summary_preview?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface BackendStudentExplanationRequest {
+  submission_id: string;
+  question_id: string;
+  force_regenerate?: boolean;
+}
+
+export interface BackendStudentExplanationResult {
+  why_it_was_wrong: string;
+  correct_reasoning: string;
+  common_mistake: string;
+  hint_for_retry: string;
+  confidence: number;
+  follow_up_questions: string[];
+}
+
+export interface BackendStudentExplanationResponse {
+  explanation_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  from_cache: boolean;
+  explanation: BackendStudentExplanationResult;
+}

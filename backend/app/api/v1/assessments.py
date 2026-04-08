@@ -3,7 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import PaginationParams, get_current_user, get_db, require_role
+from app.api.deps import (
+    PaginationParams,
+    ensure_user_can_read_assessments_for_workshop,
+    get_current_user,
+    get_db,
+    require_role,
+)
 from app.crud import (
     create_assessment,
     create_question,
@@ -12,6 +18,7 @@ from app.crud import (
     get_assessment,
     get_assessments_by_module,
     get_assessments_by_workshop,
+    get_module,
     get_question,
     get_questions_by_assessment,
     update_assessment,
@@ -62,8 +69,9 @@ async def list_by_workshop(
     workshop_id: str,
     page: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> Page[AssessmentResponse]:
+    await ensure_user_can_read_assessments_for_workshop(db, current_user, workshop_id)
     items, total = await get_assessments_by_workshop(
         db, workshop_id, offset=page.offset, limit=page.limit
     )
@@ -84,8 +92,12 @@ async def list_by_module(
     module_id: str,
     page: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> Page[AssessmentResponse]:
+    module = await get_module(db, module_id)
+    if not module:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found.")
+    await ensure_user_can_read_assessments_for_workshop(db, current_user, module.workshop_id)
     items, total = await get_assessments_by_module(
         db, module_id, offset=page.offset, limit=page.limit
     )
@@ -105,11 +117,12 @@ async def list_by_module(
 async def get_one(
     assessment_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> AssessmentResponse:
     obj = await get_assessment(db, assessment_id)
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+    await ensure_user_can_read_assessments_for_workshop(db, current_user, obj.workshop_id)
     return AssessmentResponse.model_validate(obj)
 
 

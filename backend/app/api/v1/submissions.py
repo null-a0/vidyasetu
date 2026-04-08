@@ -3,7 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import PaginationParams, get_current_user, get_db, require_role
+from app.api.deps import (
+    PaginationParams,
+    ensure_user_can_read_assessments_for_workshop,
+    get_current_user,
+    get_db,
+    require_role,
+)
 from app.crud.crud_assessment import (
     apply_grade,
     append_answers,
@@ -13,7 +19,6 @@ from app.crud.crud_assessment import (
     get_submissions_by_assessment,
     get_submissions_by_student,
 )
-from app.crud.crud_workshop import get_workshop
 from app.models import User, UserRole
 from app.schemas.assessment import AnswerBatch, SubmissionResponse, SubmissionReviewQuestion, SubmissionReviewResponse
 from app.schemas.base import Page
@@ -132,8 +137,12 @@ async def list_by_assessment(
     assessment_id: str,
     page: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(*_STAFF)),
+    current_user: User = Depends(require_role(*_STAFF)),
 ) -> Page[SubmissionResponse]:
+    assessment = await get_assessment(db, assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+    await ensure_user_can_read_assessments_for_workshop(db, current_user, assessment.workshop_id)
     items, total = await get_submissions_by_assessment(db, assessment_id, offset=page.offset, limit=page.limit)
     return Page(
         items=[SubmissionResponse.model_validate(s) for s in items],
@@ -151,7 +160,7 @@ async def list_by_assessment(
 async def review_submission(
     submission_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(*_STAFF)),
+    current_user: User = Depends(require_role(*_STAFF)),
 ) -> SubmissionReviewResponse:
     submission = await get_submission(db, submission_id)
     if not submission:
@@ -162,6 +171,7 @@ async def review_submission(
     assessment = await get_assessment(db, submission.assessment_id)
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+    await ensure_user_can_read_assessments_for_workshop(db, current_user, assessment.workshop_id)
 
     questions, _ = await get_questions_by_assessment(db, submission.assessment_id, limit=500)
     answer_lookup = {
@@ -229,11 +239,7 @@ async def grade_pending_submission(
     assessment = await get_assessment(db, submission.assessment_id)
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
-
-    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
-        workshop = await get_workshop(db, assessment.workshop_id)
-        if not workshop or workshop.institution_id != current_user.institution_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    await ensure_user_can_read_assessments_for_workshop(db, current_user, assessment.workshop_id)
 
     questions, _ = await get_questions_by_assessment(db, submission.assessment_id, limit=500)
     report = grade_submission(

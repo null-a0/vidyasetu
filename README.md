@@ -42,6 +42,39 @@ if (!(Test-Path .\.venv)) { python -m venv .venv }
 if (!(Test-Path .\.env)) { Copy-Item .\.env.example .\.env }
 ```
 
+2.4 Configure GenAI env vars in `backend\.env` (required for Admin AI Reports)
+
+Add/update the following keys in `backend\.env`:
+
+```env
+GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
+GEMINI_MODEL_NAME=gemini-1.5-pro-002
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
+AI_MAX_RETRIES=3
+AI_RETRY_BASE_DELAY_SECONDS=0.5
+AI_ADMIN_REPORT_CACHE_TTL_SECONDS=3600
+AI_ADMIN_REPORT_PROMPT_VERSION=v1
+AI_ADMIN_REPORT_USER_RATE_LIMIT=3
+AI_ADMIN_REPORT_INSTITUTION_RATE_LIMIT=10
+AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS=600
+AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
+AI_RATE_LIMIT_BACKEND=database
+AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
+```
+
+Important:
+
+- Add API keys only in `backend\.env` (backend-only).  
+- Do not add Gemini keys in frontend env files.
+- Keep `AI_RATE_LIMIT_BACKEND=database` for multi-instance deployments.
+
+2.5 Run backend migrations (required for AI report tables)
+
+```powershell
+cd .\backend
+.\.venv\Scripts\python -m alembic upgrade head
+```
+
 Notes:
 
 - Default DB is SQLite: `backend\vidyasetu.db` (controlled by `DATABASE_URL` in `backend\.env`).

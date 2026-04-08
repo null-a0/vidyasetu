@@ -43,6 +43,44 @@ uvicorn app.main:app --reload
 
 This will create `backend/vidyasetu.db` locally when using the default SQLite configuration.
 
+## GenAI setup (Admin AI Reports)
+
+GenAI configuration is backend-only. Add your Gemini key in `backend/.env`.
+
+Required env vars:
+
+```env
+GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
+GEMINI_MODEL_NAME=gemini-1.5-pro-002
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
+GEMINI_TIMEOUT_SECONDS=30
+AI_MAX_RETRIES=3
+AI_RETRY_BASE_DELAY_SECONDS=0.5
+AI_ADMIN_REPORT_CACHE_TTL_SECONDS=3600
+AI_ADMIN_REPORT_PROMPT_VERSION=v1
+AI_ADMIN_REPORT_USER_RATE_LIMIT=3
+AI_ADMIN_REPORT_INSTITUTION_RATE_LIMIT=10
+AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS=600
+AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
+AI_RATE_LIMIT_BACKEND=database
+AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
+```
+
+Production notes:
+
+- Keep `GEMINI_MODEL_NAME` on a stable version (`gemini-1.5-pro-002`).
+- Keep `AI_RATE_LIMIT_BACKEND=database` for multi-instance-safe limits.
+- `AI_RATE_LIMIT_BACKEND=memory` is only for local/single-process dev.
+- Do not put Gemini keys in frontend env files.
+
+After updating `.env`, run:
+
+```sh
+python -m alembic upgrade head
+```
+
+This creates/updates AI tables used by admin report generation and DB-backed rate limiting.
+
 ## Database options
 
 - Default local DB: `sqlite+aiosqlite:///./vidyasetu.db`
