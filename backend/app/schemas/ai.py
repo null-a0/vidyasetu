@@ -60,7 +60,47 @@ class AdminReportStructuredOutput(BaseModel):
     caveats: list[str] = Field(default_factory=list)
 
 
-ADMIN_REPORT_RESPONSE_JSON_SCHEMA = AdminReportStructuredOutput.model_json_schema()
+ADMIN_REPORT_RESPONSE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "key_insights": {"type": "array", "items": {"type": "string"}},
+        "risk_flags": {"type": "array", "items": {"type": "string"}},
+        "recommendations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "action": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+                },
+                "required": ["title", "action", "rationale", "priority"],
+            },
+        },
+        "trend_highlights": {"type": "array", "items": {"type": "string"}},
+        "data_window": {
+            "type": "object",
+            "properties": {
+                "start_date": {"type": "string", "nullable": True},
+                "end_date": {"type": "string", "nullable": True},
+                "scope": {"type": "string"},
+            },
+            "required": ["scope"],
+        },
+        "caveats": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "summary",
+        "key_insights",
+        "risk_flags",
+        "recommendations",
+        "trend_highlights",
+        "data_window",
+        "caveats",
+    ],
+}
 
 
 class StudentExplanationStructuredOutput(BaseModel):
@@ -72,7 +112,25 @@ class StudentExplanationStructuredOutput(BaseModel):
     follow_up_questions: list[str] = Field(default_factory=list)
 
 
-STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA = StudentExplanationStructuredOutput.model_json_schema()
+STUDENT_EXPLANATION_RESPONSE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "why_it_was_wrong": {"type": "string"},
+        "correct_reasoning": {"type": "string"},
+        "common_mistake": {"type": "string"},
+        "hint_for_retry": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "follow_up_questions": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "why_it_was_wrong",
+        "correct_reasoning",
+        "common_mistake",
+        "hint_for_retry",
+        "confidence",
+        "follow_up_questions",
+    ],
+}
 
 
 class AdminAIReportCreateRequest(BaseModel):

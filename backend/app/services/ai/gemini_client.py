@@ -55,7 +55,10 @@ class GeminiClient:
             raise ValueError("GEMINI_API_KEY is required for GeminiClient.")
 
         self.api_key = api_key
-        self.model_name = model_name
+        normalized_model_name = model_name.strip().removeprefix("models/").strip()
+        if not normalized_model_name:
+            raise ValueError("GEMINI_MODEL_NAME must be set.")
+        self.model_name = normalized_model_name
         self.api_base_url = api_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.retry_policy = retry_policy or RetryPolicy()
@@ -125,6 +128,14 @@ class GeminiClient:
         if response.status_code in self._TRANSIENT_CODES:
             raise GeminiTransientError(
                 f"Transient Gemini error {response.status_code}: {response.text[:300]}"
+            )
+        if response.status_code == 404:
+            raise GeminiError(
+                "Gemini model not found for generateContent. "
+                f"Configured GEMINI_MODEL_NAME='{self.model_name}'. "
+                "Set a currently available stable model (for example: gemini-3.1-flash-lite-preview) "
+                "and verify with the ListModels endpoint. "
+                f"Raw: {response.text[:500]}"
             )
         if response.status_code >= 400:
             raise GeminiError(f"Gemini error {response.status_code}: {response.text[:600]}")

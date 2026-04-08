@@ -48,7 +48,7 @@ Add/update the following keys in `backend\.env`:
 
 ```env
 GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
-GEMINI_MODEL_NAME=gemini-1.5-pro-002
+GEMINI_MODEL_NAME=gemini-3.1-flash-lite-preview
 GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
 AI_MAX_RETRIES=3
 AI_RETRY_BASE_DELAY_SECONDS=0.5
@@ -64,11 +64,11 @@ AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
 
 Important:
 
-- Add API keys only in `backend\.env` (backend-only).  
+- Add API keys only in `backend\.env` (backend-only).
 - Do not add Gemini keys in frontend env files.
 - Keep `AI_RATE_LIMIT_BACKEND=database` for multi-instance deployments.
 
-2.5 Run backend migrations (required for AI report tables)
+    2.5 Run backend migrations (required for AI report tables)
 
 ```powershell
 cd .\backend
