@@ -11,6 +11,7 @@ import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
+import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import {
   createAssessment,
@@ -38,10 +39,24 @@ interface QuestionItem {
 const AssessmentsPage = () => {
   const navigate = useNavigate();
   const role = useRole();
+  const { user } = useAuth();
+  const canManage = role !== "student";
+  const isStudent = role === "student";
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
-  const { data: all = [] } = useQuery({ queryKey: ["assessments"], queryFn: fetchAssessments });
-  const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
+  const { data: all = [] } = useQuery({
+    queryKey: ["assessments", role, user?.id],
+    queryFn: () =>
+      role === "student"
+        ? fetchAssessments({ studentId: user?.id })
+        : fetchAssessments(),
+    enabled: role !== "student" || Boolean(user?.id),
+  });
+  const { data: workshops = [] } = useQuery({
+    queryKey: ["workshops", "assessment-edit"],
+    queryFn: fetchWorkshops,
+    enabled: canManage,
+  });
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
@@ -66,9 +81,6 @@ const AssessmentsPage = () => {
   const [studentPerfModal, setStudentPerfModal] = useState(false);
   const [selectedStudentIndex, setSelectedStudentIndex] = useState<number | null>(null);
   const [perfTab, setPerfTab] = useState<"basic" | "detailed">("basic");
-
-  const canManage = role !== "student";
-  const isStudent = role === "student";
 
   const leaderboardQuery = useQuery({
     queryKey: ["assessmentLeaderboard", selected?.id],
