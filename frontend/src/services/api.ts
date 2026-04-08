@@ -1,4 +1,4 @@
-﻿import { apiGet, apiPost, apiPatch, apiDelete } from "@/api/client";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/api/client";
 import {
     adaptWorkshopsPage,
     adaptModulesToMaterials,
@@ -49,6 +49,11 @@ import type {
     DashboardStatsResponse,
     BackendStudentAnalytics,
     BackendWorkshopAnalytics,
+    BackendAdminAIReportCreateRequest,
+    BackendAdminAIReportCreateResponse,
+    BackendAdminAIReportStatusResponse,
+    BackendAdminAIReportResultResponse,
+    BackendAdminAIReportHistoryItem,
 } from "@/api/types";
 import type {
     Workshop,
@@ -1042,6 +1047,41 @@ export const fetchMaterialDownload = async (
     return apiGet<BackendMaterialDownloadResponse>(
         `/materials/${moduleId}/${materialId}/download`,
     );
+};
+
+
+
+
+export const createAdminAIReport = async (
+    payload: BackendAdminAIReportCreateRequest,
+): Promise<BackendAdminAIReportCreateResponse> => {
+    return apiPost<BackendAdminAIReportCreateResponse>("/ai/reports/", payload);
+};
+
+export const fetchAdminAIReportStatus = async (
+    reportId: string,
+): Promise<BackendAdminAIReportStatusResponse> => {
+    return apiGet<BackendAdminAIReportStatusResponse>(`/ai/reports/${reportId}/status`);
+};
+
+export const fetchAdminAIReportResult = async (
+    reportId: string,
+): Promise<BackendAdminAIReportResultResponse> => {
+    return apiGet<BackendAdminAIReportResultResponse>(`/ai/reports/${reportId}/result`);
+};
+
+export const fetchAdminAIReportsHistory = async (
+    options: { institutionId?: string; limit?: number; offset?: number } = {},
+): Promise<ApiPage<BackendAdminAIReportHistoryItem>> => {
+    const { institutionId, limit = 50, offset = 0 } = options;
+    const safeLimit = Math.min(limit, 200);
+    return apiGet<ApiPage<BackendAdminAIReportHistoryItem>>("/ai/reports/", {
+        params: {
+            limit: safeLimit,
+            offset,
+            ...(institutionId ? { institution_id: institutionId } : {}),
+        },
+    });
 };
 
 

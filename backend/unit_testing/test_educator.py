@@ -150,6 +150,38 @@ def client_and_state():
                 workshop_id="workshop-own",
                 verification_code="VERIFY-EDU-1",
             )
+            module_other = Module(
+                id="module-other",
+                workshop_id="workshop-other",
+                title="Other Institution Module",
+                order_index=1,
+                materials=[],
+            )
+            assessment_other = Assessment(
+                id="assessment-other",
+                workshop_id="workshop-other",
+                module_id="module-other",
+                title="Other Institution Assessment",
+                total_marks=100,
+                pass_mark=40,
+            )
+            question_other = Question(
+                id="question-other",
+                assessment_id="assessment-other",
+                text="Cross-tenant probe question",
+                type="mcq",
+                marks=10,
+                options=[{"id": "opt-o", "text": "Answer", "is_correct": True}],
+            )
+            submission_other_graded = Submission(
+                id="submission-other-graded",
+                student_id="student-1",
+                assessment_id="assessment-other",
+                score=10,
+                percentage=100,
+                pass_fail=True,
+                answers=[{"question_id": "question-other", "selected_option_ids": ["opt-o"]}],
+            )
 
             session.add_all(
                 [
@@ -162,11 +194,15 @@ def client_and_state():
                     own_workshop,
                     other_workshop,
                     module,
+                    module_other,
                     assessment,
+                    assessment_other,
                     question,
+                    question_other,
                     enrollment,
                     submission,
                     graded_submission,
+                    submission_other_graded,
                     notification,
                     certificate,
                 ]
@@ -233,6 +269,17 @@ def test_educator_can_view_assessments_and_submissions(client_and_state):
     submissions_response = client.get("/api/v1/submissions/assessment/assessment-1")
     assert submissions_response.status_code == 200
     assert submissions_response.json()["total"] >= 1
+
+
+def test_educator_cannot_read_assessments_or_submissions_other_institution(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    assert client.get("/api/v1/assessments/workshop/workshop-other").status_code == 403
+    assert client.get("/api/v1/assessments/module/module-other").status_code == 403
+    assert client.get("/api/v1/assessments/assessment-other").status_code == 403
+    assert client.get("/api/v1/submissions/assessment/assessment-other").status_code == 403
+    assert client.get("/api/v1/submissions/submission-other-graded/review").status_code == 403
 
 
 def test_educator_material_upload_and_delete(client_and_state):

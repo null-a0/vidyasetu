@@ -4,7 +4,7 @@ from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 
@@ -54,6 +54,17 @@ class NotificationType(str, Enum):
     FEES = "fees"
     ATTENDANCE = "attendance"
     CERTIFICATE = "certificate"
+
+
+class AIFeatureType(str, Enum):
+    ADMIN_REPORT = "admin_report"
+
+
+class AIGenerationStatus(str, Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 # --------------------------------------------------
@@ -277,6 +288,57 @@ class Submission(Base):
     """
 
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# --------------------------------------------------
+# AI GENERATION
+# --------------------------------------------------
+
+class AIGeneration(Base):
+    __tablename__ = "ai_generations"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    feature_type = Column(SqlEnum(AIFeatureType), nullable=False, index=True)
+    requester_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    institution_id = Column(String, ForeignKey("institutions.id"), nullable=True, index=True)
+
+    source_entity_type = Column(String, nullable=False)
+    source_entity_id = Column(String, nullable=False)
+    request_fingerprint = Column(String(64), nullable=False, index=True)
+
+    prompt_version = Column(String, nullable=False)
+    model_name = Column(String, nullable=False)
+
+    raw_prompt_input = Column(JSON, default=dict, nullable=False)
+    raw_model_output = Column(Text, nullable=True)
+    parsed_output_json = Column(JSON, nullable=True)
+
+    status = Column(SqlEnum(AIGenerationStatus), default=AIGenerationStatus.PENDING, nullable=False, index=True)
+    error_details = Column(JSON, default=dict, nullable=True)
+    retry_count = Column(Integer, default=0, nullable=False)
+
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+
+    cache_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AIRateLimitCounter(Base):
+    __tablename__ = "ai_rate_limit_counters"
+    __table_args__ = (
+        UniqueConstraint("key", "window_start", name="uq_ai_rate_limit_counter_key_window"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(255), nullable=False, index=True)
+    window_start = Column(DateTime(timezone=True), nullable=False, index=True)
+    request_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 # --------------------------------------------------
