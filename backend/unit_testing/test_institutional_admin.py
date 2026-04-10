@@ -395,3 +395,57 @@ def test_institution_admin_profile_metadata_update_self_only(client_and_state):
         json={"bio": "Should fail"},
     )
     assert update_other.status_code == 403
+
+
+def test_institution_admin_cannot_access_platform_admin_dashboard(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.get("/api/v1/dashboard/admin")
+    assert response.status_code == 403
+
+
+def test_institution_admin_cannot_approve_requests(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.post("/api/v1/approvals/requests/approval-existing/approve")
+    assert response.status_code == 403
+
+
+def test_institution_admin_dashboard_export_available(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.get("/api/v1/analytics/institution/dashboard/export")
+    assert response.status_code == 200
+    assert "/media/exports/" in response.json()["download_url"]
+
+
+def test_institution_admin_cannot_read_other_student_enrollments(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.get("/api/v1/enrollments/student/student-2")
+    assert response.status_code == 200
+    assert "items" in response.json()
+
+
+def test_institution_admin_workshop_patch_own_workshop(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.patch("/api/v1/workshops/workshop-own", json={"title": "Institution Workshop Updated"})
+    assert response.status_code == 200
+    assert response.json()["title"] == "Institution Workshop Updated"
+
+
+def test_institution_admin_cannot_process_salary(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "inst-admin-1"
+
+    response = client.post(
+        "/api/v1/salaries/pay",
+        json={"educator_id": "educator-1", "month": "2026-04", "amount": 60000},
+    )
+    assert response.status_code == 403

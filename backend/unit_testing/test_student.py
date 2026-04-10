@@ -391,3 +391,52 @@ def test_student_leaderboard_access_and_staff_only_guards(client_and_state):
     performance_export_forbidden = client.get(
         "/api/v1/analytics/reports/performance/export")
     assert performance_export_forbidden.status_code == 403
+
+
+def test_student_cannot_access_admin_or_institution_dashboards(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    assert client.get("/api/v1/dashboard/admin").status_code == 403
+    assert client.get("/api/v1/analytics/admin/insights").status_code == 403
+    assert client.get("/api/v1/analytics/institution/dashboard").status_code == 403
+
+
+def test_student_cannot_view_educator_dashboard(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    response = client.get("/api/v1/dashboard/educator")
+    assert response.status_code == 403
+
+
+def test_student_invalid_certificate_verification_code(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    response = client.get("/api/v1/certificates/verify/INVALID-CODE")
+    assert response.status_code == 404
+
+
+def test_student_cannot_delete_workshop(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    response = client.delete("/api/v1/workshops/workshop-1")
+    assert response.status_code == 403
+
+
+def test_student_cannot_grade_submission(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    response = client.post("/api/v1/submissions/submission-graded/grade")
+    assert response.status_code == 403
+
+
+def test_student_assessment_submit_unknown_submission(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "student-1"
+
+    response = client.post("/api/v1/tests/assessment-1/submit?submission_id=does-not-exist")
+    assert response.status_code == 404

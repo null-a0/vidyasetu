@@ -321,3 +321,57 @@ def test_admin_parent_communication_dispatch(client_and_state):
     payload = response.json()
     assert payload["accepted"] == 1
     assert payload["failed"] == 0
+
+
+def test_admin_can_read_approval_request_details(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    response = client.get("/api/v1/approvals/requests/approval-1")
+    assert response.status_code == 404
+
+
+def test_admin_approving_unknown_request_returns_not_found(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    response = client.post("/api/v1/approvals/requests/approval-missing/approve")
+    assert response.status_code == 404
+
+
+def test_admin_can_fetch_submission_review(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    response = client.get("/api/v1/submissions/submission-1/review")
+    assert response.status_code == 200
+    assert response.json()["submission_id"] == "submission-1"
+
+
+def test_admin_can_export_performance_report(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    response = client.get("/api/v1/analytics/reports/performance/export")
+    assert response.status_code == 200
+    assert response.json()["file_type"] == "csv"
+
+
+def test_platform_admin_endpoints_forbidden_for_student(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-student"
+
+    assert client.get("/api/v1/dashboard/admin").status_code == 403
+    assert client.get("/api/v1/users/?limit=20").status_code == 403
+    assert client.post("/api/v1/approvals/requests/approval-1/approve").status_code == 403
+
+
+def test_admin_workshop_create_validation_error(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "user-admin"
+
+    response = client.post(
+        "/api/v1/workshops/",
+        json={"description": "Missing title should fail", "institution_id": "inst-1"},
+    )
+    assert response.status_code == 422

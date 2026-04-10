@@ -26,7 +26,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 UNIT_TEST_DIR = ROOT / "unit_testing"
 OUTPUT_FILE = UNIT_TEST_DIR / "pytest_milestone_report.md"
@@ -49,7 +48,7 @@ class HttpCall:
 class AssertExpectation:
     raw: str               # original assert source text
     kind: str              # "status_code", "json_field", "json_key_exists",
-                           # "json_key_type", "general"
+    # "json_key_type", "general"
     expected: Any = None   # the expected value (for status_code / json_field)
     field_path: str = ""   # e.g. "payload['assessment']['avg_percentage']"
 
@@ -61,7 +60,8 @@ class TestCaseInfo:
     lineno: int
     http_calls: list[HttpCall] = field(default_factory=list)
     expectations: list[AssertExpectation] = field(default_factory=list)
-    asserts: list[str] = field(default_factory=list)   # raw assert strings (legacy)
+    # raw assert strings (legacy)
+    asserts: list[str] = field(default_factory=list)
     snippet: str = ""
     status: str = "NOT_RUN"
     failure_detail: str = ""
@@ -195,7 +195,8 @@ def _parse_assertion(assert_node: ast.Assert, source: str) -> AssertExpectation:
         if any(op in cmp_ops for op in ("GtE", "Gt", "LtE", "Lt")):
             lhs_src = ast.get_source_segment(source, test_expr.left) or ""
             rhs_src = ast.get_source_segment(source, comparators[-1]) or ""
-            op_sym = {"GtE": ">=", "Gt": ">", "LtE": "<=", "Lt": "<"}.get(cmp_ops[0], cmp_ops[0])
+            op_sym = {"GtE": ">=", "Gt": ">", "LtE": "<=",
+                      "Lt": "<"}.get(cmp_ops[0], cmp_ops[0])
             return AssertExpectation(raw=raw, kind="json_field",
                                      expected=f"{lhs_src} {op_sym} {rhs_src}",
                                      field_path=lhs_src)
@@ -258,10 +259,11 @@ def collect_tests() -> list[TestCaseInfo]:
                         raw_asserts.append(" ".join(seg.split()))
 
             start = max(node.lineno - 1, 0)
-            end = min((getattr(node, "end_lineno", node.lineno) or node.lineno), len(lines))
+            end = min((getattr(node, "end_lineno", node.lineno)
+                      or node.lineno), len(lines))
             snippet_lines = lines[start:end]
-            if len(snippet_lines) > 20:
-                snippet_lines = snippet_lines[:20] + ["    ..."]
+            if len(snippet_lines) > 50:
+                snippet_lines = snippet_lines[:50] + ["    ..."]
 
             tests.append(TestCaseInfo(
                 file_path=file_path,
@@ -496,14 +498,15 @@ def build_report(tests: list[TestCaseInfo], raw_output: str) -> str:
     parts.append("")
 
     # ── Detailed per-test sections ────────────────────────────────────────────
-    parts.append("## Detailed Test Cases (Input / Expected Output / Actual Output)")
+    parts.append(
+        "## Detailed Test Cases (Input / Expected Output / Actual Output)")
     parts.append("")
     parts.append(
         "> Each test section shows:\n"
         "> - **Input JSON** – HTTP requests extracted from the test body\n"
         "> - **Expected Output JSON** – assertions parsed from the test code\n"
         "> - **Actual Output JSON** – pytest result with pass/fail details\n"
-        "> - **Code Snippet** – first ~20 lines of the test function"
+        "> - **Code Snippet** – first ~50 lines of the test function"
     )
     parts.append("")
 
