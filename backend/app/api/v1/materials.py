@@ -13,12 +13,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_role
+from app.api.deps import get_current_user, get_db, require_role
 from app.config import settings
 from app.crud import get_module, update_module
-from app.models import User, UserRole
+from app.models import Enrollment, User, UserRole, Workshop
 from app.schemas.misc import MaterialDownloadResponse
 from app.schemas.workshop import (
     MaterialItem,
@@ -124,11 +125,34 @@ async def download_material(
     module_id: str,
     material_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR, UserRole.STUDENT)),
+    current_user: User = Depends(get_current_user),
 ) -> MaterialDownloadResponse:
     module = await get_module(db, module_id)
     if not module:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found.")
+
+    # ── Authorization ────────────────────────────────────────────────────────
+    if current_user.role == UserRole.ADMIN:
+        pass  # ADMIN: unrestricted
+    elif current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        # Staff must belong to the same institution as the workshop.
+        workshop = await db.get(Workshop, module.workshop_id)
+        if not workshop or workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    elif current_user.role == UserRole.STUDENT:
+        # Students must be enrolled in the workshop that owns this module.
+        enrolled = (
+            await db.execute(
+                select(Enrollment.id).where(
+                    Enrollment.student_id == current_user.id,
+                    Enrollment.workshop_id == module.workshop_id,
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        if enrolled is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     material: MaterialItem | None = None
     for entry in list(module.materials or []):

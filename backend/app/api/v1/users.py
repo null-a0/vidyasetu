@@ -75,19 +75,17 @@ async def get_user_by_id(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
-    # Students can only see themselves; institution_admin limited to their institution
+    # Students can only see themselves
     if current_user.role == UserRole.STUDENT:
         if current_user.id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     user = await get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    # Institution admins cannot view users from other institutions
-    if (
-        current_user.role == UserRole.INSTITUTION_ADMIN
-        and user.institution_id != current_user.institution_id
-    ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    # Institution admins and educators cannot view users from other institutions
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if user.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     return UserResponse.model_validate(user)
 
 

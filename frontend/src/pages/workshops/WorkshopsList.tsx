@@ -14,8 +14,9 @@ import VDrawer from "@/components/ui-custom/VDrawer";
 import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
-import { createApprovalRequest, createWorkshop, deleteWorkshop, fetchWorkshopLeaderboard, fetchWorkshops, updateWorkshop } from "@/services/api";
+import { createApprovalRequest, createWorkshop, deleteWorkshop, fetchInstitutions, fetchWorkshopLeaderboard, fetchWorkshops, updateWorkshop } from "@/services/api";
 import type { Workshop } from "@/mock/mockData";
+import type { BackendInstitution } from "@/api/types";
 
 const WorkshopsList = () => {
   const navigate = useNavigate();
@@ -39,6 +40,10 @@ const WorkshopsList = () => {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formInst, setFormInst] = useState("");
+  const {
+    data: institutions = [] as BackendInstitution[],
+  } = useQuery({ queryKey: ["institutions"], queryFn: fetchInstitutions });
+
   const leaderboardQuery = useQuery({
     queryKey: ["workshopLeaderboard", selected?.id],
     queryFn: () => fetchWorkshopLeaderboard(selected?.id ?? ""),
@@ -203,10 +208,21 @@ const WorkshopsList = () => {
           </div>
           <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setCreateModal(false)}>Cancel</VButton><VButton onClick={async () => {
             try {
+              // Resolve institution name → ID for admin role
+              let resolvedInstitutionId: string | null = null;
+              if (role === "admin" && formInst.trim()) {
+                const trimmed = formInst.trim().toLowerCase();
+                const match = institutions.find((i) => i.name.toLowerCase() === trimmed);
+                if (!match) {
+                  showToast("error", "Invalid Institution", `No institution found matching "${formInst}". Please check the name.`);
+                  return;
+                }
+                resolvedInstitutionId = match.id;
+              }
               await createMutation.mutateAsync({
                 title: formName,
                 description: formDesc,
-                institution_id: role === "admin" ? (formInst || null) : null,
+                institution_id: resolvedInstitutionId,
               });
               setCreateModal(false);
               showToast("success", "Workshop Created");

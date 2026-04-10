@@ -179,6 +179,20 @@ async def list_by_student(
     if current_user.role == UserRole.STUDENT and current_user.id != student_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
+    # Institution-scoped staff: only return certificates tied to their institution's workshops.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if not current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        items, total = await get_certificates_by_student(db, student_id, offset=page.offset, limit=page.limit)
+        # Filter to certificates whose workshop belongs to the caller's institution.
+        scoped: list[Certificate] = []
+        for cert in items:
+            workshop = await get_workshop(db, cert.workshop_id) if cert.workshop_id else None
+            if workshop and workshop.institution_id == current_user.institution_id:
+                scoped.append(cert)
+        enriched = [await _enrich(db, c) for c in scoped]
+        return Page(items=enriched, total=len(enriched), offset=page.offset, limit=page.limit)
+
     items, total = await get_certificates_by_student(db, student_id, offset=page.offset, limit=page.limit)
     enriched = [await _enrich(db, certificate) for certificate in items]
     return Page(items=enriched, total=int(total or 0), offset=page.offset, limit=page.limit)

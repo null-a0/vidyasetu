@@ -87,7 +87,7 @@ export const adaptWorkshop = (
   institution: overrides?.institutionName ?? 'Institution unavailable',
   startDate: formatDate(workshop.start_date),
   endDate: formatDate(workshop.end_date),
-  studentsEnrolled: overrides?.studentsEnrolled ?? 0,
+  studentsEnrolled: overrides?.studentsEnrolled ?? workshop.enrollment_count ?? 0,
   status: overrides?.status ?? getWorkshopStatus(workshop.start_date, workshop.end_date),
 });
 
@@ -130,7 +130,6 @@ export const adaptAssessments = (
     workshop: workshopLookup[assessment.workshop_id ?? ''] ?? 'Workshop',
     totalMarks: assessment.total_marks ?? 0,
     passingMarks: assessment.pass_mark ?? 0,
-    status: 'Published',
   }));
 
 export const adaptCertificates = (

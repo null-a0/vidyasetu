@@ -12,6 +12,7 @@ export interface BackendWorkshop {
   start_date?: string | null;
   end_date?: string | null;
   institution_id?: string | null;
+  enrollment_count?: number | null;
 }
 
 export interface BackendModule {

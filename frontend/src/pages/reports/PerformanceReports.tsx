@@ -152,11 +152,18 @@ const PerformanceReports = () => {
     });
 
     const scorePoints = studentPerformance.flatMap((student) => student.trend);
-    for (const point of scorePoints) {
-      const dt = point.label ? new Date(point.label) : null;
-      const fromLabel = dt && !Number.isNaN(dt.getTime()) ? dt.toISOString().slice(0, 7) : null;
-      const bucket = fromLabel ? buckets.find((entry) => entry.key === fromLabel) : null;
-      if (bucket) bucket.scores.push(point.score);
+    for (const [index, point] of scorePoints.entries()) {
+      let bucket = null as (typeof buckets)[number] | null;
+      if (point.label && /^\d{4}-\d{2}/.test(point.label)) {
+        const parsed = new Date(point.label);
+        const key = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 7);
+        bucket = key ? buckets.find((entry) => entry.key === key) ?? null : null;
+      }
+      if (!bucket) {
+        const fallbackIndex = Math.max(0, buckets.length - scorePoints.length + index);
+        bucket = buckets[Math.min(buckets.length - 1, fallbackIndex)];
+      }
+      bucket.scores.push(point.score);
     }
 
     if (scorePoints.length === 0) {

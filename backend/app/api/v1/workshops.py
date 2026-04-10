@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -19,7 +19,7 @@ from app.crud import (
     get_workshops,
     update_workshop,
 )
-from app.models import Institution, User, UserRole
+from app.models import Enrollment, Institution, User, UserRole
 from app.schemas.base import Page
 from app.schemas.workshop import (
     ModuleResponse,
@@ -92,6 +92,24 @@ async def list_workshops(
     workshops, total = await get_workshops(
         db, offset=page.offset, limit=page.limit, institution_id=inst_filter
     )
+    workshop_ids = [workshop.id for workshop in workshops]
+    enrollment_counts: dict[str, int] = {}
+    if workshop_ids:
+        rows = (
+            await db.execute(
+                select(Enrollment.workshop_id, func.count(Enrollment.id))
+                .where(Enrollment.workshop_id.in_(workshop_ids))
+                .group_by(Enrollment.workshop_id)
+            )
+        ).all()
+        enrollment_counts = {
+            row[0]: int(row[1] or 0)
+            for row in rows
+            if row[0]
+        }
+    for workshop in workshops:
+        setattr(workshop, "enrollment_count", enrollment_counts.get(workshop.id, 0))
+
     return Page(
         items=[WorkshopResponse.model_validate(w) for w in workshops],
         total=total,
@@ -122,6 +140,12 @@ async def get_one(
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         if workshop.institution_id != current_user.institution_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    enrollment_count = (
+        await db.execute(
+            select(func.count(Enrollment.id)).where(Enrollment.workshop_id == workshop.id)
+        )
+    ).scalar_one()
+    setattr(workshop, "enrollment_count", int(enrollment_count or 0))
     return WorkshopResponse.model_validate(workshop)
 
 
@@ -158,12 +182,12 @@ async def get_workshop_educator_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No educator profile found for this workshop institution.",
         )
-    if len(educators) > 1:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Workshop-specific educator assignment is not configured for this workshop.",
-        )
     primary_educator = educators[0]
+    if current_user.role == UserRole.EDUCATOR:
+        for educator in educators:
+            if educator.id == current_user.id:
+                primary_educator = educator
+                break
 
     return WorkshopEducatorProfileResponse(
         workshop_id=workshop_id,

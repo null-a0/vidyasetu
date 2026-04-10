@@ -194,6 +194,11 @@ const AdminDashboard = () => {
 
   const handleSaveCreate = async () => {
     const institutionId = resolveInstitutionId(formInstitution);
+    // Abort if an institution name was typed but no matching record was found.
+    if (formInstitution.trim() && institutionId === undefined) {
+      showToast("error", "Invalid Institution", `No institution found matching "${formInstitution}". Please check the name.`);
+      return;
+    }
     const dates = parseStatusDates(formStatus);
 
     await createMutation.mutateAsync({

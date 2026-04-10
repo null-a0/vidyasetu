@@ -92,11 +92,17 @@ async def update_one(
     institution_id: str,
     payload: InstitutionUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
 ) -> InstitutionResponse:
     institution = await get_institution(db, institution_id)
     if not institution:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Institution not found.")
+    # Institution admins can only update their own institution
+    if (
+        current_user.role == UserRole.INSTITUTION_ADMIN
+        and institution.id != current_user.institution_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     updated = await update_institution(db, institution, payload)
     return InstitutionResponse.model_validate(updated)
 

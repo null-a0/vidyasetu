@@ -34,7 +34,7 @@ export interface Assessment {
   workshop: string;
   totalMarks: number;
   passingMarks: number;
-  status: "Published" | "Draft";
+  status?: "Published" | "Draft";
   duration?: number;
 }
 
