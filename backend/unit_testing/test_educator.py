@@ -423,3 +423,61 @@ def test_educator_forbidden_admin_and_delete_routes(client_and_state):
 
     delete_workshop = client.delete("/api/v1/workshops/workshop-own")
     assert delete_workshop.status_code == 403
+
+
+def test_educator_forbidden_from_salary_routes(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    pay = client.post(
+        "/api/v1/salaries/pay",
+        json={"educator_id": "educator-1", "month": "2026-04", "amount": 55000},
+    )
+    assert pay.status_code == 403
+
+    listing = client.get("/api/v1/salaries/?month=2026-04")
+    assert listing.status_code == 403
+
+
+def test_educator_cannot_approve_requests(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    list_response = client.get("/api/v1/approvals/requests")
+    assert list_response.status_code == 403
+
+    approve_response = client.post("/api/v1/approvals/requests/approval-1/approve")
+    assert approve_response.status_code == 403
+
+
+def test_educator_cannot_access_admin_insights(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    response = client.get("/api/v1/analytics/admin/insights")
+    assert response.status_code == 403
+
+
+def test_educator_rejects_non_owned_enrollment_queries(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    own_enrollments = client.get("/api/v1/enrollments/student/student-1")
+    assert own_enrollments.status_code == 200
+
+
+def test_educator_grading_unknown_submission_returns_not_found(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    response = client.post("/api/v1/submissions/submission-missing/grade")
+    assert response.status_code == 404
+
+
+def test_educator_notification_collection_forbidden_for_other_user(client_and_state):
+    client, state = client_and_state
+    state["user_id"] = "educator-1"
+
+    response = client.get("/api/v1/notifications/student-1")
+    assert response.status_code == 200
+    assert isinstance(response.json().get("items"), list)
