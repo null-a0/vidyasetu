@@ -25,7 +25,7 @@ type ResultState = {
     pass_fail: boolean;
     per_question: Array<{ question_id: string; earned: number; max: number }>;
   };
-  answers?: Record<string, string>;
+  answers?: Record<string, string | string[]>;
   questions?: Array<{
     id: string;
     text?: string | null;
@@ -220,8 +220,12 @@ const Results = () => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="space-y-4 mb-8">
             <h3 className="text-lg font-semibold text-foreground">Question Feedback</h3>
             {questions.map((q, idx) => {
-              const userAnswerId = answers[q.id];
-              const userAnswer = q.options.find((opt) => opt.id === userAnswerId)?.text ?? "Not answered";
+              const selected = answers[q.id];
+              const selectedIds = Array.isArray(selected) ? selected : selected ? [selected] : [];
+              const userAnswer = q.options
+                .filter((opt) => selectedIds.includes(opt.id))
+                .map((opt) => opt.text)
+                .join(", ") || "Not answered";
               const grading = perQuestionMap[q.id];
               const isCorrect = grading ? grading.earned === grading.max : false;
               const canRequestExplanation = Boolean(

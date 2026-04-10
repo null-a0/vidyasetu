@@ -165,10 +165,23 @@ const pickBackendMessage = (data: any): string | null => {
   return null;
 };
 
+export class ApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+export const isApiError = (error: unknown): error is ApiError =>
+  error instanceof ApiError;
+
 const handleError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const message = pickBackendMessage(error.response?.data) || error.message;
-    throw new Error(message || 'Something went wrong.');
+    throw new ApiError(message || 'Something went wrong.', error.response?.status);
   }
   throw error;
 };

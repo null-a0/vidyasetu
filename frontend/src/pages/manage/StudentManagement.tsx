@@ -104,17 +104,22 @@ const StudentManagement = () => {
     queryKey: ["studentEnrollments", studentIdsKey],
     queryFn: async () => {
       const ids = studentUsers.map((s) => s.id);
-      const limited = ids.slice(0, 50); // avoid N+1 explosions in large datasets
-      const pairs = await Promise.all(
-        limited.map(async (id) => {
-          try {
-            const page = await fetchEnrollments(id);
-            return [id, page.items] as const;
-          } catch {
-            return [id, []] as const;
-          }
-        })
-      );
+      const pairs: Array<readonly [string, { workshop_id?: string | null; status?: string | null }[]]> = [];
+      const batchSize = 25;
+      for (let index = 0; index < ids.length; index += batchSize) {
+        const batch = ids.slice(index, index + batchSize);
+        const batchPairs = await Promise.all(
+          batch.map(async (id) => {
+            try {
+              const page = await fetchEnrollments(id);
+              return [id, page.items] as const;
+            } catch {
+              return [id, []] as const;
+            }
+          })
+        );
+        pairs.push(...batchPairs);
+      }
       return Object.fromEntries(pairs) as Record<string, { workshop_id?: string | null; status?: string | null }[]>;
     },
     enabled: studentUsers.length > 0,

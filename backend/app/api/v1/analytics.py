@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_role
@@ -91,6 +91,27 @@ async def student_analytics(
     if current_user.role == UserRole.STUDENT and current_user.id != student_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
+    # Institution-scoped staff: verify the queried student belongs to an
+    # institution workshop the caller can access.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if not current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        enrolled = (
+            await db.execute(
+                select(Enrollment.id)
+                .join(Workshop, Workshop.id == Enrollment.workshop_id)
+                .where(
+                    and_(
+                        Enrollment.student_id == student_id,
+                        Workshop.institution_id == current_user.institution_id,
+                    )
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if enrolled is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
     result = await get_student_analytics(db, student_id)
     return StudentAnalyticsResponse.model_validate(result)
 
@@ -108,6 +129,27 @@ async def student_attendance(
     if current_user.role == UserRole.STUDENT and current_user.id != student_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
+    # Institution-scoped staff: verify the queried student belongs to an
+    # institution workshop the caller can access.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if not current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        enrolled = (
+            await db.execute(
+                select(Enrollment.id)
+                .join(Workshop, Workshop.id == Enrollment.workshop_id)
+                .where(
+                    and_(
+                        Enrollment.student_id == student_id,
+                        Workshop.institution_id == current_user.institution_id,
+                    )
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if enrolled is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
     result = await get_student_attendance(db, student_id)
     return StudentAttendanceResponse.model_validate(result)
 
@@ -120,11 +162,14 @@ async def student_attendance(
 async def workshop_analytics(
     workshop_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(*_STAFF)),
+    current_user: User = Depends(require_role(*_STAFF)),
 ) -> WorkshopAnalyticsResponse:
     workshop = await get_workshop(db, workshop_id)
     if not workshop:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     result = await get_workshop_analytics(db, workshop_id)
     return WorkshopAnalyticsResponse.model_validate(result)
@@ -138,11 +183,17 @@ async def workshop_analytics(
 async def assessment_leaderboard(
     assessment_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> AssessmentLeaderboardResponse:
     assessment = await db.get(Assessment, assessment_id)
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+
+    # Non-ADMIN staff must belong to the same institution as the workshop.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        workshop = await db.get(Workshop, assessment.workshop_id)
+        if not workshop or workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     rows = (
         await db.execute(
@@ -183,11 +234,16 @@ async def assessment_leaderboard(
 async def workshop_leaderboard(
     workshop_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> WorkshopLeaderboardResponse:
     workshop = await get_workshop(db, workshop_id)
     if not workshop:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+
+    # Non-ADMIN staff must belong to the same institution as the workshop.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     assessment_ids = [
         row[0]
@@ -321,11 +377,18 @@ async def assessment_leaderboard_drilldown(
     assessment_id: str,
     student_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> LeaderboardStudentDrilldownResponse:
     assessment = await db.get(Assessment, assessment_id)
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+
+    # Non-ADMIN staff must belong to the same institution as the workshop.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        workshop = await db.get(Workshop, assessment.workshop_id)
+        if not workshop or workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
     return await _build_student_leaderboard_drilldown(
         db,
         student_id=student_id,
@@ -344,11 +407,17 @@ async def workshop_leaderboard_drilldown(
     workshop_id: str,
     student_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> LeaderboardStudentDrilldownResponse:
     workshop = await get_workshop(db, workshop_id)
     if not workshop:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+
+    # Non-ADMIN staff must belong to the same institution as the workshop.
+    if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
+        if workshop.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
     assessment_ids = [
         row[0]
         for row in (await db.execute(select(Assessment.id).where(Assessment.workshop_id == workshop_id))).all()

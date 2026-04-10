@@ -10,7 +10,7 @@ import VInput from '@/components/ui-custom/VInput';
 import { useVToast } from '@/components/ui-custom/VToast';
 import { useRole } from '@/hooks/useRole';
 import { useAuth } from '@/hooks/useAuth';
-import { deleteNotification, fetchAllUsers, fetchNotifications, markNotificationRead, sendParentEmailMessage } from '@/services/api';
+import { deleteNotification, fetchAllUsers, fetchNotifications, markNotificationRead, sendParentEmailMessage, fetchParentContactDirectory } from '@/services/api';
 import type { Notification } from '@/mock/mockData';
 
 const iconMap = {
@@ -55,6 +55,17 @@ const Notifications = () => {
   });
 
   const isInstitution = role === 'institution_admin';
+  const parentDirectoryQuery = useQuery({
+    queryKey: ['parentContactDirectory', user?.id],
+    queryFn: async () => {
+      const users = await fetchAllUsers({ max: 1000 });
+      const studentIds = users
+        .filter((item) => item.role === 'student')
+        .map((item) => item.id);
+      return fetchParentContactDirectory(studentIds);
+    },
+    enabled: isInstitution && Boolean(user?.id),
+  });
 
   const all = fetched;
   const filtered =
@@ -237,12 +248,17 @@ const Notifications = () => {
                     showToast('warning', 'Recipients required', 'Enter at least one recipient email.');
                     return;
                   }
-                  const users = await fetchAllUsers({ max: 1000 });
-                  const recipientStudentIds = users
-                    .filter((item) => item.role === 'student' && item.email && parsedEmails.includes(item.email.toLowerCase()))
-                    .map((item) => item.id);
+                  const directory = parentDirectoryQuery.data?.items ?? [];
+                  const recipientStudentIds = Array.from(
+                    new Set(
+                      directory
+                        .filter((item) => item.parent_email && parsedEmails.includes(item.parent_email.toLowerCase()))
+                        .map((item) => item.student_id)
+                        .filter(Boolean)
+                    )
+                  );
                   if (recipientStudentIds.length === 0) {
-                    showToast('warning', 'No student matches', 'None of the emails matched student accounts.');
+                    showToast('warning', 'No parent matches', 'None of the emails matched parent contacts.');
                     return;
                   }
                   const response = await sendParentEmailMutation.mutateAsync({
@@ -256,7 +272,7 @@ const Notifications = () => {
                   showToast('destructive', 'Send Failed', err instanceof Error ? err.message : 'Unable to dispatch parent email.');
                 }
               }}
-              disabled={!emailSubject || !emailBody}
+              disabled={!emailSubject || !emailBody || parentDirectoryQuery.isLoading}
             >
               <Mail className="h-4 w-4" /> Send Email
             </VButton>

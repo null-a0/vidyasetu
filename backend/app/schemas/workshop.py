@@ -68,6 +68,7 @@ class WorkshopResponse(BaseModel):
     start_date: Optional[datetime]
     end_date: Optional[datetime]
     institution_id: Optional[str]
+    enrollment_count: int = 0
 
 
 class WorkshopEducatorProfileResponse(BaseModel):

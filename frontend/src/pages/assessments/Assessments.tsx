@@ -1,7 +1,7 @@
 ﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Play, Eye, ClipboardList, Trophy, BarChart3, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, Play, Eye, ClipboardList, Trophy, BarChart3 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VButton from "@/components/ui-custom/VButton";
@@ -32,7 +32,7 @@ interface QuestionItem {
   text: string;
   type: QuestionType;
   options: string[];
-  correct: number;
+  correct: number[];
   marks: number;
 }
 
@@ -65,15 +65,13 @@ const AssessmentsPage = () => {
   const [formWorkshop, setFormWorkshop] = useState("");
   const [formTotal, setFormTotal] = useState("100");
   const [formPassing, setFormPassing] = useState("40");
-  const [formStatus, setFormStatus] = useState("Draft");
-  const [formDuration, setFormDuration] = useState("30");
 
   // Question builder state
   const [questionModal, setQuestionModal] = useState(false);
   const [qText, setQText] = useState("");
   const [qType, setQType] = useState<QuestionType>("MCQ");
   const [qOptions, setQOptions] = useState(["", "", "", ""]);
-  const [qCorrect, setQCorrect] = useState(0);
+  const [qCorrect, setQCorrect] = useState<number[]>([0]);
   const [qMarks, setQMarks] = useState("10");
 
   // Leaderboard & Student Performance
@@ -151,7 +149,7 @@ const AssessmentsPage = () => {
             : payload.question.options.map((opt, idx) => ({
                 id: `opt-${idx + 1}`,
                 text: opt,
-                is_correct: idx === payload.question.correct,
+                is_correct: payload.question.correct.includes(idx),
               })),
       }),
     onSuccess: async () => {
@@ -174,10 +172,9 @@ const AssessmentsPage = () => {
       text: question.text ?? "",
       type: (question.type?.toUpperCase() as QuestionType) || "MCQ",
       options: (question.options ?? []).map((option) => option.text),
-      correct: Math.max(
-        0,
-        (question.options ?? []).findIndex((option) => option.is_correct)
-      ),
+      correct: (question.options ?? [])
+        .map((option, index) => (option.is_correct ? index : -1))
+        .filter((index) => index >= 0),
       marks: question.marks ?? 1,
     })) ?? [];
 
@@ -199,7 +196,7 @@ const AssessmentsPage = () => {
               >
                 <Trophy className="h-4 w-4" /> Leaderboard
               </VButton>
-              <VButton onClick={() => { setFormTitle(""); setFormWorkshop(""); setFormTotal("100"); setFormPassing("40"); setFormStatus("Draft"); setFormDuration("30"); setCreateModal(true); }}>
+              <VButton onClick={() => { setFormTitle(""); setFormWorkshop(""); setFormTotal("100"); setFormPassing("40"); setCreateModal(true); }}>
                 <Plus className="h-4 w-4" /> Create Assessment
               </VButton>
             </>
@@ -211,13 +208,8 @@ const AssessmentsPage = () => {
         {all.map((a) => (
           <VCard key={a.id} hover className="p-5 flex flex-col">
             <div className="flex items-center justify-between mb-3">
-              <VBadge variant={a.status === "Published" ? "success" : "outline"}>{a.status}</VBadge>
+              <VBadge variant="success">Available</VBadge>
               <div className="flex items-center gap-2">
-                {a.duration && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" /> {a.duration}m
-                  </span>
-                )}
                 <span className="text-xs text-muted-foreground">{a.totalMarks} marks</span>
               </div>
             </div>
@@ -232,7 +224,7 @@ const AssessmentsPage = () => {
             </div>
             <p className="text-sm text-muted-foreground mb-4 flex-1">Passing: {a.passingMarks}/{a.totalMarks} marks</p>
             <div className="flex gap-2">
-              {isStudent && a.status === "Published" ? (
+              {isStudent ? (
                 <VButton className="flex-1" onClick={() => navigate(`/assessments/attempt/${a.id}`)}>
                   <Play className="h-4 w-4" /> Take Test
                 </VButton>
@@ -241,7 +233,7 @@ const AssessmentsPage = () => {
                   <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setQuestionModal(true); }}>
                     <Eye className="h-3.5 w-3.5" /> Questions
                   </VButton>
-                  <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setFormTitle(a.title); setFormWorkshop(a.workshop); setFormTotal(String(a.totalMarks)); setFormPassing(String(a.passingMarks)); setFormStatus(a.status); setFormDuration(String(a.duration || 30)); setEditModal(true); }}>
+                  <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setFormTitle(a.title); setFormWorkshop(a.workshop); setFormTotal(String(a.totalMarks)); setFormPassing(String(a.passingMarks)); setEditModal(true); }}>
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </VButton>
                   <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setLeaderboardModal(true); }}>
@@ -270,12 +262,6 @@ const AssessmentsPage = () => {
             <VInput label="Total Marks" type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} />
             <VInput label="Passing Marks" type="number" value={formPassing} onChange={e => setFormPassing(e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <VInput label="Duration (minutes)" type="number" value={formDuration} onChange={e => setFormDuration(e.target.value)} placeholder="e.g. 30" />
-            <VSelect label="Status" value={formStatus} onChange={e => setFormStatus(e.target.value)} options={[
-              { value: "Draft", label: "Draft" }, { value: "Published", label: "Published" },
-            ]} />
-          </div>
           <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setCreateModal(false)}>Cancel</VButton><VButton onClick={() => {
             const workshopId = workshops.find((workshop) => workshop.name === formWorkshop)?.id;
             if (!workshopId) {
@@ -300,12 +286,6 @@ const AssessmentsPage = () => {
           <div className="grid grid-cols-2 gap-3">
             <VInput label="Total Marks" type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} />
             <VInput label="Passing Marks" type="number" value={formPassing} onChange={e => setFormPassing(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <VInput label="Duration (minutes)" type="number" value={formDuration} onChange={e => setFormDuration(e.target.value)} />
-            <VSelect label="Status" value={formStatus} onChange={e => setFormStatus(e.target.value)} options={[
-              { value: "Draft", label: "Draft" }, { value: "Published", label: "Published" },
-            ]} />
           </div>
           <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setEditModal(false)}>Cancel</VButton><VButton onClick={() => {
             if (!selected) return;
@@ -332,7 +312,7 @@ const AssessmentsPage = () => {
               {q.type !== "Integer" && (
                 <div className="grid grid-cols-2 gap-2">
                   {q.options.map((opt, oi) => (
-                    <span key={oi} className={`text-xs px-3 py-1.5 rounded-lg ${oi === q.correct ? "bg-success/10 text-success font-medium" : "bg-muted text-muted-foreground"}`}>
+                    <span key={oi} className={`text-xs px-3 py-1.5 rounded-lg ${q.correct.includes(oi) ? "bg-success/10 text-success font-medium" : "bg-muted text-muted-foreground"}`}>
                       {String.fromCharCode(65 + oi)}. {opt}
                     </span>
                   ))}
@@ -345,7 +325,11 @@ const AssessmentsPage = () => {
         <div className="border-t border-border pt-4 mt-4">
           <p className="text-sm font-semibold text-foreground mb-3">Add Question</p>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <VSelect label="Question Type" value={qType} onChange={e => setQType(e.target.value as QuestionType)} options={[
+            <VSelect label="Question Type" value={qType} onChange={e => {
+              const nextType = e.target.value as QuestionType;
+              setQType(nextType);
+              setQCorrect(nextType === "MCQ" ? [0] : []);
+            }} options={[
               { value: "MCQ", label: "MCQ (Single Choice)" },
               { value: "MSQ", label: "MSQ (Multiple Select)" },
               { value: "Integer", label: "Integer Input" },
@@ -361,18 +345,47 @@ const AssessmentsPage = () => {
             </div>
           )}
           {qType !== "Integer" && (
-            <VSelect label="Correct Answer" value={String(qCorrect)} onChange={e => setQCorrect(Number(e.target.value))} options={qOptions.map((_, i) => ({ value: String(i), label: `Option ${String.fromCharCode(65 + i)}` }))} />
+            qType === "MCQ" ? (
+              <VSelect label="Correct Answer" value={String(qCorrect[0] ?? 0)} onChange={e => setQCorrect([Number(e.target.value)])} options={qOptions.map((_, i) => ({ value: String(i), label: `Option ${String.fromCharCode(65 + i)}` }))} />
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Correct Answers</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {qOptions.map((_, i) => {
+                    const isSelected = qCorrect.includes(i);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setQCorrect((prev) =>
+                            prev.includes(i)
+                              ? prev.filter((idx) => idx !== i)
+                              : [...prev, i].sort((a, b) => a - b)
+                          );
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-sm text-left ${isSelected ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground hover:bg-accent"}`}
+                      >
+                        Option {String.fromCharCode(65 + i)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )
           )}
           <VButton className="w-full mt-3" variant="secondary" onClick={() => {
             if (!qText) { showToast("warning", "Enter question text"); return; }
             if (qType === "Integer") { showToast("warning", "Unsupported", "Backend currently supports MCQ/MSQ question types only."); return; }
             if (qOptions.some(o => !o)) { showToast("warning", "Fill all options"); return; }
+            if (qType === "MCQ" && qCorrect.length !== 1) { showToast("warning", "Select one correct option for MCQ."); return; }
+            if (qType === "MSQ" && qCorrect.length === 0) { showToast("warning", "Select at least one correct option for MSQ."); return; }
             if (!selected?.id) return;
             addQuestionMutation.mutate({
               assessmentId: selected.id,
               question: { text: qText, type: qType, options: [...qOptions], correct: qCorrect, marks: Number(qMarks) || 10 },
             });
-            setQText(""); setQOptions(["", "", "", ""]); setQCorrect(0); setQMarks("10");
+            setQText(""); setQOptions(["", "", "", ""]); setQCorrect(qType === "MCQ" ? [0] : []); setQMarks("10");
           }} disabled={addQuestionMutation.isPending}>
             <Plus className="h-4 w-4" /> Add Question
           </VButton>

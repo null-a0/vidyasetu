@@ -15,14 +15,12 @@ interface SalaryRecord {
   id: string;
   name: string;
   institution: string;
-  salary: number;
+  salary: number | null;
   monthlyStatus: "Paid" | "Unpaid";
-  type: "Internal" | "Visiting";
+  type: string;
 }
 
 const currentMonthKey = () => new Date().toISOString().slice(0, 7); // YYYY-MM
-
-const defaultSalary = (type: SalaryRecord["type"]) => (type === "Internal" ? 50000 : 30000);
 
 const SalaryManagement = () => {
   const role = useRole();
@@ -72,16 +70,16 @@ const SalaryManagement = () => {
     const scoped = isInstitutionAdmin ? educators.filter((u) => u.institution_id === user?.institution_id) : educators;
 
     return scoped.map((u) => {
-      const type: SalaryRecord["type"] = "Internal";
-      const paid = !!paidLookup[u.id];
-      const salary = paidLookup[u.id]?.amount ?? defaultSalary(type);
+      const paidRecord = paidLookup[u.id];
+      const paid = !!paidRecord;
+      const salary = paidRecord?.amount ?? null;
       return {
         id: u.id,
         name: u.name || u.email,
         institution: u.institution_id ? institutionLookup[u.institution_id] ?? u.institution_id : "",
         salary,
         monthlyStatus: paid ? "Paid" : "Unpaid",
-        type,
+        type: "Not available",
       };
     });
   }, [institutionLookup, isInstitutionAdmin, paidLookup, user?.institution_id, usersQuery.data]);
@@ -92,9 +90,10 @@ const SalaryManagement = () => {
     return matchSearch && matchStatus;
   });
 
-  const totalSalary = records.reduce((s, r) => s + r.salary, 0);
+  const totalSalary = records.reduce((s, r) => s + (r.salary ?? 0), 0);
   const paidCount = records.filter((r) => r.monthlyStatus === "Paid").length;
   const unpaidCount = records.filter((r) => r.monthlyStatus === "Unpaid").length;
+  const payableUnpaidCount = records.filter((r) => r.monthlyStatus === "Unpaid" && r.salary !== null).length;
 
   const payMutation = useMutation({
     mutationFn: async (payload: { educatorId: string; amount: number }) => {
@@ -111,11 +110,11 @@ const SalaryManagement = () => {
 
   const payAllMutation = useMutation({
     mutationFn: async () => {
-      const unpaid = records.filter((r) => r.monthlyStatus === "Unpaid");
-      for (const r of unpaid) {
-        await paySalary({ educatorId: r.id, month, amount: r.salary });
+      const unpaidWithKnownAmount = records.filter((r) => r.monthlyStatus === "Unpaid" && r.salary !== null);
+      for (const r of unpaidWithKnownAmount) {
+        await paySalary({ educatorId: r.id, month, amount: r.salary as number });
       }
-      return unpaid.length;
+      return unpaidWithKnownAmount.length;
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["salaryPayments", month] });
@@ -129,13 +128,17 @@ const SalaryManagement = () => {
   const columns = [
     { key: "name", header: "Educator" },
     { key: "institution", header: "Institution" },
-    { key: "type", header: "Type", render: (r: SalaryRecord) => <VBadge variant={r.type === "Internal" ? "default" : "outline"}>{r.type}</VBadge> },
-    { key: "salary", header: "Salary", render: (r: SalaryRecord) => <span className="font-bold text-foreground">INR {r.salary.toLocaleString()}</span> },
+    { key: "type", header: "Type", render: (r: SalaryRecord) => <VBadge variant="outline">{r.type}</VBadge> },
+    { key: "salary", header: "Salary", render: (r: SalaryRecord) => r.salary === null ? <span className="text-muted-foreground">Not available</span> : <span className="font-bold text-foreground">INR {r.salary.toLocaleString()}</span> },
     { key: "monthlyStatus", header: "Status", render: (r: SalaryRecord) => <VBadge variant={r.monthlyStatus === "Paid" ? "success" : "warning"}>{r.monthlyStatus}</VBadge> },
     { key: "actions", header: "Action", render: (r: SalaryRecord) => r.monthlyStatus === "Unpaid" ? (
-      <VButton size="sm" onClick={() => payMutation.mutate({ educatorId: r.id, amount: r.salary })} disabled={!isAdmin} isLoading={payMutation.isPending}>
-        <DollarSign className="h-3.5 w-3.5" /> Pay
-      </VButton>
+      r.salary === null ? (
+        <span className="text-xs text-muted-foreground">Set salary in backend</span>
+      ) : (
+        <VButton size="sm" onClick={() => payMutation.mutate({ educatorId: r.id, amount: r.salary as number })} disabled={!isAdmin} isLoading={payMutation.isPending}>
+          <DollarSign className="h-3.5 w-3.5" /> Pay
+        </VButton>
+      )
     ) : <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Done</span> },
   ];
 
@@ -172,7 +175,7 @@ const SalaryManagement = () => {
               {s}
             </button>
           ))}
-          {unpaidCount > 0 && (
+          {payableUnpaidCount > 0 && (
             <VButton size="sm" onClick={() => payAllMutation.mutate()} disabled={!isAdmin} isLoading={payAllMutation.isPending}>
               Pay All Unpaid
             </VButton>

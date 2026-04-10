@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+ï»¿import { useState, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, Clock, ChevronLeft, ChevronRight, Flag, Send, Shield, Maximize2 } from "lucide-react";
@@ -22,7 +22,7 @@ const AssessmentAttempt = () => {
   const { assessmentId } = useParams<{ assessmentId: string }>();
 
   const [attemptData, setAttemptData] = useState<StartAttemptResponse | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [currentQ, setCurrentQ] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
@@ -56,9 +56,9 @@ const AssessmentAttempt = () => {
 
     try {
       setIsSubmitting(true);
-      const payload = Object.entries(answers).map(([questionId, optionId]) => ({
+      const payload = Object.entries(answers).map(([questionId, selectedOptionIds]) => ({
         questionId,
-        selectedOptionIds: optionId ? [optionId] : [],
+        selectedOptionIds,
       }));
 
       await saveAssessmentAnswers(attemptData.submission_id, payload);
@@ -138,8 +138,18 @@ const AssessmentAttempt = () => {
     return () => document.removeEventListener("copy", handler);
   }, [started, warnings, showToast, handleSubmit]);
 
-  const handleSelect = (qId: string, optId: string) => {
-    setAnswers((prev) => ({ ...prev, [qId]: optId }));
+  const handleSelect = (qId: string, optId: string, type?: string | null) => {
+    const isMSQ = (type ?? "").toUpperCase() === "MSQ";
+    setAnswers((prev) => {
+      if (!isMSQ) {
+        return { ...prev, [qId]: [optId] };
+      }
+      const current = prev[qId] ?? [];
+      const next = current.includes(optId)
+        ? current.filter((id) => id !== optId)
+        : [...current, optId];
+      return { ...prev, [qId]: next };
+    });
   };
 
   const toggleFlag = (qId: string) => {
@@ -159,7 +169,7 @@ const AssessmentAttempt = () => {
   };
 
   const questions = attemptData?.questions ?? [];
-  const answeredCount = Object.keys(answers).length;
+  const answeredCount = Object.values(answers).filter((selectedIds) => selectedIds.length > 0).length;
   const currentQuestion = questions[currentQ];
   const isUrgent = timeLeft < 60;
 
@@ -196,8 +206,8 @@ const AssessmentAttempt = () => {
             </div>
             <ul className="space-y-2.5 text-sm text-muted-foreground">
               <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> You have <strong className="text-foreground">10 minutes</strong> to complete {questions.length || "all"} questions.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Do not switch tabs</strong> — this will trigger a warning.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Copying is not allowed</strong> — attempts will be detected.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Do not switch tabs</strong> â€” this will trigger a warning.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Copying is not allowed</strong> â€” attempts will be detected.</li>
               <li className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> After <strong className="text-foreground">{MAX_WARNINGS} warnings</strong>, your test will be auto-submitted.</li>
               <li className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> When time runs out, your answers will be <strong className="text-foreground">automatically submitted</strong>.</li>
             </ul>
@@ -267,16 +277,16 @@ const AssessmentAttempt = () => {
             {currentQuestion.options.map((opt, oi) => (
               <button
                 key={opt.id}
-                onClick={() => handleSelect(currentQuestion.id, opt.id)}
+                onClick={() => handleSelect(currentQuestion.id, opt.id, currentQuestion.type)}
                 className={`w-full text-left rounded-xl border px-5 py-4 text-sm transition-all ${
-                  answers[currentQuestion.id] === opt.id
+                  (answers[currentQuestion.id] ?? []).includes(opt.id)
                     ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/30"
                     : "border-border text-foreground hover:bg-accent hover:border-primary/20"
                 }`}
               >
                 <span className="inline-flex items-center gap-3">
                   <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                    answers[currentQuestion.id] === opt.id
+                    (answers[currentQuestion.id] ?? []).includes(opt.id)
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}>
@@ -313,7 +323,7 @@ const AssessmentAttempt = () => {
                 className={`flex h-9 w-full items-center justify-center rounded-lg text-xs font-bold transition-all ${
                   currentQ === i
                     ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
-                    : answers[q.id] !== undefined
+                    : (answers[q.id] ?? []).length > 0
                     ? "bg-success/10 text-success border border-success/30"
                     : flagged.has(q.id)
                     ? "bg-warning/10 text-warning border border-warning/30"
@@ -368,4 +378,5 @@ const AssessmentAttempt = () => {
 };
 
 export default AssessmentAttempt;
+
 

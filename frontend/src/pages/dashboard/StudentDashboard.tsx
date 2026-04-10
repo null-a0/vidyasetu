@@ -13,11 +13,13 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   enrollInWorkshop,
   fetchEnrollments,
+  fetchMaterialDownload,
   fetchStudentAnalytics,
   fetchStudentLearningCourses,
   fetchStudentStats,
   fetchWorkshopModules,
   fetchWorkshops,
+  resolveBackendMediaUrl,
   type StudentLearningCourse,
   type StudentLearningModule,
 } from "@/services/api";
@@ -116,18 +118,8 @@ const StudentDashboard = () => {
       const moduleCount = Math.max(1, courseData?.modules.length ?? 1);
       const statusRaw = (enrollment.status ?? "").toLowerCase();
       const isCompleted = statusRaw === "completed";
-
-      let progress = isCompleted ? 100 : 35;
-      if (!isCompleted) {
-        const startMs = workshop.startDate ? Date.parse(workshop.startDate) : Number.NaN;
-        const endMs = workshop.endDate ? Date.parse(workshop.endDate) : Number.NaN;
-        if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {
-          const ratio = (Date.now() - startMs) / (endMs - startMs);
-          progress = Math.max(5, Math.min(99, Math.round(ratio * 100)));
-        }
-      }
-
-      const completedModules = isCompleted ? moduleCount : Math.max(1, Math.min(moduleCount - 1, Math.round((progress / 100) * moduleCount)));
+      const progress = isCompleted ? 100 : 0;
+      const completedModules = isCompleted ? moduleCount : 0;
 
       map.set(workshopId, {
         id: workshopId,
@@ -461,7 +453,24 @@ const StudentDashboard = () => {
                   <VButton
                     variant="secondary"
                     className="mt-3"
-                    onClick={() => showToast("info", "Opening", currentModule.materials[0]?.title ?? "No file available")}
+                    onClick={async () => {
+                      const material = currentModule.materials[0];
+                      if (!material) {
+                        showToast("warning", "No material", "No file available for this module yet.");
+                        return;
+                      }
+                      try {
+                        const response = await fetchMaterialDownload(currentModule.id, material.id);
+                        const url = resolveBackendMediaUrl(response.download_url);
+                        if (!url) {
+                          showToast("warning", "Unavailable", "Download URL is unavailable for this material.");
+                          return;
+                        }
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      } catch (err: unknown) {
+                        showToast("destructive", "Unable to open material", err instanceof Error ? err.message : "Please try again.");
+                      }
+                    }}
                   >
                     Read Material
                   </VButton>

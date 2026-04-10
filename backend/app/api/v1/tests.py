@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_role
 from app.crud.crud_assessment import (
     apply_grade,
     get_assessment,
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/tests", tags=["tests"])
 async def start_test(
     assessment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.STUDENT)),
 ) -> TestStartResponse:
     assessment = await get_assessment(db, assessment_id)
     if not assessment:
@@ -84,7 +84,7 @@ async def submit_test(
     assessment_id: str,
     submission_id: str,  # passed as query param
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.STUDENT)),
 ) -> GradeResult:
     assessment = await get_assessment(db, assessment_id)
     if not assessment:

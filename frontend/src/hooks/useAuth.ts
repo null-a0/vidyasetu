@@ -1,6 +1,6 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { loginUser, fetchCurrentUser } from '@/services/api';
-import { AUTH_CHANGED_EVENT, TOKEN_STORAGE_KEY, setAuthTokens, getAccessToken, clearAccessToken } from '@/api/client';
+import { AUTH_CHANGED_EVENT, TOKEN_STORAGE_KEY, setAuthTokens, getAccessToken, clearAccessToken, isApiError } from '@/api/client';
 import type { BackendUser } from '@/api/types';
 
 interface AuthContextValue {
@@ -26,9 +26,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const data = await fetchCurrentUser();
       setUser(data);
-    } catch {
-      clearAccessToken();
-      setUser(null);
+      setError(null);
+    } catch (err: unknown) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        clearAccessToken();
+        setUser(null);
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Unable to refresh session.');
     } finally {
       setIsLoading(false);
     }
