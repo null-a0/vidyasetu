@@ -30,6 +30,7 @@ class UserRole(str, Enum):
     INSTITUTION_ADMIN = "institution_admin"
     EDUCATOR = "educator"
     STUDENT = "student"
+    TECHNICAL_SUPPORT = "technical_support"
 
 
 class NotificationStatus(str, Enum):
@@ -64,6 +65,23 @@ class AIFeatureType(str, Enum):
 class AIGenerationStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ScheduledReportFrequency(str, Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
+class ScheduledReportStatus(str, Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+
+
+class ScheduledReportRunStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -343,6 +361,59 @@ class AIRateLimitCounter(Base):
 
 
 # --------------------------------------------------
+# SCHEDULED AI REPORTS
+# --------------------------------------------------
+
+
+class ScheduledAIReport(Base):
+    __tablename__ = "scheduled_ai_reports"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    created_by_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    institution_id = Column(String, ForeignKey("institutions.id"), nullable=True, index=True)
+
+    report_type = Column(String, nullable=False, default="admin_report")
+    frequency = Column(SqlEnum(ScheduledReportFrequency), nullable=False, default=ScheduledReportFrequency.DAILY)
+    status = Column(SqlEnum(ScheduledReportStatus), nullable=False, default=ScheduledReportStatus.ACTIVE, index=True)
+
+    # Rolling window settings (e.g., last 7 days)
+    window_days = Column(Integer, nullable=False, default=7)
+    focus_areas = Column(JSON, default=list, nullable=False)
+
+    # Recipient identifiers: user_ids and/or emails (resolved at send time)
+    recipients = Column(JSON, default=list, nullable=False)
+
+    timezone = Column(String, nullable=False, default="UTC")
+    time_of_day = Column(String, nullable=False, default="09:00")  # HH:MM in timezone
+    weekdays = Column(JSON, default=list, nullable=False)  # for weekly: [0..6] (Mon=0)
+
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ScheduledAIReportRun(Base):
+    __tablename__ = "scheduled_ai_report_runs"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    schedule_id = Column(String, ForeignKey("scheduled_ai_reports.id"), nullable=False, index=True)
+    ai_generation_id = Column(String, ForeignKey("ai_generations.id"), nullable=False, index=True)
+
+    due_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    status = Column(SqlEnum(ScheduledReportRunStatus), nullable=False, default=ScheduledReportRunStatus.PENDING, index=True)
+    error_details = Column(JSON, default=dict, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+# --------------------------------------------------
 # CERTIFICATE
 # --------------------------------------------------
 
@@ -470,3 +541,44 @@ class SalaryPayment(Base):
     status = Column(SqlEnum(SalaryPaymentStatus), default=SalaryPaymentStatus.PAID)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# --------------------------------------------------
+# AUDIT LOGS + SUPPORT EVENTS
+# --------------------------------------------------
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    actor_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    actor_role = Column(String, nullable=True, index=True)
+
+    action = Column(String(128), nullable=False, index=True)
+    target_type = Column(String(64), nullable=True, index=True)
+    target_id = Column(String(128), nullable=True, index=True)
+
+    metadata = Column(JSON, default=dict, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class RateLimitEvent(Base):
+    __tablename__ = "ai_rate_limit_events"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    key = Column(String(255), nullable=False, index=True)
+    allowed = Column(Boolean, nullable=False, default=False, index=True)
+    remaining = Column(Integer, nullable=False, default=0)
+    retry_after_seconds = Column(Integer, nullable=False, default=0)
+
+    rule_max_requests = Column(Integer, nullable=False, default=0)
+    rule_window_seconds = Column(Integer, nullable=False, default=0)
+
+    actor_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    institution_id = Column(String, ForeignKey("institutions.id"), nullable=True, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

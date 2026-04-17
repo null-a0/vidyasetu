@@ -17,6 +17,7 @@ import {
   DollarSign,
   User,
   Sparkles,
+  LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -31,7 +32,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
   { to: "/workshops", label: "Workshops", icon: BookOpen, roles: ["admin", "institution_admin", "educator", "student"] },
   { to: "/materials", label: "Materials", icon: FileText, roles: ["admin", "institution_admin", "educator", "student"] },
   { to: "/assessments", label: "Assessments", icon: ClipboardList, roles: ["admin", "institution_admin", "educator", "student"] },
@@ -39,14 +40,15 @@ const navItems: NavItem[] = [
   { to: "/certificates", label: "Certificates", icon: Award, roles: ["admin", "institution_admin", "educator", "student"] },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "institution_admin", "educator"] },
   { to: "/reports/ai", label: "AI Reports", icon: Sparkles, roles: ["admin", "institution_admin"] },
-  { to: "/notifications", label: "Notifications", icon: Bell, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/support", label: "Support", icon: LifeBuoy, roles: ["technical_support"] },
+  { to: "/notifications", label: "Notifications", icon: Bell, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
   // Management items
   { to: "/manage/students", label: "Students", icon: Users, roles: ["admin", "institution_admin"] },
   { to: "/manage/educators", label: "Educators", icon: GraduationCap, roles: ["admin", "institution_admin"] },
   { to: "/manage/institutes", label: "Institutes", icon: Building2, roles: ["admin"] },
   { to: "/manage/salary", label: "Salary", icon: DollarSign, roles: ["admin"] },
   { to: "/manage/approvals", label: "Approvals", icon: CheckSquare, roles: ["admin"] },
-  { to: "/profile", label: "Profile", icon: User, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/profile", label: "Profile", icon: User, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
 ];
 
 interface SidebarProps {

@@ -3,6 +3,8 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai_student_explanations,
     ai_reports,
+    ai_scheduled_reports,
+    support,
     analytics,
     approvals,
     assessments,
@@ -49,6 +51,8 @@ api_router.include_router(communication.router)
 api_router.include_router(analytics.router)
 api_router.include_router(ai_reports.router)
 api_router.include_router(ai_student_explanations.router)
+api_router.include_router(ai_scheduled_reports.router)
+api_router.include_router(support.router)
 api_router.include_router(notifications.router)
 api_router.include_router(dashboard.router)
 

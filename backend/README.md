@@ -64,6 +64,9 @@ AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS=600
 AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
 AI_RATE_LIMIT_BACKEND=database
 AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
+
+# Async job system (Celery + Redis)
+REDIS_URL=rediss://:<password>@<host>:<port>
 ```
 
 Production notes:
@@ -80,6 +83,24 @@ python -m alembic upgrade head
 ```
 
 This creates/updates AI tables used by admin report generation and DB-backed rate limiting.
+
+## Async AI jobs (Celery worker + beat)
+
+AI report generation and student explanations run as background jobs.
+
+1. Set `REDIS_URL` (Upstash supported via `rediss://`).
+2. Start the API (`uvicorn app.main:app --reload`).
+3. In a separate terminal, start a Celery worker:
+
+```sh
+celery -A app.jobs.celery_app.celery_app worker -l info -Q vidyasetu
+```
+
+4. For scheduled AI reports, also run Celery Beat:
+
+```sh
+celery -A app.jobs.celery_app.celery_app beat -l info
+```
 
 ## Database options
 

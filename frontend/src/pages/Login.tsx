@@ -13,6 +13,7 @@ const roleOptions = [
   { value: "institution_admin", label: "Institutional Admin" },
   { value: "educator", label: "Educator" },
   { value: "student", label: "Student" },
+  { value: "technical_support", label: "Technical Support" },
 ];
 
 const roleDashboardMap: Record<UserRole, string> = {
@@ -20,6 +21,7 @@ const roleDashboardMap: Record<UserRole, string> = {
   institution_admin: "/dashboard/institution",
   educator: "/dashboard/educator",
   student: "/dashboard/student",
+  technical_support: "/dashboard/technical_support",
 };
 
 const Login = () => {

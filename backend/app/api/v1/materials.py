@@ -180,8 +180,9 @@ async def download_material(
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Material file not found.")
 
+    normalized_url_path = normalized.replace("\\", "/")
     return MaterialDownloadResponse(
         module_id=module_id,
         material_id=material_id,
-        download_url=f"{settings.BASE_URL}/{normalized.replace('\\', '/')}",
+        download_url=f"{settings.BASE_URL}/{normalized_url_path}",
     )

@@ -6,6 +6,7 @@ import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import InstitutionDashboard from "@/pages/dashboard/InstitutionDashboard";
 import EducatorDashboard from "@/pages/dashboard/EducatorDashboard";
 import StudentDashboard from "@/pages/dashboard/StudentDashboard";
+import SupportDashboard from "@/pages/dashboard/SupportDashboard";
 import WorkshopsList from "@/pages/workshops/WorkshopsList";
 import WorkshopDetails from "@/pages/workshops/WorkshopDetails";
 import MaterialsPage from "@/pages/materials/Materials";
@@ -17,6 +18,7 @@ import Certificates from "@/pages/certificates/Certificates";
 import VerifyCertificate from "@/pages/certificates/VerifyCertificate";
 import PerformanceReports from "@/pages/reports/PerformanceReports";
 import AdminAIReports from "@/pages/reports/AdminAIReports";
+import ScheduledAIReports from "@/pages/reports/ScheduledAIReports";
 import Notifications from "@/pages/notifications/Notifications";
 import ProfilePage from "@/pages/profile/ProfilePage";
 import EducatorManagement from "@/pages/manage/EducatorManagement";
@@ -26,6 +28,7 @@ import ApprovalPanel from "@/pages/manage/ApprovalPanel";
 import SalaryManagement from "@/pages/manage/SalaryManagement";
 import ProtectedRoute from "@/routes/ProtectedRoute";
 import NotFound from "@/pages/NotFound";
+import SupportConsole from "@/pages/support/SupportConsole";
 
 const AppRoutes = () => (
   <Routes>
@@ -38,6 +41,7 @@ const AppRoutes = () => (
     <Route path="/dashboard/institution" element={<ProtectedRoute allowedRoles={["institution_admin"]}><InstitutionDashboard /></ProtectedRoute>} />
     <Route path="/dashboard/educator" element={<ProtectedRoute allowedRoles={["educator"]}><EducatorDashboard /></ProtectedRoute>} />
     <Route path="/dashboard/student" element={<ProtectedRoute allowedRoles={["student"]}><StudentDashboard /></ProtectedRoute>} />
+    <Route path="/dashboard/technical_support" element={<ProtectedRoute allowedRoles={["technical_support"]}><SupportDashboard /></ProtectedRoute>} />
 
     {/* Shared pages */}
     <Route path="/workshops" element={<ProtectedRoute><WorkshopsList /></ProtectedRoute>} />
@@ -50,6 +54,8 @@ const AppRoutes = () => (
     <Route path="/certificates" element={<ProtectedRoute><Certificates /></ProtectedRoute>} />
     <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "institution_admin", "educator"]}><PerformanceReports /></ProtectedRoute>} />
     <Route path="/reports/ai" element={<ProtectedRoute allowedRoles={["admin", "institution_admin"]}><AdminAIReports /></ProtectedRoute>} />
+    <Route path="/reports/ai/scheduled" element={<ProtectedRoute allowedRoles={["admin", "institution_admin"]}><ScheduledAIReports /></ProtectedRoute>} />
+    <Route path="/support" element={<ProtectedRoute allowedRoles={["technical_support"]}><SupportConsole /></ProtectedRoute>} />
     <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
