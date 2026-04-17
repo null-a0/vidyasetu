@@ -152,6 +152,7 @@ class AdminAIReportStatusResponse(BaseModel):
     report_id: str
     status: AIGenerationStatus
     error_details: dict[str, Any] | None = None
+    progress: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -189,4 +190,23 @@ class StudentExplanationCreateResponse(BaseModel):
     explanation_id: str
     status: AIGenerationStatus
     from_cache: bool
+    explanation: StudentExplanationStructuredOutput | None = None
+
+
+class StudentExplanationStatusResponse(BaseModel):
+    explanation_id: str
+    status: AIGenerationStatus
+    error_details: dict[str, Any] | None = None
+    progress: dict[str, Any] | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentExplanationResultResponse(BaseModel):
+    explanation_id: str
+    status: AIGenerationStatus
     explanation: StudentExplanationStructuredOutput
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    prompt_version: str
+    model_name: str

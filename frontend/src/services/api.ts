@@ -56,6 +56,19 @@ import type {
     BackendAdminAIReportHistoryItem,
     BackendStudentExplanationRequest,
     BackendStudentExplanationResponse,
+    BackendStudentExplanationStatusResponse,
+    BackendStudentExplanationResultResponse,
+    BackendScheduledReportCreateRequest,
+    BackendScheduledReportUpdateRequest,
+    BackendScheduledReport,
+    BackendScheduledReportRun,
+    BackendSupportConfigResponse,
+    BackendSupportJobDetailResponse,
+    BackendSupportJobListItem,
+    BackendSupportRerunResponse,
+    BackendAuditLog,
+    BackendRateLimitEvent,
+    BackendCacheStatsResponse,
 } from "@/api/types";
 import type {
     Workshop,
@@ -1148,6 +1161,109 @@ export const createStudentAnswerExplanation = async (
     payload: BackendStudentExplanationRequest,
 ): Promise<BackendStudentExplanationResponse> => {
     return apiPost<BackendStudentExplanationResponse>("/ai/student-explanations/", payload);
+};
+
+export const fetchStudentExplanationStatus = async (
+    explanationId: string,
+): Promise<BackendStudentExplanationStatusResponse> => {
+    return apiGet<BackendStudentExplanationStatusResponse>(`/ai/student-explanations/${explanationId}/status`);
+};
+
+export const fetchStudentExplanationResult = async (
+    explanationId: string,
+): Promise<BackendStudentExplanationResultResponse> => {
+    return apiGet<BackendStudentExplanationResultResponse>(`/ai/student-explanations/${explanationId}/result`);
+};
+
+export const createScheduledAIReport = async (
+    payload: BackendScheduledReportCreateRequest,
+): Promise<BackendScheduledReport> => {
+    return apiPost<BackendScheduledReport>("/ai/scheduled-reports/", payload);
+};
+
+export const fetchScheduledAIReports = async (
+    options: { limit?: number; offset?: number } = {},
+): Promise<ApiPage<BackendScheduledReport>> => {
+    const { limit = 50, offset = 0 } = options;
+    const safeLimit = Math.min(limit, 200);
+    return apiGet<ApiPage<BackendScheduledReport>>("/ai/scheduled-reports/", {
+        params: { limit: safeLimit, offset },
+    });
+};
+
+export const updateScheduledAIReport = async (
+    scheduleId: string,
+    payload: BackendScheduledReportUpdateRequest,
+): Promise<BackendScheduledReport> => {
+    return apiPatch<BackendScheduledReport>(`/ai/scheduled-reports/${scheduleId}`, payload);
+};
+
+export const fetchScheduledAIReportRuns = async (
+    scheduleId: string,
+    options: { limit?: number; offset?: number } = {},
+): Promise<ApiPage<BackendScheduledReportRun>> => {
+    const { limit = 50, offset = 0 } = options;
+    const safeLimit = Math.min(limit, 200);
+    return apiGet<ApiPage<BackendScheduledReportRun>>(`/ai/scheduled-reports/${scheduleId}/runs`, {
+        params: { limit: safeLimit, offset },
+    });
+};
+
+export const fetchSupportConfig = async (): Promise<BackendSupportConfigResponse> => {
+    return apiGet<BackendSupportConfigResponse>("/support/config");
+};
+
+export const fetchSupportJobs = async (
+    options: {
+        status?: string;
+        feature_type?: string;
+        institution_id?: string;
+        requester_user_id?: string;
+        limit?: number;
+        offset?: number;
+    } = {},
+): Promise<ApiPage<BackendSupportJobListItem>> => {
+    const { limit = 50, offset = 0, ...rest } = options;
+    const safeLimit = Math.min(limit, 200);
+    return apiGet<ApiPage<BackendSupportJobListItem>>("/support/jobs", {
+        params: { limit: safeLimit, offset, ...rest },
+    });
+};
+
+export const fetchSupportJobDetail = async (
+    generationId: string,
+): Promise<BackendSupportJobDetailResponse> => {
+    return apiGet<BackendSupportJobDetailResponse>(`/support/jobs/${generationId}`);
+};
+
+export const rerunSupportJob = async (
+    generationId: string,
+): Promise<BackendSupportRerunResponse> => {
+    return apiPost<BackendSupportRerunResponse>(`/support/jobs/${generationId}/rerun`, {});
+};
+
+export const fetchSupportAuditLogs = async (
+    options: { limit?: number; offset?: number; since_hours?: number; action?: string } = {},
+): Promise<ApiPage<BackendAuditLog>> => {
+    const { limit = 50, offset = 0, ...rest } = options;
+    const safeLimit = Math.min(limit, 200);
+    return apiGet<ApiPage<BackendAuditLog>>("/support/audit-logs", {
+        params: { limit: safeLimit, offset, ...rest },
+    });
+};
+
+export const fetchSupportRateLimitEvents = async (
+    options: { limit?: number; offset?: number; since_hours?: number; key_prefix?: string; allowed?: boolean } = {},
+): Promise<ApiPage<BackendRateLimitEvent>> => {
+    const { limit = 50, offset = 0, ...rest } = options;
+    const safeLimit = Math.min(limit, 200);
+    return apiGet<ApiPage<BackendRateLimitEvent>>("/support/rate-limit-events", {
+        params: { limit: safeLimit, offset, ...rest },
+    });
+};
+
+export const fetchSupportCacheStats = async (): Promise<BackendCacheStatsResponse> => {
+    return apiGet<BackendCacheStatsResponse>("/support/cache-stats");
 };
 
 

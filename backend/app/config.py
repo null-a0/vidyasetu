@@ -49,9 +49,43 @@ class Settings(BaseSettings):
     AI_RATE_LIMIT_BACKEND: str = "database"
     AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS: int = 86400
 
+    # ----- Redis / Celery (Async jobs) -----
+    # Upstash typically uses rediss:// (TLS). Example:
+    # rediss://:<password>@<host>:<port>
+    REDIS_URL: str = ""
+    CELERY_BROKER_URL: str | None = None
+    CELERY_RESULT_BACKEND: str | None = None
+    CELERY_TASK_DEFAULT_QUEUE: str = "vidyasetu"
+
+    AI_JOB_DEDUP_LOCK_TTL_SECONDS: int = 300
+    AI_JOB_IDEMPOTENCY_TTL_SECONDS: int = 86400
+    AI_JOB_PROGRESS_TTL_SECONDS: int = 3600
+    AI_JOB_MAX_RETRIES: int = 5
+    SUPPORT_RERUN_LIMIT_PER_DAY: int = 3
+
+    # ----- Scheduled reports -----
+    # Scheduler ticks are handled by Celery Beat; this controls how far we look ahead.
+    SCHEDULED_REPORT_LOOKAHEAD_SECONDS: int = 120
+
+    # ----- Email (optional) -----
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_USE_TLS: bool = True
+
     @property
     def frontend_origins(self) -> list[str]:
         return [origin.strip() for origin in self.FRONTEND_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def celery_broker_url(self) -> str:
+        return (self.CELERY_BROKER_URL or self.REDIS_URL).strip()
+
+    @property
+    def celery_result_backend(self) -> str:
+        return (self.CELERY_RESULT_BACKEND or self.REDIS_URL).strip()
 
 
 settings = Settings()

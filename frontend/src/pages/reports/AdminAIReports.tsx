@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, RefreshCw, AlertTriangle } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -41,6 +42,7 @@ const AdminAIReports = () => {
   const { user } = useAuth();
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
 
   const [selectedInstitutionId, setSelectedInstitutionId] = useState("");
   const [historyInstitutionFilter, setHistoryInstitutionFilter] = useState("");
@@ -70,10 +72,16 @@ const AdminAIReports = () => {
   });
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const reportIdFromUrl = params.get("report_id");
+    if (reportIdFromUrl) {
+      setSelectedReportId(reportIdFromUrl);
+      return;
+    }
     if (!selectedReportId && historyQuery.data?.items?.length) {
       setSelectedReportId(historyQuery.data.items[0].report_id);
     }
-  }, [historyQuery.data, selectedReportId]);
+  }, [historyQuery.data, selectedReportId, location.search]);
 
   const statusQuery = useQuery({
     queryKey: ["adminAIReportStatus", selectedReportId],
@@ -96,10 +104,15 @@ const AdminAIReports = () => {
     onSuccess: async (data) => {
       setSelectedReportId(data.report_id);
       await queryClient.invalidateQueries({ queryKey: ["adminAIReportsHistory"] });
+      const isReady = data.status === "completed";
       showToast(
-        data.from_cache ? "info" : "success",
-        data.from_cache ? "Loaded Cached Report" : "Report Generated",
-        data.from_cache ? "Reused a previous matching report." : "AI report is ready.",
+        data.from_cache ? "info" : isReady ? "success" : "warning",
+        data.from_cache ? "Loaded Cached Report" : isReady ? "Report Ready" : "Report Queued",
+        data.from_cache
+          ? "Reused a previous matching report."
+          : isReady
+            ? "AI report is ready."
+            : "Generating in background. This page will auto-refresh.",
       );
     },
     onError: (error: unknown) => {
@@ -255,6 +268,12 @@ const AdminAIReports = () => {
                   <div className="rounded-xl border border-border bg-accent/30 p-4">
                     <p className="text-sm text-foreground">Generating report...</p>
                     <p className="text-xs text-muted-foreground mt-1">This page auto-refreshes until the report is complete.</p>
+                    {statusQuery.data?.progress && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {typeof statusQuery.data.progress.message === "string" ? statusQuery.data.progress.message : "Working..."}
+                        {typeof statusQuery.data.progress.percent === "number" ? ` (${statusQuery.data.progress.percent}%)` : ""}
+                      </p>
+                    )}
                   </div>
                 )}
 

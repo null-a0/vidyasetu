@@ -438,6 +438,7 @@ export interface BackendAdminAIReportStatusResponse {
   report_id: string;
   status: "pending" | "processing" | "completed" | "failed";
   error_details?: Record<string, unknown> | null;
+  progress?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -507,5 +508,148 @@ export interface BackendStudentExplanationResponse {
   explanation_id: string;
   status: "pending" | "processing" | "completed" | "failed";
   from_cache: boolean;
+  explanation?: BackendStudentExplanationResult | null;
+}
+
+export interface BackendStudentExplanationStatusResponse {
+  explanation_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  error_details?: Record<string, unknown> | null;
+  progress?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface BackendStudentExplanationResultResponse {
+  explanation_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
   explanation: BackendStudentExplanationResult;
+  created_at?: string | null;
+  updated_at?: string | null;
+  prompt_version: string;
+  model_name: string;
+}
+
+export interface BackendScheduledReportCreateRequest {
+  institution_id?: string | null;
+  report_type?: string;
+  frequency?: "daily" | "weekly";
+  status?: "active" | "paused";
+  window_days?: number;
+  focus_areas?: string[];
+  recipients?: string[];
+  timezone?: string;
+  time_of_day?: string;
+  weekdays?: number[];
+}
+
+export interface BackendScheduledReportUpdateRequest {
+  status?: "active" | "paused";
+  frequency?: "daily" | "weekly";
+  window_days?: number;
+  focus_areas?: string[];
+  recipients?: string[];
+  timezone?: string;
+  time_of_day?: string;
+  weekdays?: number[];
+}
+
+export interface BackendScheduledReport {
+  id: string;
+  created_by_user_id: string;
+  institution_id?: string | null;
+  report_type: string;
+  frequency: "daily" | "weekly";
+  status: "active" | "paused";
+  window_days: number;
+  focus_areas: string[];
+  recipients: string[];
+  timezone: string;
+  time_of_day: string;
+  weekdays: number[];
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface BackendScheduledReportRun {
+  id: string;
+  schedule_id: string;
+  ai_generation_id: string;
+  due_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  status: "pending" | "running" | "completed" | "failed";
+  error_details?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface BackendSupportConfigResponse {
+  celery_queue: string;
+  redis_configured: boolean;
+  smtp_configured: boolean;
+  ai_max_retries: number;
+  ai_retry_base_delay_seconds: number;
+  admin_report_rate_limits: Record<string, unknown>;
+  student_explanation_rate_limits: Record<string, unknown>;
+}
+
+export interface BackendSupportJobListItem {
+  id: string;
+  feature_type: "admin_report" | "student_explanation";
+  status: "pending" | "processing" | "completed" | "failed";
+  requester_user_id: string;
+  institution_id?: string | null;
+  source_entity_type: string;
+  source_entity_id: string;
+  prompt_version: string;
+  model_name: string;
+  retry_count: number;
+  error_details?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  progress?: Record<string, unknown> | null;
+}
+
+export interface BackendSupportJobDetailResponse extends BackendSupportJobListItem {
+  error_trace?: string | null;
+}
+
+export interface BackendSupportRerunResponse {
+  generation_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  queued: boolean;
+  message: string;
+}
+
+export interface BackendAuditLog {
+  id: string;
+  actor_user_id?: string | null;
+  actor_role?: string | null;
+  action: string;
+  target_type?: string | null;
+  target_id?: string | null;
+  metadata: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export interface BackendRateLimitEvent {
+  id: string;
+  key: string;
+  allowed: boolean;
+  remaining: number;
+  retry_after_seconds: number;
+  rule_max_requests: number;
+  rule_window_seconds: number;
+  actor_user_id?: string | null;
+  institution_id?: string | null;
+  created_at?: string | null;
+}
+
+export interface BackendCacheStatsResponse {
+  now: string;
+  ai_generations: Record<string, any>;
+  redis: Record<string, any>;
 }

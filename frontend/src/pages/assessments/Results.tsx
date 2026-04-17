@@ -11,7 +11,12 @@ import VModal from "@/components/ui-custom/VModal";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
 import StudentExplanationPanel from "@/components/assessments/StudentExplanationPanel";
-import { createStudentAnswerExplanation, fetchAssessmentLeaderboard } from "@/services/api";
+import {
+  createStudentAnswerExplanation,
+  fetchAssessmentLeaderboard,
+  fetchStudentExplanationResult,
+  fetchStudentExplanationStatus,
+} from "@/services/api";
 import type { BackendStudentExplanationResult } from "@/api/types";
 
 type ResultState = {
@@ -76,21 +81,58 @@ const Results = () => {
         submission_id: payload.submissionId,
         question_id: payload.questionId,
       }),
-    onSuccess: (data, variables) => {
-      setExplanationsByQuestion((prev) => ({
-        ...prev,
-        [variables.questionId]: data.explanation,
-      }));
-      setExplanationErrorsByQuestion((prev) => {
-        const next = { ...prev };
-        delete next[variables.questionId];
-        return next;
-      });
+    onSuccess: async (data, variables) => {
+      if (data.explanation) {
+        setExplanationsByQuestion((prev) => ({
+          ...prev,
+          [variables.questionId]: data.explanation as BackendStudentExplanationResult,
+        }));
+        setExplanationErrorsByQuestion((prev) => {
+          const next = { ...prev };
+          delete next[variables.questionId];
+          return next;
+        });
+        showToast(
+          data.from_cache ? "info" : "success",
+          data.from_cache ? "Loaded Cached Explanation" : "Explanation Ready",
+          data.from_cache ? "Reused a previous explanation." : "Generated a new explanation.",
+        );
+        return;
+      }
+
       showToast(
-        data.from_cache ? "info" : "success",
-        data.from_cache ? "Loaded Cached Explanation" : "Explanation Ready",
-        data.from_cache ? "Reused a previous explanation." : "Generated a new explanation.",
+        "warning",
+        "Explanation Queued",
+        "Generating in background. This will auto-refresh for a short time.",
       );
+
+      const maxAttempts = 30;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const status = await fetchStudentExplanationStatus(data.explanation_id);
+        if (status.status === "failed") {
+          throw new Error(
+            typeof status.error_details?.message === "string"
+              ? status.error_details.message
+              : "Explanation generation failed.",
+          );
+        }
+        if (status.status !== "completed") continue;
+        const result = await fetchStudentExplanationResult(data.explanation_id);
+        setExplanationsByQuestion((prev) => ({
+          ...prev,
+          [variables.questionId]: result.explanation,
+        }));
+        setExplanationErrorsByQuestion((prev) => {
+          const next = { ...prev };
+          delete next[variables.questionId];
+          return next;
+        });
+        showToast("success", "Explanation Ready", "Generated a new explanation.");
+        return;
+      }
+
+      throw new Error("Explanation is still processing. Please try again in a moment.");
     },
     onError: (error, variables) => {
       setExplanationErrorsByQuestion((prev) => ({
