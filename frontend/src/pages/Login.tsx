@@ -34,7 +34,7 @@ const Login = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, role);
       if (user) {
         const redirect = roleDashboardMap[user.role as UserRole] ?? "/dashboard";
         navigate(redirect);

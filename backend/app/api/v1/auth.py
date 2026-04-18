@@ -69,6 +69,12 @@ async def login(
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Check that the selected role matches the user's actual role
+    if payload.role != user.role.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role mismatch. You must select your assigned role: {user.role.value}",
+        )
     access_token = create_access_token(subject=user.id, role=user.role.value)
     refresh_token = create_refresh_token(subject=user.id, role=user.role.value)
     return Token(access_token=access_token, refresh_token=refresh_token)

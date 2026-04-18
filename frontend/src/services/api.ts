@@ -811,6 +811,7 @@ export const uploadUserProfilePhoto = async (
 export const loginUser = async (payload: {
     email: string;
     password: string;
+    role: string;
 }) => {
     return apiPost<TokenResponse>("/auth/login", payload);
 };

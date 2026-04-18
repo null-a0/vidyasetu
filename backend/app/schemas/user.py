@@ -115,6 +115,7 @@ class InstitutionResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    role: str  # Added: role selected by user
 
 
 class RefreshTokenRequest(BaseModel):

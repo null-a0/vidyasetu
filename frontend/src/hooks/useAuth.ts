@@ -7,7 +7,7 @@ interface AuthContextValue {
   user: BackendUser | null;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<BackendUser | null>;
+  login: (email: string, password: string, role: string) => Promise<BackendUser | null>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -72,11 +72,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [refreshUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, role: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const token = await loginUser({ email, password });
+      const token = await loginUser({ email, password, role });
       setAuthTokens({ accessToken: token.access_token, refreshToken: token.refresh_token ?? null });
       const data = await fetchCurrentUser();
       setUser(data);
