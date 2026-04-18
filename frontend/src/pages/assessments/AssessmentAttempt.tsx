@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, Clock, ChevronLeft, ChevronRight, Flag, Send, Shield, Maximize2 } from "lucide-react";
@@ -34,6 +34,25 @@ const AssessmentAttempt = () => {
   const [rulesModal, setRulesModal] = useState(true);
   const [submitModal, setSubmitModal] = useState(false);
   const [autoSubmitting, setAutoSubmitting] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenRequired, setFullscreenRequired] = useState(false);
+  const warningsRef = useRef(0); // Use ref to avoid stale closure
+
+  // Sync ref with state for display
+  useEffect(() => {
+    warningsRef.current = warnings;
+  }, [warnings]);
+
+  // Track fullscreen state
+  useEffect(() => {
+    if (!started) return;
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    setIsFullscreen(!!document.fullscreenElement);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [started]);
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -44,7 +63,12 @@ const AssessmentAttempt = () => {
       setAttemptData(data);
       setStarted(true);
       setRulesModal(false);
+      setFullscreenRequired(true);
       showToast("info", "Assessment Started", "Good luck!");
+      // Request fullscreen to prevent tab switching
+      document.documentElement.requestFullscreen().catch(() => {
+        // Fullscreen denied - will show warning modal
+      });
     },
     onError: (error: unknown) => {
       showToast("error", "Unable to start assessment", error instanceof Error ? error.message : "Please try again.");
@@ -106,26 +130,62 @@ const AssessmentAttempt = () => {
 
   useEffect(() => {
     if (!started) return;
-    const handler = () => {
-      if (document.hidden) {
-        const newWarnings = warnings + 1;
-        setWarnings(newWarnings);
-        setWarningMessage(`Tab switch detected! Warning ${newWarnings}/${MAX_WARNINGS}. ${newWarnings >= MAX_WARNINGS ? "Your test will be auto-submitted." : "Please stay on this tab."}`);
-        setWarningModal(true);
-        if (newWarnings >= MAX_WARNINGS) {
-          setTimeout(() => void handleSubmit(), 1200);
-        }
+
+    const handleTabSwitch = () => {
+      // Detect tab switch via blur or visibility change
+      const newWarnings = warningsRef.current + 1;
+      setWarnings(newWarnings);
+      setWarningMessage(`Tab switch detected! Warning ${newWarnings}/${MAX_WARNINGS}. ${newWarnings >= MAX_WARNINGS ? "Your test will be auto-submitted." : "Please stay on this tab."}`);
+      setWarningModal(true);
+      if (newWarnings >= MAX_WARNINGS) {
+        setTimeout(() => void handleSubmit(), 1200);
       }
     };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  }, [started, warnings, handleSubmit]);
+
+    // Listen for visibility change (tab switching)
+    const handleVisibility = () => {
+      if (document.hidden) {
+        handleTabSwitch();
+      }
+    };
+
+    // Listen for blur (window loses focus)
+    const handleBlur = () => {
+      handleTabSwitch();
+    };
+
+    // Prevent fullscreen exit - warn if user exits fullscreen
+    const handleFullscreenChange = () => {
+      if (fullscreenRequired && !document.fullscreenElement) {
+        handleTabSwitch();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, [started, handleSubmit, fullscreenRequired]);
+
+  // Cleanup fullscreen on unmount
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!started) return;
     const handler = (e: ClipboardEvent) => {
       e.preventDefault();
-      const newWarnings = warnings + 1;
+      const newWarnings = warningsRef.current + 1;
       setWarnings(newWarnings);
       setWarningMessage(`Copy attempt detected! Warning ${newWarnings}/${MAX_WARNINGS}.`);
       setWarningModal(true);
@@ -136,7 +196,7 @@ const AssessmentAttempt = () => {
     };
     document.addEventListener("copy", handler);
     return () => document.removeEventListener("copy", handler);
-  }, [started, warnings, showToast, handleSubmit]);
+  }, [started, showToast, handleSubmit]);
 
   const handleSelect = (qId: string, optId: string, type?: string | null) => {
     const isMSQ = (type ?? "").toUpperCase() === "MSQ";
@@ -195,7 +255,26 @@ const AssessmentAttempt = () => {
       </div>
     );
   }
-  if (!started || !currentQuestion) {
+  // Show rules modal if not started OR if fullscreen is required but not in fullscreen
+  if (!started || !currentQuestion || (fullscreenRequired && !isFullscreen)) {
+    // If fullscreen is required but not in fullscreen, show a blocking message
+    if (fullscreenRequired && !isFullscreen) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <VCard className="p-8 text-center max-w-md">
+            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <Maximize2 className="h-8 w-8 text-destructive" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground mb-2">Fullscreen Required</h3>
+            <p className="text-sm text-muted-foreground mb-6">Please enter fullscreen mode to continue the assessment.</p>
+            <VButton onClick={() => document.documentElement.requestFullscreen()}>
+              <Maximize2 className="h-4 w-4 mr-2" /> Enter Fullscreen
+            </VButton>
+          </VCard>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <VModal isOpen={rulesModal} onClose={() => {}} title="Assessment Rules" className="max-w-md">
@@ -206,10 +285,11 @@ const AssessmentAttempt = () => {
             </div>
             <ul className="space-y-2.5 text-sm text-muted-foreground">
               <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> You have <strong className="text-foreground">10 minutes</strong> to complete {questions.length || "all"} questions.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Do not switch tabs</strong> — this will trigger a warning.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Copying is not allowed</strong> — attempts will be detected.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> After <strong className="text-foreground">{MAX_WARNINGS} warnings</strong>, your test will be auto-submitted.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> When time runs out, your answers will be <strong className="text-foreground">automatically submitted</strong>.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Fullscreen required</strong> — assessment will run in fullscreen mode.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Do not switch tabs</strong> — this will trigger a warning.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> <strong className="text-foreground">Copying is not allowed</strong> — attempts will be detected.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> After <strong className="text-foreground">{MAX_WARNINGS} warnings</strong>, your test will be auto-submitted.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">6.</span> When time runs out, your answers will be <strong className="text-foreground">automatically submitted</strong>.</li>
             </ul>
             <div className="flex justify-end gap-3 pt-2">
               <VButton variant="ghost" onClick={() => navigate("/assessments")}>Cancel</VButton>
