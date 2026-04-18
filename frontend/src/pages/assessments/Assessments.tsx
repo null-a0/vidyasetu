@@ -298,7 +298,7 @@ const AssessmentsPage = () => {
       </VModal>
 
       {/* Question Builder Modal */}
-      <VModal isOpen={questionModal} onClose={() => setQuestionModal(false)} title={`Questions â€” ${selected?.title || ""}`} className="max-w-2xl">
+      <VModal isOpen={questionModal} onClose={() => setQuestionModal(false)} title={`Questions |  ${selected?.title || ""}`} className="max-w-2xl">
         <div className="space-y-4 max-h-96 overflow-y-auto">
           {displayQuestions.map((q, i) => (
             <VCard key={i} className="p-4">
