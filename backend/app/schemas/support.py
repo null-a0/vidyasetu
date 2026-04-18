@@ -3,10 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 from app.models import AIFeatureType, AIGenerationStatus
 from app.schemas.base import Page
+from pydantic import BaseModel, Field
 
 
 class SupportConfigResponse(BaseModel):
@@ -58,7 +57,7 @@ class AuditLogResponse(BaseModel):
     action: str
     target_type: str | None = None
     target_id: str | None = None
-    metadata: dict[str, Any]
+    metadata_: dict[str, Any]
     created_at: datetime | None = None
 
 
@@ -88,4 +87,3 @@ class JobQueryParams(BaseModel):
     feature_type: str | None = None
     institution_id: str | None = None
     requester_user_id: str | None = None
-

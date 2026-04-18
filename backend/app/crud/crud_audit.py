@@ -3,10 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.models import AuditLog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models import AuditLog
 
 
 async def create_audit_log(
@@ -17,7 +16,7 @@ async def create_audit_log(
     action: str,
     target_type: str | None = None,
     target_id: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    metadata_: dict[str, Any] | None = None,
 ) -> AuditLog:
     row = AuditLog(
         actor_user_id=actor_user_id,
@@ -25,7 +24,7 @@ async def create_audit_log(
         action=action,
         target_type=target_type,
         target_id=target_id,
-        metadata=metadata or {},
+        metadata_=metadata_ or {},
     )
     db.add(row)
     await db.flush()
@@ -57,4 +56,3 @@ async def list_audit_logs(
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
     rows = (await db.execute(q.offset(offset).limit(limit))).scalars().all()
     return list(rows), int(total or 0)
-
