@@ -41,6 +41,12 @@ This resets the SQLite database, recreates the schema, and loads linked demo dat
 uvicorn app.main:app --reload
 ```
 
+OR
+
+```sh
+python -m uvicorn app.main:app --reload
+```
+
 This will create `backend/vidyasetu.db` locally when using the default SQLite configuration.
 
 ## GenAI setup (Admin AI Reports)
