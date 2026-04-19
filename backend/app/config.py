@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     # ----- Redis / Celery (Async jobs) -----
     # Upstash typically uses rediss:// (TLS). Example:
     # rediss://:<password>@<host>:<port>
-    REDIS_URL: str = ""
+    REDIS_URL: str = "rediss://default:gQAAAAAAAY6gAAIocDI1YjkxMTQyZDkwY2M0MDVmODdkODg2MDQxYWMxOGRkM3AyMTAyMDQ4@exotic-stud-102048.upstash.io:6379"
     CELERY_BROKER_URL: str | None = None
     CELERY_RESULT_BACKEND: str | None = None
     CELERY_TASK_DEFAULT_QUEUE: str = "vidyasetu"

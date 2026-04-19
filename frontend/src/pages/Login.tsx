@@ -1,7 +1,7 @@
 ﻿import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { GraduationCap, ArrowRight, ArrowLeft } from "lucide-react";
+import { GraduationCap, ArrowRight, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import VButton from "@/components/ui-custom/VButton";
 import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
@@ -28,6 +28,7 @@ const Login = () => {
   const [email, setEmail] = useState("admin@vidyasetu.edu");
   const [password, setPassword] = useState("admin123");
   const [role, setRole] = useState<UserRole>("admin");
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useAuth();
   const navigate = useNavigate();
 
@@ -101,7 +102,25 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <VInput id="email" label="Email" type="email" placeholder="user@vidyasetu.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <VInput id="password" label="Password" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={password} onChange={(e) => setPassword(e.target.value)} />
+            
+            <div className="relative">
+              <VInput 
+                id="password" 
+                label="Password" 
+                type={showPassword ? "text" : "password"} 
+                placeholder="••••••••" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-[38px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
             <VSelect id="role" label="Sign in as" options={roleOptions} value={role} onChange={(e) => setRole(e.target.value as UserRole)} />
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -128,4 +147,3 @@ const Login = () => {
 };
 
 export default Login;
-

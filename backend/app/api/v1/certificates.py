@@ -3,32 +3,25 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import PaginationParams, get_current_user, get_db, require_role
+from app.api.deps import (PaginationParams, get_current_user, get_db,
+                          require_role)
 from app.config import settings
-from app.crud.crud_misc import (
-    create_certificate,
-    create_notification,
-    get_certificate,
-    get_certificate_by_code,
-    get_certificates_by_student,
-)
+from app.crud.crud_misc import (create_certificate, create_notification,
+                                get_certificate, get_certificate_by_code,
+                                get_certificates_by_student)
 from app.crud.crud_user import get_user
 from app.crud.crud_workshop import get_workshop
 from app.models import Certificate, NotificationType, User, UserRole, Workshop
 from app.schemas.base import Page
-from app.schemas.misc import (
-    CertificateCreate,
-    CertificateDownloadResponse,
-    CertificateRecommendationRequest,
-    CertificateRecommendationResponse,
-    CertificateResponse,
-    NotificationCreate,
-)
-from app.services.certificate import generate_certificate_pdf, generate_verification_code
+from app.schemas.misc import (CertificateCreate, CertificateDownloadResponse,
+                              CertificateRecommendationRequest,
+                              CertificateRecommendationResponse,
+                              CertificateResponse, NotificationCreate)
+from app.services.certificate import (generate_certificate_pdf,
+                                      generate_verification_code)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
 
@@ -112,15 +105,18 @@ async def generate_certificate(
 ) -> CertificateResponse:
     student = await get_user(db, payload.student_id)
     if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
 
     workshop = await get_workshop(db, payload.workshop_id)
     if not workshop:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
 
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         if workshop.institution_id != current_user.institution_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     verification_code = generate_verification_code()
     cert = await create_certificate(db, payload, verification_code=verification_code)
@@ -153,15 +149,18 @@ async def get_one(
 ) -> CertificateResponse:
     cert = await get_certificate(db, certificate_id)
     if not cert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Certificate not found.")
 
     if current_user.role == UserRole.STUDENT and cert.student_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         workshop = await get_workshop(db, cert.workshop_id)
         if not workshop or workshop.institution_id != current_user.institution_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     return await _enrich(db, cert)
 
@@ -178,12 +177,14 @@ async def list_by_student(
     current_user: User = Depends(get_current_user),
 ) -> Page[CertificateResponse]:
     if current_user.role == UserRole.STUDENT and current_user.id != student_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     # Institution-scoped staff: only return certificates tied to their institution's workshops.
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         if not current_user.institution_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
         items, total = await get_certificates_by_student(db, student_id, offset=page.offset, limit=page.limit)
         # Filter to certificates whose workshop belongs to the caller's institution.
         scoped: list[Certificate] = []
@@ -210,7 +211,8 @@ async def verify_certificate(
 ) -> CertificateResponse:
     cert = await get_certificate_by_code(db, verification_code)
     if not cert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No certificate found with this verification code.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="No certificate found with this verification code.")
 
     response = await _enrich(db, cert)
     response.qr_url = _build_qr_url(verification_code)
@@ -225,19 +227,23 @@ async def verify_certificate(
 async def recommend_certificate(
     payload: CertificateRecommendationRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.EDUCATOR, UserRole.INSTITUTION_ADMIN, UserRole.ADMIN)),
+    current_user: User = Depends(require_role(
+        UserRole.EDUCATOR, UserRole.INSTITUTION_ADMIN, UserRole.ADMIN)),
 ) -> CertificateRecommendationResponse:
     student = await get_user(db, payload.student_id)
     if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
 
     workshop = await get_workshop(db, payload.workshop_id)
     if not workshop:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workshop not found.")
 
     if current_user.role in (UserRole.EDUCATOR, UserRole.INSTITUTION_ADMIN):
         if workshop.institution_id != current_user.institution_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     institution_admin_ids = (
         await db.execute(
@@ -293,19 +299,23 @@ async def certificate_download_url(
     current_user: User = Depends(get_current_user),
 ) -> CertificateDownloadResponse:
     logger = logging.getLogger(__name__)
-    logger.info(f"Download request for certificate: {certificate_id} by user: {current_user.id} role: {current_user.role}")
-    
+    logger.info(
+        f"Download request for certificate: {certificate_id} by user: {current_user.id} role: {current_user.role}")
+
     cert = await get_certificate(db, certificate_id)
     if not cert:
         logger.warning(f"Certificate not found: {certificate_id}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Certificate not found.")
 
     if current_user.role == UserRole.STUDENT and cert.student_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         workshop = await get_workshop(db, cert.workshop_id)
         if not workshop or workshop.institution_id != current_user.institution_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     relative_pdf = f"media/certificates/{cert.id}.pdf"
     if not Path(relative_pdf).exists():
