@@ -1,7 +1,7 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { GraduationCap, ArrowRight, ArrowLeft } from "lucide-react";
+import { GraduationCap, ArrowRight, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import VButton from "@/components/ui-custom/VButton";
 import VInput from "@/components/ui-custom/VInput";
 import VSelect from "@/components/ui-custom/VSelect";
@@ -20,6 +20,7 @@ const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("student");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useVToast();
@@ -100,7 +101,25 @@ const SignUp = () => {
           <form onSubmit={handleSubmit} className="space-y-5">
             <VInput id="name" label="Full Name" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} />
             <VInput id="email" label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <VInput id="password" label="Password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+            
+            <div className="relative">
+              <VInput 
+                id="password" 
+                label="Password" 
+                type={showPassword ? "text" : "password"} 
+                placeholder="••••••••" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-[38px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
             <VSelect id="role" label="I am a" options={roleOptions} value={role} onChange={(e) => setRole(e.target.value as UserRole)} />
 
             <VButton type="submit" isLoading={isLoading} className="w-full" size="lg">
