@@ -462,7 +462,13 @@ const AdminDashboard = () => {
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Workshop">
         <div className="space-y-4">
           <VInput id="create-name" label="Workshop Name" placeholder="e.g. React Fundamentals" value={formName} onChange={(e) => setFormName(e.target.value)} />
-          <VInput id="create-inst" label="Institution" placeholder="e.g. IIT Delhi" value={formInstitution} onChange={(e) => setFormInstitution(e.target.value)} />
+          <VSelect 
+            id="create-inst" 
+            label="Institution" 
+            value={formInstitution} 
+            onChange={(e) => setFormInstitution(e.target.value)} 
+            options={[{ value: "", label: "Select Institution" }, ...institutions.map(i => ({ value: i.name, label: i.name }))]}
+          />
           <div className="space-y-1.5"><label className="vidya-label">Description</label><textarea placeholder="Workshop description..." value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={3} className="vidya-input resize-none" /></div>
           <VSelect id="create-status" label="Status" value={formStatus} onChange={(e) => setFormStatus(e.target.value)} options={[
             { value: "Upcoming", label: "Upcoming" },

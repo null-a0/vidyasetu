@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Search, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react';
+import { Bell, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeSwitcher from '@/components/ui-custom/ThemeSwitcher';
 import { useVToast } from '@/components/ui-custom/VToast';
@@ -8,16 +8,14 @@ interface TopbarProps {
   title: string;
   userName?: string;
   onMenuToggle?: () => void;
-  onSearch?: (query: string) => void;
   onLogout?: () => void;
 }
 
-const Topbar = ({ title, userName = 'User', onMenuToggle, onSearch, onLogout }: TopbarProps) => {
+const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProps) => {
   const navigate = useNavigate();
   const { showToast } = useVToast();
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchVal, setSearchVal] = useState('');
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -40,15 +38,6 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onSearch, onLogout }: 
     onLogout?.();
     showToast('success', 'Logged out', 'You have been signed out successfully.');
     navigate('/login');
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchVal.trim();
-    if (onSearch && q) {
-      onSearch(q);
-      showToast('info', 'Searching...', `Results for "${q}".`);
-    }
   };
 
   const today = new Date().toLocaleDateString('en-US', {
@@ -80,20 +69,6 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onSearch, onLogout }: 
           <p className="text-sm font-semibold text-foreground leading-tight">{title}</p>
           <span className="text-xs text-muted-foreground hidden xl:block">{today}</span>
         </div>
-
-        <form onSubmit={handleSearch} className="relative hidden sm:block ml-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchVal}
-            onChange={(e) => {
-              setSearchVal(e.target.value);
-              onSearch?.(e.target.value);
-            }}
-            className="h-9 w-48 md:w-72 rounded-xl border border-input bg-muted/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
-          />
-        </form>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">

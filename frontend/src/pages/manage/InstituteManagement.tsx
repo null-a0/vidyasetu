@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Eye, Search, Building2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Eye, Search, Building2, Plus } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VTable from "@/components/ui-custom/VTable";
 import VBadge from "@/components/ui-custom/VBadge";
 import VModal from "@/components/ui-custom/VModal";
-import { fetchInstitutions, fetchUsers, fetchWorkshops } from "@/services/api";
+import VButton from "@/components/ui-custom/VButton";
+import VInput from "@/components/ui-custom/VInput";
+import { useVToast } from "@/components/ui-custom/VToast";
+import { fetchInstitutions, fetchUsers, fetchWorkshops, createInstitution } from "@/services/api";
 import type { BackendInstitution, BackendUser } from "@/api/types";
 
 interface InstituteRow {
@@ -21,9 +24,13 @@ interface InstituteRow {
 }
 
 const InstituteManagement = () => {
+  const { showToast } = useVToast();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InstituteRow | null>(null);
   const [viewModal, setViewModal] = useState(false);
+  const [addModal, setAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", code: "", address: "", contact_email: "", contact_phone: "" });
 
   const {
     data: institutions = [],
@@ -73,7 +80,7 @@ const InstituteManagement = () => {
       id: i.id,
       name: i.name,
       code: `INST-${i.id.slice(0, 8).toUpperCase()}`,
-      location: i.address ?? "—",
+      location: i.address ?? "ï¿½",
       workshops: workshopsByInstName[i.name] ?? 0,
       educators: educatorCountByInst[i.id] ?? 0,
       students: studentCountByInst[i.id] ?? 0,
@@ -188,6 +195,11 @@ const InstituteManagement = () => {
         </div>
       )}
 
+      <div className="flex items-center justify-between mb-4">
+        <input type="text" placeholder="Search institutions..." value={search} onChange={(e) => setSearch(e.target.value)} className="vidya-input w-64" />
+        <VButton onClick={() => setAddModal(true)}><Plus className="h-4 w-4 mr-1" /> Add Institution</VButton>
+      </div>
+
       <div className="overflow-x-auto">
         <VTable columns={columns} data={filtered} emptyText={emptyText} />
       </div>
@@ -228,6 +240,35 @@ const InstituteManagement = () => {
             </div>
           </div>
         )}
+      </VModal>
+
+      {/* Add Institution Modal */}
+      <VModal isOpen={addModal} onClose={() => setAddModal(false)} title="Add Institution">
+        <div className="space-y-4">
+          <VInput label="Institution Name" value={addForm.name} onChange={e => setAddForm({ ...addForm, name: e.target.value })} placeholder="e.g. IIT Delhi" />
+          <VInput label="Code" value={addForm.code} onChange={e => setAddForm({ ...addForm, code: e.target.value })} placeholder="e.g. IITD" />
+          <VInput label="Address" value={addForm.address} onChange={e => setAddForm({ ...addForm, address: e.target.value })} placeholder="City, State" />
+          <VInput label="Contact Email" value={addForm.contact_email} onChange={e => setAddForm({ ...addForm, contact_email: e.target.value })} placeholder="contact@institution.edu" />
+          <VInput label="Contact Phone" value={addForm.contact_phone} onChange={e => setAddForm({ ...addForm, contact_phone: e.target.value })} placeholder="+91 1234567890" />
+          <div className="flex justify-end gap-3">
+            <VButton variant="ghost" onClick={() => setAddModal(false)}>Cancel</VButton>
+            <VButton onClick={async () => {
+              if (!addForm.name.trim()) {
+                showToast("error", "Error", "Institution name is required.");
+                return;
+              }
+              try {
+                await createInstitution(addForm);
+                queryClient.invalidateQueries({ queryKey: ["institutions"] });
+                setAddModal(false);
+                setAddForm({ name: "", code: "", address: "", contact_email: "", contact_phone: "" });
+                showToast("success", "Success", "Institution created successfully.");
+              } catch (err: unknown) {
+                showToast("error", "Error", err instanceof Error ? err.message : "Failed to create institution.");
+              }
+            }}>Create</VButton>
+          </div>
+        </div>
       </VModal>
     </DashboardLayout>
   );

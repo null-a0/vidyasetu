@@ -737,6 +737,7 @@ export const uploadModuleMaterial = async (
     return apiPost<BackendModule>(
         `/modules/${moduleId}/materials/upload`,
         formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
     );
 };
 
@@ -864,6 +865,16 @@ export const fetchInstitutions = async (): Promise<BackendInstitution[]> => {
     return apiGet<BackendInstitution[]>("/institutions/", {
         params: { limit: 200 },
     });
+};
+
+export const createInstitution = async (payload: {
+    name: string;
+    code?: string;
+    address?: string;
+    contact_email?: string;
+    contact_phone?: string;
+}): Promise<BackendInstitution> => {
+    return apiPost<BackendInstitution>("/institutions/", payload);
 };
 
 export const fetchUsers = async (

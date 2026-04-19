@@ -52,11 +52,31 @@ const MaterialsPage = () => {
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!fileToUpload) throw new Error("Please choose a file.");
+      if (!formTitle.trim()) throw new Error("Please enter a title.");
+      if (!formWorkshop) throw new Error("Please select a workshop.");
+      
       const workshop = workshops.find((item) => item.name === formWorkshop);
       if (!workshop) throw new Error("Select a valid workshop.");
+      
       const modules = await fetchWorkshopModules(workshop.id);
       if (modules.length === 0) throw new Error("No module exists for this workshop. Create a module first.");
-      return uploadModuleMaterial(modules[0].id, fileToUpload);
+      
+      // Create a new file with the custom title as filename
+      const customFileName = formTitle.trim();
+      const fileWithCustomName = new File([fileToUpload], customFileName, { type: fileToUpload.type });
+      
+      try {
+        return await uploadModuleMaterial(modules[0].id, fileWithCustomName);
+      } catch (err: unknown) {
+        // Provide more helpful error message
+        if (err instanceof Error && err.message.includes("403")) {
+          throw new Error("You don't have permission to upload materials. Please contact your administrator.");
+        }
+        if (err instanceof Error && err.message.includes("401")) {
+          throw new Error("Your session has expired. Please log in again.");
+        }
+        throw err;
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["materials"] });
@@ -65,7 +85,7 @@ const MaterialsPage = () => {
       showToast("success", "Material Uploaded");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Upload Failed", err instanceof Error ? err.message : "Unable to upload material.");
+      showToast("error", "Upload Failed", err instanceof Error ? err.message : "Unable to upload material.");
     },
   });
 
@@ -80,7 +100,7 @@ const MaterialsPage = () => {
       showToast("success", "Material Deleted");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Delete Failed", err instanceof Error ? err.message : "Unable to delete material.");
+      showToast("error", "Delete Failed", err instanceof Error ? err.message : "Unable to delete material.");
     },
   });
   const downloadMutation = useMutation({
@@ -93,7 +113,7 @@ const MaterialsPage = () => {
       showToast("success", "Downloaded", "Download started.");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Download Failed", err instanceof Error ? err.message : "Unable to download material.");
+      showToast("error", "Download Failed", err instanceof Error ? err.message : "Unable to download material.");
     },
   });
 
@@ -128,12 +148,17 @@ const MaterialsPage = () => {
       <VModal isOpen={uploadModal} onClose={() => setUploadModal(false)} title="Upload Material">
         <div className="space-y-4">
           <VInput label="Title" placeholder="Material title" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
-          <VInput label="Workshop" placeholder="Workshop name" value={formWorkshop} onChange={e => setFormWorkshop(e.target.value)} />
+          <VSelect 
+            label="Workshop" 
+            value={formWorkshop} 
+            onChange={e => setFormWorkshop(e.target.value)} 
+            options={[{ value: "", label: "Select a workshop" }, ...workshops.map(w => ({ value: w.name, label: w.name }))]}
+          />
           <VSelect label="File Type" value={formType} onChange={e => setFormType(e.target.value)} options={[
             { value: "PDF", label: "PDF Document" }, { value: "PPTX", label: "Presentation" }, { value: "DOC", label: "Document" }, { value: "TXT", label: "Text File" },
           ]} />
           <VInput label="File" type="file" onChange={(e) => setFileToUpload((e.target as HTMLInputElement).files?.[0] ?? null)} />
-          <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setUploadModal(false)}>Cancel</VButton><VButton onClick={() => uploadMutation.mutate()} disabled={!formTitle || !fileToUpload || uploadMutation.isPending}>Upload</VButton></div>
+          <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setUploadModal(false)}>Cancel</VButton><VButton onClick={() => uploadMutation.mutate()} disabled={!formTitle || !formWorkshop || !fileToUpload || uploadMutation.isPending}>Upload</VButton></div>
         </div>
       </VModal>
 

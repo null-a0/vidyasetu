@@ -7,10 +7,9 @@ import { useAuth } from '@/hooks/useAuth';
 interface DashboardLayoutProps {
   title: string;
   children: ReactNode;
-  onSearch?: (query: string) => void;
 }
 
-const DashboardLayout = ({ title, children, onSearch }: DashboardLayoutProps) => {
+const DashboardLayout = ({ title, children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, isLoading, logout } = useAuth();
@@ -52,7 +51,6 @@ const DashboardLayout = ({ title, children, onSearch }: DashboardLayoutProps) =>
           title={title}
           userName={user?.name ?? undefined}
           onMenuToggle={() => setSidebarOpen(true)}
-          onSearch={onSearch}
           onLogout={handleLogout}
         />
         <main className="p-4 sm:p-6 lg:p-8">{children}</main>
