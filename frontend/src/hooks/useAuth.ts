@@ -1,4 +1,5 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import i18n from '@/lib/i18n';
 import { loginUser, fetchCurrentUser } from '@/services/api';
 import { AUTH_CHANGED_EVENT, TOKEN_STORAGE_KEY, setAuthTokens, getAccessToken, clearAccessToken, isApiError } from '@/api/client';
 import type { BackendUser } from '@/api/types';
@@ -33,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         return;
       }
-      setError(err instanceof Error ? err.message : 'Unable to refresh session.');
+      setError(err instanceof Error ? err.message : i18n.t('auth.errors.refreshFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(data);
       return data;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : i18n.t('auth.errors.loginFailed'));
       throw err;
     } finally {
       setIsLoading(false);

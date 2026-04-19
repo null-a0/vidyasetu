@@ -24,18 +24,18 @@ export const useTheme = () => useContext(ThemeContext);
 
 export const themeConfig: Record<
     ThemeName,
-    { label: string; accent: string; bg: string; emoji: string }
+    { labelKey: string; accent: string; bg: string; emoji: string }
 > = {
-    day: { label: "Day", accent: "#3B82F6", bg: "#F8FAFC", emoji: "☀️" },
-    night: { label: "Night", accent: "#60A5FA", bg: "#020617", emoji: "🌙" },
+    day: { labelKey: "common.themeOptions.day", accent: "#3B82F6", bg: "#F8FAFC", emoji: "☀️" },
+    night: { labelKey: "common.themeOptions.night", accent: "#60A5FA", bg: "#020617", emoji: "🌙" },
     sunset: {
-        label: "Sunset",
+        labelKey: "common.themeOptions.sunset",
         accent: "#F97316",
         bg: "#FAF6F2",
         emoji: "🌅",
     },
     forest: {
-        label: "Forest",
+        labelKey: "common.themeOptions.forest",
         accent: "#059669",
         bg: "#F0FDF4",
         emoji: "🌲",
