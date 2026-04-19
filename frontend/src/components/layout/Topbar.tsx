@@ -1,0 +1,204 @@
+import { useEffect, useRef, useState } from 'react';
+import { Bell, Search, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import ThemeSwitcher from '@/components/ui-custom/ThemeSwitcher';
+import { useVToast } from '@/components/ui-custom/VToast';
+
+interface TopbarProps {
+  title: string;
+  userName?: string;
+  onMenuToggle?: () => void;
+  onSearch?: (query: string) => void;
+  onLogout?: () => void;
+}
+
+const Topbar = ({ title, userName = 'User', onMenuToggle, onSearch, onLogout }: TopbarProps) => {
+  const navigate = useNavigate();
+  const { showToast } = useVToast();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchVal, setSearchVal] = useState('');
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const notifications = [
+    { id: '1', text: 'New assessment published', time: '2 min ago', unread: true },
+    { id: '2', text: 'Workshop starting soon', time: '1 hour ago', unread: true },
+    { id: '3', text: 'Results are now available', time: '3 hours ago', unread: false },
+  ];
+
+  const handleLogout = () => {
+    onLogout?.();
+    showToast('success', 'Logged out', 'You have been signed out successfully.');
+    navigate('/login');
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchVal.trim();
+    if (onSearch && q) {
+      onSearch(q);
+      showToast('info', 'Searching...', `Results for "${q}".`);
+    }
+  };
+
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const initials = userName
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-md px-4 sm:px-6 lg:px-8">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMenuToggle}
+          className="lg:hidden rounded-xl p-2 text-muted-foreground hover:bg-accent transition-all"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="flex flex-col">
+          <p className="text-sm font-semibold text-foreground leading-tight">{title}</p>
+          <span className="text-xs text-muted-foreground hidden xl:block">{today}</span>
+        </div>
+
+        <form onSubmit={handleSearch} className="relative hidden sm:block ml-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchVal}
+            onChange={(e) => {
+              setSearchVal(e.target.value);
+              onSearch?.(e.target.value);
+            }}
+            className="h-9 w-48 md:w-72 rounded-xl border border-input bg-muted/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+          />
+        </form>
+      </div>
+
+      <div className="flex items-center gap-1 sm:gap-2">
+        <ThemeSwitcher />
+
+        {/* Notifications dropdown */}
+        <div ref={notifRef} className="relative">
+          <button
+            onClick={() => setNotifOpen((v) => !v)}
+            className="relative rounded-xl p-2 text-muted-foreground hover:bg-accent transition-all"
+          >
+            <Bell className="h-5 w-5" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+          </button>
+          {notifOpen && (
+            <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-border bg-card shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="px-4 py-3 border-b border-border">
+                <p className="text-sm font-semibold text-foreground">Notifications</p>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {notifications.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      setNotifOpen(false);
+                      navigate('/notifications');
+                      showToast('info', n.text);
+                    }}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent/50 transition-colors"
+                  >
+                    <div
+                      className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${n.unread ? 'bg-destructive' : 'bg-muted'}`}
+                    />
+                    <div>
+                      <p className="text-sm text-foreground">{n.text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{n.time}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  setNotifOpen(false);
+                  navigate('/notifications');
+                }}
+                className="w-full px-4 py-3 text-sm text-primary font-medium border-t border-border hover:bg-accent/50 transition-colors"
+              >
+                View all notifications
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Profile dropdown */}
+        <div ref={profileRef} className="relative">
+          <button
+            onClick={() => setProfileOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-accent transition-all cursor-pointer"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full vidya-gradient text-primary-foreground text-xs font-bold">
+              {initials}
+            </div>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
+          </button>
+          {profileOpen && (
+            <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-border bg-card shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="px-4 py-3 border-b border-border">
+                <p className="text-sm font-semibold text-foreground">{userName}</p>
+                <p className="text-xs text-muted-foreground">Logged in</p>
+              </div>
+              <div className="p-1">
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
+                    navigate('/profile');
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-foreground hover:bg-accent transition-colors"
+                >
+                  <User className="h-4 w-4 text-muted-foreground" /> My Profile
+                </button>
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
+                    showToast('info', 'Settings', 'Settings page coming soon');
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-foreground hover:bg-accent transition-colors"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+                </button>
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
+                    handleLogout();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> Sign out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Topbar;
