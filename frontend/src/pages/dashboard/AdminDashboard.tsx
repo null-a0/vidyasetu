@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, BookOpen, Users, GraduationCap, TrendingUp, TrendingDown, Plus, Eye, Pencil, Trash2, Zap, ArrowRight } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Bar, BarChart } from "recharts";
@@ -36,6 +37,7 @@ const statCards = [
 const AdminDashboard = () => {
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: stats } = useQuery({ queryKey: ["adminStats"], queryFn: fetchAdminStats });
   const insightsQuery = useQuery({ queryKey: ["adminDashboardInsights"], queryFn: fetchAdminDashboardInsights });
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
@@ -242,9 +244,9 @@ const AdminDashboard = () => {
 
   const quickActions = [
     { label: "Create Workshop", icon: Plus, action: handleCreate },
-    { label: "View Reports", icon: TrendingUp, action: () => { window.location.href = "/reports"; showToast("info", "Navigating to Reports"); } },
-    { label: "Manage Students", icon: Users, action: () => showToast("info", "Students", "Student management panel opening...") },
-    { label: "Issue Certificates", icon: GraduationCap, action: () => { window.location.href = "/certificates"; } },
+    { label: "View Reports", icon: TrendingUp, action: () => { navigate("/reports"); showToast("info", "Navigating to Reports"); } },
+    { label: "Manage Students", icon: Users, action: () => { navigate("/manage/students"); } },
+    { label: "Issue Certificates", icon: GraduationCap, action: () => { navigate("/certificates"); } },
   ];
 
   return (

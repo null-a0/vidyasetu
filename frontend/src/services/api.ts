@@ -949,6 +949,16 @@ export const paySalary = async (payload: {
     });
 };
 
+export const updateEducatorSalary = async (
+    educatorId: string,
+    payload: {
+        salary_amount: number;
+        salary_type: string;
+    },
+) => {
+    return apiPatch<BackendUser>(`/users/${educatorId}/salary`, payload);
+};
+
 export const fetchWorkshopAnalytics = async (
     workshopId: string,
 ): Promise<WorkshopAnalyticsView> => {

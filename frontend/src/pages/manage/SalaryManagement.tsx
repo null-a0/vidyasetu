@@ -1,21 +1,25 @@
 import { useMemo, useState } from "react";
-import { DollarSign, Search, CheckCircle2 } from "lucide-react";
+import { DollarSign, Search, CheckCircle2, Pencil } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VTable from "@/components/ui-custom/VTable";
 import VBadge from "@/components/ui-custom/VBadge";
 import VButton from "@/components/ui-custom/VButton";
+import VModal from "@/components/ui-custom/VModal";
+import VInput from "@/components/ui-custom/VInput";
+import VSelect from "@/components/ui-custom/VSelect";
 import { useVToast } from "@/components/ui-custom/VToast";
 import { useRole } from "@/hooks/useRole";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchAllUsers, fetchInstitutions, fetchSalaryPayments, paySalary } from "@/services/api";
+import { fetchAllUsers, fetchInstitutions, fetchSalaryPayments, paySalary, updateEducatorSalary } from "@/services/api";
 
 interface SalaryRecord {
   id: string;
   name: string;
   institution: string;
   salary: number | null;
+  salaryType: string;
   monthlyStatus: "Paid" | "Unpaid";
   type: string;
 }
@@ -72,14 +76,15 @@ const SalaryManagement = () => {
     return scoped.map((u) => {
       const paidRecord = paidLookup[u.id];
       const paid = !!paidRecord;
-      const salary = paidRecord?.amount ?? null;
+      const salary = paidRecord?.amount ?? (u.salary_amount ?? 0);
       return {
         id: u.id,
         name: u.name || u.email,
         institution: u.institution_id ? institutionLookup[u.institution_id] ?? u.institution_id : "",
-        salary,
+        salary: salary > 0 ? salary : null,
+        salaryType: u.salary_type || "monthly",
         monthlyStatus: paid ? "Paid" : "Unpaid",
-        type: "Not available",
+        type: u.salary_type || "monthly",
       };
     });
   }, [institutionLookup, isInstitutionAdmin, paidLookup, user?.institution_id, usersQuery.data]);
@@ -125,21 +130,60 @@ const SalaryManagement = () => {
     },
   });
 
+  const [editingSalary, setEditingSalary] = useState<SalaryRecord | null>(null);
+  const [salaryAmount, setSalaryAmount] = useState("");
+  const [salaryType, setSalaryType] = useState("monthly");
+
+  const updateSalaryMutation = useMutation({
+    mutationFn: async (payload: { educatorId: string; salaryAmount: number; salaryType: string }) => {
+      return updateEducatorSalary(payload.educatorId, { salary_amount: payload.salaryAmount, salary_type: payload.salaryType });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+      showToast("success", "Salary Updated", "Educator salary has been updated.");
+      setEditingSalary(null);
+    },
+    onError: (err: unknown) => {
+      showToast("destructive", "Update Failed", err instanceof Error ? err.message : "Unable to update salary.");
+    },
+  });
+
+  const handleEditSalary = (record: SalaryRecord) => {
+    setEditingSalary(record);
+    setSalaryAmount(record.salary?.toString() || "0");
+    setSalaryType(record.salaryType || "monthly");
+  };
+
+  const handleSaveSalary = () => {
+    if (!editingSalary) return;
+    updateSalaryMutation.mutate({
+      educatorId: editingSalary.id,
+      salaryAmount: parseInt(salaryAmount) || 0,
+      salaryType,
+    });
+  };
+
   const columns = [
     { key: "name", header: "Educator" },
     { key: "institution", header: "Institution" },
     { key: "type", header: "Type", render: (r: SalaryRecord) => <VBadge variant="outline">{r.type}</VBadge> },
-    { key: "salary", header: "Salary", render: (r: SalaryRecord) => r.salary === null ? <span className="text-muted-foreground">Not available</span> : <span className="font-bold text-foreground">INR {r.salary.toLocaleString()}</span> },
+    { key: "salary", header: "Salary", render: (r: SalaryRecord) => r.salary === null ? <span className="text-muted-foreground">Not set</span> : <span className="font-bold text-foreground">INR {r.salary.toLocaleString()}</span> },
     { key: "monthlyStatus", header: "Status", render: (r: SalaryRecord) => <VBadge variant={r.monthlyStatus === "Paid" ? "success" : "warning"}>{r.monthlyStatus}</VBadge> },
-    { key: "actions", header: "Action", render: (r: SalaryRecord) => r.monthlyStatus === "Unpaid" ? (
-      r.salary === null ? (
-        <span className="text-xs text-muted-foreground">Set salary in backend</span>
-      ) : (
-        <VButton size="sm" onClick={() => payMutation.mutate({ educatorId: r.id, amount: r.salary as number })} disabled={!isAdmin} isLoading={payMutation.isPending}>
-          <DollarSign className="h-3.5 w-3.5" /> Pay
+    { key: "actions", header: "Actions", render: (r: SalaryRecord) => (
+      <div className="flex gap-1">
+        <VButton variant="ghost" size="sm" onClick={() => handleEditSalary(r)} disabled={!isAdmin} title="Edit Salary">
+          <Pencil className="h-3.5 w-3.5" />
         </VButton>
-      )
-    ) : <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Done</span> },
+        {r.monthlyStatus === "Unpaid" && r.salary !== null && (
+          <VButton size="sm" onClick={() => payMutation.mutate({ educatorId: r.id, amount: r.salary as number })} disabled={!isAdmin} isLoading={payMutation.isPending}>
+            <DollarSign className="h-3.5 w-3.5" /> Pay
+          </VButton>
+        )}
+        {r.monthlyStatus === "Paid" && (
+          <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /></span>
+        )}
+      </div>
+    )},
   ];
 
   const emptyText =
@@ -186,6 +230,42 @@ const SalaryManagement = () => {
       <div className="overflow-x-auto">
         <VTable columns={columns} data={filtered} emptyText={emptyText} />
       </div>
+
+      {editingSalary && (
+        <VModal isOpen={true} onClose={() => setEditingSalary(null)} title="Edit Educator Salary">
+          <div className="space-y-4">
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="font-medium">{editingSalary.name}</p>
+              <p className="text-sm text-muted-foreground">{editingSalary.institution}</p>
+            </div>
+            <VInput
+              label="Salary Amount (INR)"
+              type="number"
+              value={salaryAmount}
+              onChange={(e) => setSalaryAmount(e.target.value)}
+              placeholder="Enter salary amount"
+            />
+            <VSelect
+              label="Salary Type"
+              value={salaryType}
+              onChange={(e) => setSalaryType(e.target.value)}
+              options={[
+                { value: "monthly", label: "Monthly" },
+                { value: "per_session", label: "Per Session" },
+                { value: "per_hour", label: "Per Hour" },
+              ]}
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <VButton variant="ghost" onClick={() => setEditingSalary(null)}>
+                Cancel
+              </VButton>
+              <VButton onClick={handleSaveSalary} isLoading={updateSalaryMutation.isPending}>
+                Save Changes
+              </VButton>
+            </div>
+          </div>
+        </VModal>
+      )}
     </DashboardLayout>
   );
 };

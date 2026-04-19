@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -291,8 +292,12 @@ async def certificate_download_url(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CertificateDownloadResponse:
+    logger = logging.getLogger(__name__)
+    logger.info(f"Download request for certificate: {certificate_id} by user: {current_user.id} role: {current_user.role}")
+    
     cert = await get_certificate(db, certificate_id)
     if not cert:
+        logger.warning(f"Certificate not found: {certificate_id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found.")
 
     if current_user.role == UserRole.STUDENT and cert.student_id != current_user.id:
