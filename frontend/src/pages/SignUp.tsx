@@ -36,7 +36,7 @@ const SignUp = () => {
       showToast("success", "Account Created!", "Your account has been created. Please sign in.");
       navigate("/login");
     } catch (err: unknown) {
-      showToast("destructive", "Registration Failed", err instanceof Error ? err.message : "Unable to register at this time.");
+      showToast("error", "Registration Failed", err instanceof Error ? err.message : "Unable to register at this time.");
     } finally {
       setIsLoading(false);
     }

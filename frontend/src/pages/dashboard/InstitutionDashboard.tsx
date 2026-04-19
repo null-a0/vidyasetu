@@ -1,8 +1,9 @@
-﻿import { useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Users, ClipboardList, Award, TrendingUp, TrendingDown, Plus, AlertCircle, Eye, Calendar, CheckSquare } from "lucide-react";
+import { BookOpen, Users, ClipboardList, Award, TrendingUp, TrendingDown, Plus, AlertCircle, Eye, Calendar, CheckSquare, Pencil } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
 import VTable from "@/components/ui-custom/VTable";
@@ -22,6 +23,9 @@ import {
   fetchInstitutionDashboardAggregate,
   fetchInstitutionStudentRoster,
   fetchWorkshops,
+  fetchAllUsers,
+  updateEducatorSalary,
+  paySalary,
 } from "@/services/api";
 
 type WorkshopRow = {
@@ -44,17 +48,21 @@ const InstitutionDashboard = () => {
   const navigate = useNavigate();
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
   const institutionAggregateQuery = useQuery({
     queryKey: ["institutionDashboardAggregate"],
     queryFn: fetchInstitutionDashboardAggregate,
   });
-  const [activeTab, setActiveTab] = useState<"overview" | "students" | "attendance" | "reports">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "students" | "attendance" | "reports" | "salaries">("overview");
   const [createModal, setCreateModal] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createStatus, setCreateStatus] = useState("Upcoming");
+  const [editingSalary, setEditingSalary] = useState<{ id: string; name: string; salary: number; salaryType: string } | null>(null);
+  const [salaryAmount, setSalaryAmount] = useState("");
+  const [salaryType, setSalaryType] = useState("monthly");
 
   const studentRosterQuery = useQuery({
     queryKey: ["institutionStudentRoster"],
@@ -80,7 +88,7 @@ const InstitutionDashboard = () => {
       showToast("success", "Workshop Created", "New workshop added successfully");
     },
     onError: (error: unknown) => {
-      showToast("destructive", "Create Failed", error instanceof Error ? error.message : "Unable to create workshop.");
+      showToast("error", "Create Failed", error instanceof Error ? error.message : "Unable to create workshop.");
     },
   });
   const bulkStudentActionMutation = useMutation({
@@ -94,7 +102,7 @@ const InstitutionDashboard = () => {
       showToast("success", "Bulk Action Applied", `${result.updated_enrollments} enrollments updated.`);
     },
     onError: (error: unknown) => {
-      showToast("destructive", "Bulk Action Failed", error instanceof Error ? error.message : "Unable to apply bulk action.");
+      showToast("error", "Bulk Action Failed", error instanceof Error ? error.message : "Unable to apply bulk action.");
     },
   });
   const exportStudentsMutation = useMutation({
@@ -104,7 +112,7 @@ const InstitutionDashboard = () => {
       showToast("success", "Export Ready", "Student CSV export started.");
     },
     onError: (error: unknown) => {
-      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export students.");
+      showToast("error", "Export Failed", error instanceof Error ? error.message : "Unable to export students.");
     },
   });
   const exportAttendanceMutation = useMutation({
@@ -114,7 +122,7 @@ const InstitutionDashboard = () => {
       showToast("success", "Attendance Export Ready", "Attendance CSV export started.");
     },
     onError: (error: unknown) => {
-      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export attendance report.");
+      showToast("error", "Export Failed", error instanceof Error ? error.message : "Unable to export attendance report.");
     },
   });
   const exportDashboardReportMutation = useMutation({
@@ -124,13 +132,58 @@ const InstitutionDashboard = () => {
       showToast("success", "Report Export Ready", "Dashboard CSV export started.");
     },
     onError: (error: unknown) => {
-      showToast("destructive", "Export Failed", error instanceof Error ? error.message : "Unable to export report.");
+      showToast("error", "Export Failed", error instanceof Error ? error.message : "Unable to export report.");
     },
   });
 
   const aggregate = institutionAggregateQuery.data;
   const studentData = studentRosterQuery.data?.items ?? [];
   const attendanceData = attendanceReportQuery.data?.rows ?? [];
+
+  // Educators for salary management
+  const usersQuery = useQuery({
+    queryKey: ["adminUsers"],
+    queryFn: () => fetchAllUsers({ max: 500 }),
+    enabled: activeTab === "salaries",
+  });
+  const educators = useMemo(() => {
+    const users = usersQuery.data ?? [];
+    const allEducators = users.filter((u) => u.role === "educator");
+    // Filter by institution for institution admins
+    if (user?.institution_id) {
+      return allEducators.filter((u) => u.institution_id === user.institution_id);
+    }
+    return allEducators;
+  }, [usersQuery.data, user?.institution_id]);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  const updateSalaryMutation = useMutation({
+    mutationFn: async (payload: { educatorId: string; salaryAmount: number; salaryType: string }) => {
+      return updateEducatorSalary(payload.educatorId, { salary_amount: payload.salaryAmount, salary_type: payload.salaryType });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+      showToast("success", "Salary Updated", "Educator salary has been updated.");
+      setEditingSalary(null);
+    },
+    onError: (err: unknown) => {
+      showToast("error", "Update Failed", err instanceof Error ? err.message : "Unable to update salary.");
+    },
+  });
+
+  const paySalaryMutation = useMutation({
+    mutationFn: async (payload: { educatorId: string; amount: number }) => {
+      return paySalary({ educatorId: payload.educatorId, month: currentMonth, amount: payload.amount });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+      showToast("success", "Salary Paid", "Payment processed successfully.");
+    },
+    onError: (err: unknown) => {
+      showToast("error", "Payment Failed", err instanceof Error ? err.message : "Unable to process payment.");
+    },
+  });
 
   const statsData = [
     { label: "Institution Workshops", value: String(aggregate?.kpis.workshops ?? 0), icon: BookOpen, trend: String(aggregate?.kpis.workshops ?? 0), up: true },
@@ -203,6 +256,7 @@ const InstitutionDashboard = () => {
     { key: "students", label: "Students" },
     { key: "attendance", label: "Attendance" },
     { key: "reports", label: "Reports" },
+    { key: "salaries", label: "Salaries" },
   ];
 
   return (
@@ -211,7 +265,7 @@ const InstitutionDashboard = () => {
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as "overview" | "students" | "attendance" | "reports")}
+            onClick={() => setActiveTab(tab.key as "overview" | "students" | "attendance" | "reports" | "salaries")}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === tab.key
                 ? "border-primary text-primary"
@@ -316,7 +370,7 @@ const InstitutionDashboard = () => {
                     Export Selected
                   </VButton>
                   <VButton
-                    variant="destructive"
+                    variant="secondary"
                     size="sm"
                     onClick={() => bulkStudentActionMutation.mutate(Array.from(selectedStudents))}
                     isLoading={bulkStudentActionMutation.isPending}
@@ -407,9 +461,9 @@ const InstitutionDashboard = () => {
                   {["mon", "tue", "wed", "thu", "fri"].map((day) => (
                     <td key={day} className="px-4 py-4 text-center">
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
-                        (row as Record<string, boolean | string>)[day] ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                        (row as unknown as Record<string, boolean | string>)[day] ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
                       }`}>
-                        {(row as Record<string, boolean | string>)[day] ? <CheckSquare className="h-4 w-4" /> : "×"}
+                        {(row as unknown as Record<string, boolean | string>)[day] ? <CheckSquare className="h-4 w-4" /> : "×"}
                       </span>
                     </td>
                   ))}
@@ -469,6 +523,77 @@ const InstitutionDashboard = () => {
         </>
       )}
 
+      {activeTab === "salaries" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-foreground">Educator Salaries</h3>
+          </div>
+          
+          {usersQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading educators...</p>
+          ) : educators.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No educators found for this institution.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <VTable
+                columns={[
+                  { key: "name", header: "Educator" },
+                  { key: "email", header: "Email" },
+                  { 
+                    key: "salary", 
+                    header: "Salary", 
+                    render: (row: { id: string; name: string; email: string; salary_amount: number; salary_type: string }) => (
+                      <span className="font-medium">₹{row.salary_amount?.toLocaleString() || 0} / {row.salary_type || 'monthly'}</span>
+                    )
+                  },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (row: { id: string; name: string; email: string; salary_amount: number; salary_type: string }) => (
+                      <div className="flex gap-2">
+                        <VButton 
+                          variant="secondary" 
+                          size="sm"
+                          onClick={() => {
+                            setEditingSalary({ 
+                              id: row.id, 
+                              name: row.name || row.email, 
+                              salary: row.salary_amount || 0, 
+                              salaryType: row.salary_type || 'monthly' 
+                            });
+                            setSalaryAmount(String(row.salary_amount || 0));
+                            setSalaryType(row.salary_type || 'monthly');
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Edit
+                        </VButton>
+                        <VButton 
+                          variant="primary" 
+                          size="sm"
+                          onClick={() => {
+                            paySalaryMutation.mutate({ educatorId: row.id, amount: row.salary_amount || 0 });
+                          }}
+                          disabled={!row.salary_amount}
+                        >
+                          Pay Now
+                        </VButton>
+                      </div>
+                    ),
+                  },
+                ]}
+                data={educators.map(e => ({
+                  id: e.id,
+                  name: e.name || e.email,
+                  email: e.email,
+                  salary_amount: e.salary_amount || 0,
+                  salary_type: e.salary_type || 'monthly',
+                }))}
+              />
+            </div>
+          )}
+        </>
+      )}
+
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Workshop">
         <div className="space-y-4">
           <VInput id="inst-w-name" label="Workshop Name" placeholder="e.g. React Fundamentals" value={createName} onChange={(event) => setCreateName(event.target.value)} />
@@ -498,6 +623,51 @@ const InstitutionDashboard = () => {
               disabled={createWorkshopMutation.isPending}
             >
               Create Workshop
+            </VButton>
+          </div>
+        </div>
+      </VModal>
+
+      {/* Edit Salary Modal */}
+      <VModal isOpen={!!editingSalary} onClose={() => setEditingSalary(null)} title="Edit Educator Salary">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Update salary for <span className="font-semibold text-foreground">{editingSalary?.name}</span>
+          </p>
+          <VInput
+            label="Salary Amount"
+            type="number"
+            value={salaryAmount}
+            onChange={(e) => setSalaryAmount(e.target.value)}
+            placeholder="Enter salary amount"
+          />
+          <VSelect
+            label="Salary Type"
+            value={salaryType}
+            onChange={(e) => setSalaryType(e.target.value)}
+            options={[
+              { value: "monthly", label: "Monthly" },
+              { value: "per_session", label: "Per Session" },
+              { value: "per_hour", label: "Per Hour" },
+            ]}
+          />
+          <div className="flex justify-end gap-3">
+            <VButton variant="ghost" onClick={() => setEditingSalary(null)}>
+              Cancel
+            </VButton>
+            <VButton
+              onClick={() => {
+                if (!editingSalary || !salaryAmount) return;
+                updateSalaryMutation.mutate({
+                  educatorId: editingSalary.id,
+                  salaryAmount: parseInt(salaryAmount, 10),
+                  salaryType,
+                });
+              }}
+              isLoading={updateSalaryMutation.isPending}
+              disabled={!salaryAmount || updateSalaryMutation.isPending}
+            >
+              Save Changes
             </VButton>
           </div>
         </div>

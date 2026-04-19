@@ -64,7 +64,7 @@ const AppRoutes = () => (
     <Route path="/manage/students" element={<ProtectedRoute allowedRoles={["admin", "institution_admin"]}><StudentManagement /></ProtectedRoute>} />
     <Route path="/manage/institutes" element={<ProtectedRoute allowedRoles={["admin"]}><InstituteManagement /></ProtectedRoute>} />
     <Route path="/manage/approvals" element={<ProtectedRoute allowedRoles={["admin"]}><ApprovalPanel /></ProtectedRoute>} />
-    <Route path="/manage/salary" element={<ProtectedRoute allowedRoles={["admin"]}><SalaryManagement /></ProtectedRoute>} />
+    <Route path="/manage/salary" element={<ProtectedRoute allowedRoles={["admin", "institution_admin"]}><SalaryManagement /></ProtectedRoute>} />
 
     {/* Legacy educator routes redirect */}
     <Route path="/educator/dashboard" element={<Navigate to="/dashboard/educator" replace />} />

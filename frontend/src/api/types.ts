@@ -86,6 +86,8 @@ export interface BackendUser {
   institution_admin_address?: string | null;
   institution_admin_code?: string | null;
   theme?: string | null;
+  salary_amount?: number | null;
+  salary_type?: string | null;
 }
 
 export interface AdminStatsResponse {

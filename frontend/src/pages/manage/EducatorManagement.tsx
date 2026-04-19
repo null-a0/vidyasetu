@@ -70,7 +70,7 @@ const EducatorManagement = () => {
   const salaryPaymentsQuery = useQuery({
     queryKey: ["salaryPayments", month],
     queryFn: () => fetchSalaryPayments({ month, limit: 500 }),
-    enabled: isAdmin,
+    enabled: isAdmin || isInstitutionAdmin,
   });
 
   const institutionLookup = useMemo(() => {
@@ -92,7 +92,8 @@ const EducatorManagement = () => {
       const institutionName = u.institution_id ? institutionLookup[u.institution_id] ?? u.institution_id : "";
       const type = normalizeEducatorType(u.educator_type);
       const paid = !!paidLookup[u.id];
-      const salary = paidLookup[u.id]?.amount ?? 0;
+      // Use the educator's base salary_amount, not the payment amount
+      const salary = u.salary_amount ?? 0;
       return {
         id: u.id,
         name: u.name || u.email,
@@ -138,7 +139,7 @@ const EducatorManagement = () => {
       queryClient.invalidateQueries({ queryKey: ["approvalRequests"] });
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Action Failed", err instanceof Error ? err.message : "Unable to process request.");
+      showToast("error", "Action Failed", err instanceof Error ? err.message : "Unable to process request.");
     },
   });
 
@@ -151,7 +152,7 @@ const EducatorManagement = () => {
       showToast("success", "Payment Processed", "Salary marked as paid.");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Payment Failed", err instanceof Error ? err.message : "Unable to process payment.");
+      showToast("error", "Payment Failed", err instanceof Error ? err.message : "Unable to process payment.");
     },
   });
 
@@ -252,7 +253,7 @@ const EducatorManagement = () => {
               <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Salary</p><p className="text-sm font-bold text-foreground">INR {selected.salary.toLocaleString()}</p></div>
               <div className="rounded-xl bg-muted p-3 col-span-2"><p className="text-xs text-muted-foreground">Monthly Status</p><VBadge variant={selected.monthlyStatus === "Paid" ? "success" : "warning"}>{selected.monthlyStatus}</VBadge></div>
             </div>
-            {isAdmin && selected.monthlyStatus === "Unpaid" && (
+            {selected.monthlyStatus === "Unpaid" && (
               <VButton
                 className="w-full"
                 isLoading={markPaidMutation.isPending}
@@ -288,7 +289,7 @@ const EducatorManagement = () => {
                 removeMutation.mutate(target);
               }}
               isLoading={removeMutation.isPending}
-              variant={isAdmin ? "destructive" : "default"}
+              variant="primary"
             >
               <Send className="h-4 w-4" /> {isAdmin ? "Remove" : "Send Request"}
             </VButton>
