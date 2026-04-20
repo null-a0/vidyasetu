@@ -1,7 +1,7 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, ClipboardList, Award, TrendingUp, Play, CheckCircle2, Clock, Star, Search, FileText, Users } from "lucide-react";
+import { BookOpen, ClipboardList, Award, TrendingUp, Play, CheckCircle2, Clock, Star, Search, FileText, Users, Download, Eye } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -12,6 +12,7 @@ import { useVToast } from "@/components/ui-custom/VToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
   enrollInWorkshop,
+  fetchCertificates,
   fetchEnrollments,
   fetchMaterialDownload,
   fetchStudentAnalytics,
@@ -23,7 +24,7 @@ import {
   type StudentLearningCourse,
   type StudentLearningModule,
 } from "@/services/api";
-import type { Workshop } from "@/mock/mockData";
+import type { Workshop, Certificate } from "@/mock/mockData";
 
 const iconColors = [
   "bg-primary/10 text-primary",
@@ -81,12 +82,19 @@ const StudentDashboard = () => {
     enabled: Boolean(user),
   });
 
-  const [activeTab, setActiveTab] = useState<"overview" | "browse" | "mycourses" | "learning">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "browse" | "mycourses" | "learning" | "certificates">("overview");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [enrollModal, setEnrollModal] = useState<Workshop | null>(null);
   const [learningCourse, setLearningCourse] = useState<MyCourse | null>(null);
   const [activeModule, setActiveModule] = useState(0);
+  const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
+
+  const { data: certificates = [] } = useQuery({
+    queryKey: ["certificates", user?.id],
+    queryFn: () => fetchCertificates({ studentId: user?.id ?? "" }),
+    enabled: Boolean(user),
+  });
 
   const { data: modalModules = [] } = useQuery({
     queryKey: ["workshopModules", enrollModal?.id],
@@ -175,7 +183,7 @@ const StudentDashboard = () => {
       await Promise.all([refetchEnrollments()]);
       showToast("success", "Enrolled!", `You have been enrolled in "${workshop.name}".`);
     } catch (err: unknown) {
-      showToast("destructive", "Enrollment Failed", err instanceof Error ? err.message : "Unable to enroll right now.");
+      showToast("error", "Enrollment Failed", err instanceof Error ? err.message : "Unable to enroll right now.");
     }
   };
 
@@ -195,10 +203,11 @@ const StudentDashboard = () => {
           { key: "browse", label: "Browse Courses" },
           { key: "mycourses", label: "My Courses" },
           { key: "learning", label: "Continue Learning" },
+          { key: "certificates", label: "Certificates" },
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as "overview" | "browse" | "mycourses" | "learning")}
+            onClick={() => setActiveTab(tab.key as "overview" | "browse" | "mycourses" | "learning" | "certificates")}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === tab.key
                 ? "border-primary text-primary"
@@ -225,7 +234,7 @@ const StudentDashboard = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "—"}</p>
+                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "�"}</p>
               </VCard>
             ))}
           </div>
@@ -468,7 +477,7 @@ const StudentDashboard = () => {
                         }
                         window.open(url, "_blank", "noopener,noreferrer");
                       } catch (err: unknown) {
-                        showToast("destructive", "Unable to open material", err instanceof Error ? err.message : "Please try again.");
+                        showToast("error", "Unable to open material", err instanceof Error ? err.message : "Please try again.");
                       }
                     }}
                   >
@@ -521,10 +530,132 @@ const StudentDashboard = () => {
           </div>
         )}
       </VModal>
+
+      {activeTab === "certificates" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-foreground">My Certificates</h2>
+            <span className="text-sm text-muted-foreground">{certificates.length} certificate(s) earned</span>
+          </div>
+
+          {certificates.length === 0 ? (
+            <VCard className="p-12 text-center">
+              <Award className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No Certificates Yet</h3>
+              <p className="text-muted-foreground mb-4">Complete courses and pass assessments to earn certificates.</p>
+              <VButton onClick={() => setActiveTab("mycourses")}>Go to My Courses</VButton>
+            </VCard>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {certificates.map((cert) => (
+                <VCard key={cert.id} className="p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 rounded-xl bg-success/10">
+                      <Award className="w-8 h-8 text-success" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">{cert.workshop}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Issued: {cert.completionDate || "N/A"}
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                        <VButton
+                          variant="secondary"
+                          className="text-sm"
+                          onClick={() => setPreviewCert(cert)}
+                        >
+                          <FileText className="w-4 h-4" />
+                          View
+                        </VButton>
+                        {cert.downloadUrl && (
+                          <a
+                            href={resolveBackendMediaUrl(cert.downloadUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm"
+                          >
+                            <VButton variant="primary" className="text-sm">
+                              <Download className="w-4 h-4" />
+                              Download
+                            </VButton>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </VCard>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <VModal isOpen={!!enrollModal} onClose={() => setEnrollModal(null)} title="Enroll in Workshop">
+        {enrollModal && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-foreground">{enrollModal.name}</h3>
+            <p className="text-sm text-muted-foreground">{enrollModal.description}</p>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Institution</p><p className="font-medium text-foreground">{enrollModal.institution}</p></div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Duration</p><p className="font-medium text-foreground">{enrollModal.startDate} - {enrollModal.endDate}</p></div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Students</p><p className="font-medium text-foreground">{enrollModal.studentsEnrolled} enrolled</p></div>
+              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Status</p><p className="font-medium text-foreground">{enrollModal.status}</p></div>
+            </div>
+            <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
+              <h4 className="text-sm font-semibold text-foreground mb-2">Syllabus</h4>
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                {(modalModules.length > 0 ? modalModules.slice(0, 4).map((module) => module.title || "Untitled Module") : ["Syllabus will be available after module setup"]).map((label, index) => (
+                  <li key={`${label}-${index}`} className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> {label}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <VButton variant="ghost" onClick={() => setEnrollModal(null)}>Cancel</VButton>
+              <VButton onClick={() => handleEnroll(enrollModal)}>Confirm Enrollment</VButton>
+            </div>
+          </div>
+        )}
+      </VModal>
+
+      <VModal isOpen={!!previewCert} onClose={() => setPreviewCert(null)} title="Certificate Preview">
+        {previewCert && (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-muted p-4 border border-border">
+              <div className="text-center py-8">
+                <Award className="w-16 h-16 mx-auto mb-4 text-primary" />
+                <h3 className="text-xl font-bold text-foreground mb-2">Certificate of Completion</h3>
+                <p className="text-lg text-foreground mb-1">This is to certify that</p>
+                <p className="text-xl font-semibold text-primary mb-2">{user?.name || "Student"}</p>
+                <p className="text-muted-foreground mb-4">has successfully completed the course</p>
+                <p className="text-lg font-bold text-foreground mb-2">{previewCert.workshop}</p>
+                <p className="text-sm text-muted-foreground">
+                  Issued on: {previewCert.completionDate || "N/A"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Certificate ID: {previewCert.certificateId}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <VButton variant="ghost" onClick={() => setPreviewCert(null)}>Close</VButton>
+              {previewCert.downloadUrl && (
+                <a
+                  href={resolveBackendMediaUrl(previewCert.downloadUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <VButton>
+                    <Download className="w-4 h-4" />
+                    Download
+                  </VButton>
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </VModal>
     </DashboardLayout>
   );
 };
 
 export default StudentDashboard;
-
-
