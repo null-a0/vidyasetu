@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.security import hash_password
 from app.db import AsyncSessionLocal, engine
@@ -23,6 +23,8 @@ from app.models import (Assessment, Attendance, Base, Certificate, Enrollment,
                         Submission, User, UserRole, Workshop)
 from app.services.certificate import generate_certificate_pdf
 
+UTC = timezone.utc
+
 # ---------------------------------------------------------------------------
 # Credentials
 # ---------------------------------------------------------------------------
@@ -32,6 +34,7 @@ PASSWORDS = {
     "institution.admin@vidyasetu.edu": "institution123",
     "educator@vidyasetu.edu": "educator123",
     "student@vidyasetu.edu": "student123",
+    "support@vidyasetu.edu": "support123",
 }
 DEFAULT_PASSWORD = "demo123"
 
@@ -2510,6 +2513,17 @@ async def load_test_data() -> None:
                 )
             )
         users.extend(students)
+
+        tech_support = User(
+            name="VidyaSetu Support",
+            email="support@vidyasetu.edu",
+            password=hash_password(PASSWORDS.get("support@vidyasetu.edu", DEFAULT_PASSWORD)),
+            role=UserRole.TECHNICAL_SUPPORT,
+            institution_id=institutions[0].id,
+            phone="+91 94000 00001",
+            theme="dark",
+        )
+        users.append(tech_support)
 
         db.add_all(users)
         await db.flush()

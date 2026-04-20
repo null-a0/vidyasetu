@@ -3,28 +3,26 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api.deps import PaginationParams, get_db, require_role
 from app.config import settings
 from app.core.redis import get_job_progress, get_redis_async
+from app.crud.crud_ai_generation import (get_ai_generation,
+                                         list_ai_generations,
+                                         update_ai_generation)
 from app.crud.crud_audit import create_audit_log, list_audit_logs
-from app.crud.crud_ai_generation import get_ai_generation, list_ai_generations, update_ai_generation
 from app.crud.crud_rate_limit_events import list_rate_limit_events
-from app.models import AIFeatureType, AIGeneration, AIGenerationStatus, User, UserRole
+from app.models import (AIFeatureType, AIGeneration, AIGenerationStatus, User,
+                        UserRole)
 from app.schemas.ai import AIGenerationUpdate
 from app.schemas.base import Page
-from app.schemas.support import (
-    AuditLogResponse,
-    CacheStatsResponse,
-    RateLimitEventResponse,
-    SupportConfigResponse,
-    SupportJobDetailResponse,
-    SupportJobListItem,
-    SupportRerunResponse,
-)
+from app.schemas.support import (AuditLogResponse, CacheStatsResponse,
+                                 RateLimitEventResponse, SupportConfigResponse,
+                                 SupportJobDetailResponse, SupportJobListItem,
+                                 SupportRerunResponse)
+from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException, Query,
+                     status)
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/support", tags=["support"])
 
@@ -49,7 +47,7 @@ async def get_support_config(
         action="support.config.view",
     )
     return SupportConfigResponse(
-        celery_queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        celery_queue="celery",
         redis_configured=bool(settings.REDIS_URL.strip()),
         smtp_configured=bool(settings.SMTP_HOST.strip() and settings.SMTP_FROM_EMAIL.strip()),
         ai_max_retries=settings.AI_MAX_RETRIES,
@@ -92,7 +90,7 @@ async def list_jobs(
         actor_user_id=current_user.id,
         actor_role=current_user.role.value,
         action="support.jobs.list",
-        metadata={
+        metadata_={
             "status": status_filter,
             "feature_type": feature_type,
             "institution_id": institution_id,
@@ -260,7 +258,7 @@ async def rerun_job(
         action="support.jobs.rerun",
         target_type="ai_generation",
         target_id=generation_id,
-        metadata={"previous_error_type": (row.error_details or {}).get("error_type")},
+        metadata_={"previous_error_type": (row.error_details or {}).get("error_type")},
     )
 
     await update_ai_generation(
@@ -312,7 +310,7 @@ async def get_audit_logs(
         actor_user_id=current_user.id,
         actor_role=current_user.role.value,
         action="support.audit.list",
-        metadata={"since_hours": since_hours, "action": action},
+        metadata_={"since_hours": since_hours, "action": action},
     )
     return Page(
         items=[AuditLogResponse.model_validate(r) for r in rows],
@@ -349,7 +347,7 @@ async def get_rate_limit_events(
         actor_user_id=current_user.id,
         actor_role=current_user.role.value,
         action="support.rate_limits.list",
-        metadata={"key_prefix": key_prefix, "allowed": allowed, "since_hours": since_hours},
+        metadata_={"key_prefix": key_prefix, "allowed": allowed, "since_hours": since_hours},
     )
     return Page(
         items=[RateLimitEventResponse.model_validate(r) for r in rows],
