@@ -413,44 +413,25 @@ async def generate_student_explanation(generation_id: str) -> None:
             break
 
 async def _run_tick_scheduled_reports(db: AsyncSession) -> None:
-    from app.crud.crud_scheduled_reports import (
-        find_due_scheduled_reports,
-        mark_scheduled_run_processing,
-    )
-    from app.services.ai.admin_report_pipeline import request_admin_report_generation
+    from app.crud.crud_scheduled_reports import claim_due_scheduled_runs
 
-    due_runs = await find_due_scheduled_reports(
-        db, target_time=_utc_now() + timedelta(seconds=settings.SCHEDULED_REPORT_LOOKAHEAD_SECONDS)
+    claimed_runs = await claim_due_scheduled_runs(
+        db,
+        now=_utc_now(),
+        lookahead_seconds=settings.SCHEDULED_REPORT_LOOKAHEAD_SECONDS,
     )
-    if not due_runs:
+    if not claimed_runs:
         return
 
-    for run_info in due_runs:
-        report, next_run = run_info.report, run_info.next_run
-        scheduled_run = await mark_scheduled_run_processing(db, report=report, run_date=next_run)
-        if not scheduled_run:
-            continue
-
+    for run_info in claimed_runs:
         try:
-            req_result = await request_admin_report_generation(
-                db,
-                institution_id=report.institution_id,
-                requester_user_id=report.created_by,
-                source_entity_type="scheduled_report",
-                source_entity_id=report.id,
-                focus_areas=report.focus_areas,
-                date_from=None,
-                date_to=None,
-                force_regenerate=True,
-                bypass_rate_limits=True,
-            )
-            asyncio.create_task(generate_admin_ai_report(req_result.generation.id, scheduled_run_id=scheduled_run.id))
+            asyncio.create_task(generate_admin_ai_report(run_info.ai_generation_id, scheduled_run_id=run_info.id))
         except Exception as exc:
-            logger.exception("Failed to enqueue scheduled report generation %s", report.id)
+            logger.exception("Failed to enqueue scheduled report generation %s", run_info.ai_generation_id)
             try:
                 from app.crud.crud_scheduled_reports import mark_scheduled_run_failed
                 await mark_scheduled_run_failed(
-                    db, run_id=scheduled_run.id, error_details={"error_type": exc.__class__.__name__, "message": str(exc)}
+                    db, run_id=run_info.id, error_details={"error_type": exc.__class__.__name__, "message": str(exc)}
                 )
             except Exception:
                 pass
