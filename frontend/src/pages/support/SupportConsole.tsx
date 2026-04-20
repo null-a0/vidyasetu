@@ -294,6 +294,11 @@ const SupportConsole = () => {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Actor: {a.actor_user_id || "-"}</p>
                 {a.target_type && <p className="text-xs text-muted-foreground mt-1">Target: {a.target_type}:{a.target_id}</p>}
+                {a.metadata_ && Object.keys(a.metadata_).length > 0 && (
+                  <pre className="text-[10px] text-muted-foreground mt-2 bg-accent/30 p-2 rounded overflow-auto whitespace-pre-wrap">
+                    {JSON.stringify(a.metadata_, null, 2)}
+                  </pre>
+                )}
               </div>
             ))}
           </div>

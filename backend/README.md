@@ -4,6 +4,13 @@ FastAPI + SQLAlchemy async backend for the VidyaSetu full-stack application.
 
 Local development now defaults to SQLite. PostgreSQL can still be used later by changing `DATABASE_URL`.
 
+## Architecture (No Celery)
+
+This application uses **FastAPI BackgroundTasks** and a background **asyncio scheduler** (started in the FastAPI app lifespan) to handle asynchronously executing AI report generation and student explanations. 
+There is **NO** dependency on a Celery worker or Celery Beat anymore, which drastically simplifies deployments and resolves SQLite locking contention issues.
+
+Redis is currently used as an ephemeral data store to track real-time job progress (reporting task % internally) and idempotency locks.
+
 ## Development
 
 1. Create `backend/.env` from `backend/.env.example`.
@@ -47,7 +54,7 @@ OR
 python -m uvicorn app.main:app --reload
 ```
 
-This will create `backend/vidyasetu.db` locally when using the default SQLite configuration.
+This will create `backend/vidyasetu.db` locally when using the default SQLite configuration. The background scheduled loop for AI reports will start automatically on application launch.
 
 ## GenAI setup (Admin AI Reports)
 
@@ -71,7 +78,7 @@ AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
 AI_RATE_LIMIT_BACKEND=database
 AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
 
-# Async job system (Celery + Redis)
+# Redis is used for Job progress state and Idempotency locks (Upstash supported)
 REDIS_URL=rediss://:<password>@<host>:<port>
 ```
 
@@ -90,24 +97,6 @@ python -m alembic upgrade head
 
 This creates/updates AI tables used by admin report generation and DB-backed rate limiting.
 
-## Async AI jobs (Celery worker + beat)
-
-AI report generation and student explanations run as background jobs.
-
-1. Set `REDIS_URL` (Upstash supported via `rediss://`).
-2. Start the API (`uvicorn app.main:app --reload`).
-3. In a separate terminal, start a Celery worker:
-
-```sh
-celery -A app.jobs.celery_app.celery_app worker -l info -Q vidyasetu
-```
-
-4. For scheduled AI reports, also run Celery Beat:
-
-```sh
-celery -A app.jobs.celery_app.celery_app beat -l info
-```
-
 ## Database options
 
 - Default local DB: `sqlite+aiosqlite:///./vidyasetu.db`
@@ -119,6 +108,7 @@ celery -A app.jobs.celery_app.celery_app beat -l info
 - Institution admin: `institution.admin@vidyasetu.edu` / `institution123`
 - Educator: `educator@vidyasetu.edu` / `educator123`
 - Student: `student2@vidyasetu.edu` / `demo123`
+- Technical support: `support@vidyasetu.edu` / `support123`
 
 ## Frontend integration
 

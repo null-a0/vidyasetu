@@ -633,7 +633,7 @@ export interface BackendAuditLog {
   action: string;
   target_type?: string | null;
   target_id?: string | null;
-  metadata: Record<string, unknown>;
+  metadata_: Record<string, unknown>;
   created_at?: string | null;
 }
 

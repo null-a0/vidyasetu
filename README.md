@@ -5,9 +5,12 @@ This repo has two projects:
 - `backend/` = FastAPI + SQLAlchemy (async) + SQLite (default)
 - `frontend/` = React + Vite
 
+## Architecture Overview
+This application uses **FastAPI BackgroundTasks** and a background **asyncio scheduler** (started in the FastAPI app lifespan) to handle asynchronously executing AI report generation and student explanations. There is **NO** dependency on a Celery worker or Celery Beat anymore, which drastically simplifies deployments and resolves SQLite locking contention issues. Redis is currently used as an ephemeral cache store for job progress tracking and rate limit lock synchronization.
+
 The root folder does NOT have a `package.json`, so you must run npm commands inside `frontend/`.
 
-Prerequisites (Windows)
+## Prerequisites (Windows)
 
 - Node.js (for frontend)
 - Python 3.11+ (for backend; recommended 3.11/3.12)
@@ -60,6 +63,9 @@ AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS=600
 AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
 AI_RATE_LIMIT_BACKEND=database
 AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
+
+# Redis is used for Job progress state and Idempotency locks (Upstash supported)
+REDIS_URL=rediss://:<password>@<host>:<port>
 ```
 
 Important:
@@ -100,13 +106,6 @@ cd .\backend
 .\.venv\Scripts\python -m scripts.test_data
 ```
 
-Demo logins created by the seed script:
-
-- admin: `admin@vidyasetu.edu` / `admin123`
-- institution admin: `institution.admin@vidyasetu.edu` / `institution123`
-- educator: `educator@vidyasetu.edu` / `educator123`
-- student: `student@vidyasetu.edu` / `student123`
-
 4. Run the backend (FastAPI)
    Run this in one PowerShell window:
 
@@ -118,6 +117,8 @@ cd .\backend
 Backend will be at:
 
 - http://127.0.0.1:8000
+
+(Scheduled loop for reports will auto-start in the FastAPI lifespan background tasks)
 
 5. Frontend setup (one-time)
    Run in a separate PowerShell window:
@@ -170,8 +171,9 @@ Frontend will be at:
 - Institution admin: `institution.admin@vidyasetu.edu` / `institution123`
 - Educator: `educator@vidyasetu.edu` / `educator123`
 - Student: `student2@vidyasetu.edu` / `demo123`
+- Support: `support@vidyasetu.edu` / `support123`
 
-Troubleshooting
+## Troubleshooting
 
 - If `npm run dev` fails at repo root: you are in the wrong folder. Run it inside `frontend/`.
 - If backend errors like `No module named 'jose'`: you are using system python. Use `backend\.venv\Scripts\python`.
