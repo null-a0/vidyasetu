@@ -19,6 +19,7 @@ import {
   X,
   CheckCircle2,
 } from "lucide-react";
+import LanguageSwitcher from "@/components/ui-custom/LanguageSwitcher";
 import ThemeSwitcher from "@/components/ui-custom/ThemeSwitcher";
 
 const fadeUp = {
@@ -147,7 +148,10 @@ const LandingPage = () => {
             <a href="#stats" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Impact</a>
             <a href="#testimonials" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Testimonials</a>
             <a href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-            <ThemeSwitcher />
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+              <ThemeSwitcher />
+            </div>
           </div>
 
           <div className="hidden md:flex items-center gap-3">
@@ -183,6 +187,10 @@ const LandingPage = () => {
               <a href="#stats" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground rounded-xl hover:bg-accent transition-all">Impact</a>
               <a href="#testimonials" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground rounded-xl hover:bg-accent transition-all">Testimonials</a>
               <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground rounded-xl hover:bg-accent transition-all">Pricing</a>
+              <div className="flex items-center gap-2 px-1 py-2">
+                <LanguageSwitcher />
+                <ThemeSwitcher />
+              </div>
               <div className="pt-2 border-t border-border mt-2">
               <button onClick={() => navigate("/signup")} className="w-full rounded-xl vidya-gradient px-5 py-2.5 text-sm font-semibold text-primary-foreground">
                   Get Started

@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import type { UserRole } from "@/mock/mockData";
+import VLoader from "@/components/ui-custom/VLoader";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -12,7 +13,11 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <VLoader text="Loading your workspace..." />
+      </div>
+    );
   }
 
   if (!user) {

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 from fastapi.responses import Response
 import yaml
 import uvicorn
@@ -9,8 +10,11 @@ from pathlib import Path
 from app.api.v1 import api_router
 from app.config import settings
 from app.db import engine
+from app.i18n import get_locale_from_request, normalize_locale, translate_payload
 from app.models import Base
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -51,6 +55,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def locale_middleware(request: Request, call_next):
+    request.state.locale = normalize_locale(
+        request.headers.get("x-language") or request.headers.get("accept-language")
+    )
+    response = await call_next(request)
+    response.headers["Content-Language"] = request.state.locale
+
+    content_type = response.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return response
+
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=response.media_type,
+        )
+
+    translated = translate_payload(payload, get_locale_from_request(request))
+    headers = dict(response.headers)
+    headers.pop("content-length", None)
+    return JSONResponse(
+        content=translated,
+        status_code=response.status_code,
+        headers=headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    locale = get_locale_from_request(request)
+    translated_errors = []
+    for error in exc.errors():
+        item = dict(error)
+        if isinstance(item.get("msg"), str):
+            item["msg"] = translate_payload(item["msg"], locale, "msg")
+        translated_errors.append(item)
+    return JSONResponse(status_code=422, content={"detail": translated_errors})
 
 # ---------------------------------------------------------------------------
 # Static file serving for uploads  (mounted after media/ is guaranteed)
