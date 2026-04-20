@@ -34,7 +34,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
   { to: "/workshops", label: "Workshops", icon: BookOpen, roles: ["admin", "institution_admin", "educator", "student"] },
-  { to: "/materials", label: "Materials", icon: FileText, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/materials", label: "Materials", icon: FileText, roles: ["admin", "institution_admin", "educator"] },
   { to: "/assessments", label: "Assessments", icon: ClipboardList, roles: ["admin", "institution_admin", "educator", "student"] },
   { to: "/submissions", label: "Submissions", icon: Inbox, roles: ["admin", "institution_admin", "educator"] },
   { to: "/certificates", label: "Certificates", icon: Award, roles: ["admin", "institution_admin", "educator", "student"] },
@@ -60,7 +60,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
   const role = useRole();
   const { user: authUser } = useAuth();
 
-  const filteredItems = navItems.filter((item) => role && item.roles.includes(role));
+  const filteredItems = navItems.filter((item) => role && item.roles.includes(role as UserRole));
 
   // Group items
   const mainItems = filteredItems.filter(i => !i.to.startsWith("/manage") && i.to !== "/profile");

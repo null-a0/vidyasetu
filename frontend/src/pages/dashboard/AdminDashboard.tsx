@@ -250,7 +250,7 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <DashboardLayout title="Admin Dashboard" onSearch={setSearchQuery}>
+    <DashboardLayout title="Admin Dashboard">
       {/* Stat Cards - clickable */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-8">
         {statCards.map(({ key, label, icon: Icon }, i) => (
