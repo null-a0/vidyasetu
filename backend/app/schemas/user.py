@@ -135,3 +135,59 @@ class ResetPasswordRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Public Profile
+# ---------------------------------------------------------------------------
+
+class PublicUserResponse(BaseModel):
+    id: str
+    name: Optional[str]
+    role: UserRole
+    profile_photo: Optional[str] = None
+    bio: Optional[str] = None
+    department: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class PublicWorkshopInfo(BaseModel):
+    id: str
+    title: str
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
+class PublicEnrollmentInfo(BaseModel):
+    workshop: PublicWorkshopInfo
+    status: str
+    enrolled_at: datetime
+
+
+class PublicAssessmentInfo(BaseModel):
+    id: str
+    title: str
+    total_marks: int
+    pass_mark: int
+
+
+class PublicSubmissionInfo(BaseModel):
+    assessment: PublicAssessmentInfo
+    score: Optional[int] = None
+    percentage: Optional[int] = None
+    pass_fail: Optional[bool] = None
+    submitted_at: datetime
+
+
+class PublicStudentStats(BaseModel):
+    total_workshops: int
+    completed_workshops: int
+    completion_rate: float
+
+
+class PublicStudentProfileResponse(BaseModel):
+    student: PublicUserResponse
+    active_enrollments: list[PublicEnrollmentInfo]
+    completed_enrollments: list[PublicEnrollmentInfo]
+    submissions: list[PublicSubmissionInfo]
+    stats: PublicStudentStats

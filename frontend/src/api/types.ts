@@ -655,3 +655,55 @@ export interface BackendCacheStatsResponse {
   ai_generations: Record<string, any>;
   redis: Record<string, any>;
 }
+
+export interface BackendPublicUser {
+  id: string;
+  name?: string | null;
+  role: string;
+  profile_photo?: string | null;
+  bio?: string | null;
+  department?: string | null;
+  created_at?: string | null;
+}
+
+export interface BackendPublicWorkshopInfo {
+  id: string;
+  title: string;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface BackendPublicEnrollmentInfo {
+  workshop: BackendPublicWorkshopInfo;
+  status: string;
+  enrolled_at: string;
+}
+
+export interface BackendPublicAssessmentInfo {
+  id: string;
+  title: string;
+  total_marks: number;
+  pass_mark: number;
+}
+
+export interface BackendPublicSubmissionInfo {
+  assessment: BackendPublicAssessmentInfo;
+  score?: number | null;
+  percentage?: number | null;
+  pass_fail?: boolean | null;
+  submitted_at: string;
+}
+
+export interface BackendPublicStudentStats {
+  total_workshops: number;
+  completed_workshops: number;
+  completion_rate: number;
+}
+
+export interface BackendPublicStudentProfileResponse {
+  student: BackendPublicUser;
+  active_enrollments: BackendPublicEnrollmentInfo[];
+  completed_enrollments: BackendPublicEnrollmentInfo[];
+  submissions: BackendPublicSubmissionInfo[];
+  stats: BackendPublicStudentStats;
+}

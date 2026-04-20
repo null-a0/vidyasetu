@@ -69,6 +69,7 @@ import type {
     BackendAuditLog,
     BackendRateLimitEvent,
     BackendCacheStatsResponse,
+    BackendPublicStudentProfileResponse,
 } from "@/api/types";
 import type {
     Workshop,
@@ -215,6 +216,7 @@ export const updateWorkshop = async (
 export const deleteWorkshop = async (workshopId: string): Promise<void> => {
     await apiDelete<void>("/workshops/" + workshopId);
 };
+
 
 const filterToStudentEnrollments = async (
     workshops: Workshop[],
@@ -1286,6 +1288,14 @@ export const fetchSupportRateLimitEvents = async (
 
 export const fetchSupportCacheStats = async (): Promise<BackendCacheStatsResponse> => {
     return apiGet<BackendCacheStatsResponse>("/support/cache-stats");
+};
+
+export const getPublicStudentProfile = async (
+    studentId: string,
+): Promise<BackendPublicStudentProfileResponse> => {
+    return apiGet<BackendPublicStudentProfileResponse>(
+        `/users/${studentId}/public-profile`,
+    );
 };
 
 

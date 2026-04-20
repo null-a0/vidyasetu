@@ -10,10 +10,21 @@ from app.api.deps import (
     require_role,
 )
 from app.crud import get_user, get_users, update_user
-from app.models import User, UserRole
+from app.models import User, UserRole, Enrollment, Workshop, EnrollmentStatus, Submission, Assessment
 from app.schemas.base import Page
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import (
+    UserResponse, 
+    UserUpdate, 
+    PublicStudentProfileResponse, 
+    PublicEnrollmentInfo, 
+    PublicSubmissionInfo, 
+    PublicStudentStats, 
+    PublicWorkshopInfo, 
+    PublicAssessmentInfo, 
+    PublicUserResponse
+)
 from app.services.storage import delete_upload, save_upload
+from sqlalchemy import select
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -184,3 +195,103 @@ async def update_educator_salary(
     await db.refresh(user)
     
     return UserResponse.model_validate(user)
+
+
+# ---------------------------------------------------------------------------
+# GET /users/{user_id}/public-profile
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{user_id}/public-profile",
+    response_model=PublicStudentProfileResponse,
+    summary="Fetch public student profile for parents (unauthenticated)",
+)
+async def get_public_student_profile(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> PublicStudentProfileResponse:
+    # 1. Fetch user (must be a student)
+    user = await get_user(db, user_id)
+    if not user or user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student not found."
+        )
+
+    # 2. Fetch enrollments & workshops
+    enroll_q = (
+        select(Enrollment, Workshop)
+        .join(Workshop, Enrollment.workshop_id == Workshop.id)
+        .where(Enrollment.student_id == user_id)
+    )
+    enroll_res = await db.execute(enroll_q)
+    enrollments_data = enroll_res.all()
+
+    active_enrollments = []
+    completed_enrollments = []
+    for enroll, workshop in enrollments_data:
+        info = PublicEnrollmentInfo(
+            workshop=PublicWorkshopInfo(
+                id=workshop.id,
+                title=workshop.title,
+                start_date=workshop.start_date,
+                end_date=workshop.end_date,
+            ),
+            status=enroll.status,
+            enrolled_at=enroll.enrolled_at,
+        )
+        if enroll.status == EnrollmentStatus.COMPLETED:
+            completed_enrollments.append(info)
+        else:
+            active_enrollments.append(info)
+
+    # 3. Fetch submissions & assessments
+    sub_q = (
+        select(Submission, Assessment)
+        .join(Assessment, Submission.assessment_id == Assessment.id)
+        .where(Submission.student_id == user_id)
+    )
+    sub_res = await db.execute(sub_q)
+    submissions_data = sub_res.all()
+
+    public_submissions = []
+    for sub, assessment in submissions_data:
+        public_submissions.append(
+            PublicSubmissionInfo(
+                assessment=PublicAssessmentInfo(
+                    id=assessment.id,
+                    title=assessment.title,
+                    total_marks=assessment.total_marks,
+                    pass_mark=assessment.pass_mark,
+                ),
+                score=sub.score,
+                percentage=sub.percentage,
+                pass_fail=sub.pass_fail,
+                submitted_at=sub.submitted_at,
+            )
+        )
+
+    # 4. Stats
+    total_w = len(enrollments_data)
+    completed_w = len(completed_enrollments)
+    rate = (completed_w / total_w * 100.0) if total_w > 0 else 0.0
+
+    return PublicStudentProfileResponse(
+        student=PublicUserResponse(
+            id=user.id,
+            name=user.name,
+            role=user.role,
+            profile_photo=user.profile_photo,
+            bio=user.bio,
+            department=user.department,
+            created_at=user.created_at,
+        ),
+        active_enrollments=active_enrollments,
+        completed_enrollments=completed_enrollments,
+        submissions=public_submissions,
+        stats=PublicStudentStats(
+            total_workshops=total_w,
+            completed_workshops=completed_w,
+            completion_rate=rate,
+        ),
+    )

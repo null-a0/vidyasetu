@@ -30,12 +30,14 @@ import ProtectedRoute from "@/routes/ProtectedRoute";
 import NotFound from "@/pages/NotFound";
 import SupportConsole from "@/pages/support/SupportConsole";
 import AIContentGenerator from "@/pages/AIContentGenerator"; // ADD THIS IMPORT
+import PublicStudentProfile from "@/pages/profile/PublicStudentProfile";
 
 const AppRoutes = () => (
   <Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/signup" element={<SignUp />} />
     <Route path="/verify-certificate" element={<VerifyCertificate />} />
+    <Route path="/public/student/:studentId" element={<PublicStudentProfile />} />
 
     {/* Role-based dashboards */}
     <Route path="/dashboard/admin" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
