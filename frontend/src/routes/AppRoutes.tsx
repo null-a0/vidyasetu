@@ -29,6 +29,7 @@ import SalaryManagement from "@/pages/manage/SalaryManagement";
 import ProtectedRoute from "@/routes/ProtectedRoute";
 import NotFound from "@/pages/NotFound";
 import SupportConsole from "@/pages/support/SupportConsole";
+import AIContentGenerator from "@/pages/AIContentGenerator"; // ADD THIS IMPORT
 
 const AppRoutes = () => (
   <Routes>
@@ -66,6 +67,9 @@ const AppRoutes = () => (
     <Route path="/manage/approvals" element={<ProtectedRoute allowedRoles={["admin"]}><ApprovalPanel /></ProtectedRoute>} />
     <Route path="/manage/salary" element={<ProtectedRoute allowedRoles={["admin", "institution_admin"]}><SalaryManagement /></ProtectedRoute>} />
 
+    {/* AI Content Generator - Accessible to all authenticated users */}
+    <Route path="/ai-content-generator" element={<ProtectedRoute><AIContentGenerator /></ProtectedRoute>} /> {/* ADD THIS ROUTE */}
+
     {/* Legacy educator routes redirect */}
     <Route path="/educator/dashboard" element={<Navigate to="/dashboard/educator" replace />} />
     <Route path="/educator/workshops" element={<Navigate to="/workshops" replace />} />
@@ -79,5 +83,3 @@ const AppRoutes = () => (
 );
 
 export default AppRoutes;
-
-
