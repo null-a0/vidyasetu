@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import json
 from fastapi.responses import Response
 import yaml
@@ -29,7 +30,18 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     if settings.DATABASE_URL.startswith("sqlite+"):
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+    from app.jobs.tasks import tick_scheduled_ai_reports
+
+    async def _scheduled_reports_loop():
+        while True:
+            await tick_scheduled_ai_reports()
+            await asyncio.sleep(60)
+
+    loop_task = asyncio.create_task(_scheduled_reports_loop())
+    
     yield
+    
+    loop_task.cancel()
 
 
 # ---------------------------------------------------------------------------

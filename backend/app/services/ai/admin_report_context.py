@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import date, datetime, time, timezone
 from typing import Any
 
+from app.models import (Assessment, Enrollment, Submission, User, UserRole,
+                        Workshop)
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models import Assessment, Enrollment, User, UserRole, Workshop, Submission
 
 
 def _window_bounds(date_from: date | None, date_to: date | None) -> tuple[datetime | None, datetime | None]:

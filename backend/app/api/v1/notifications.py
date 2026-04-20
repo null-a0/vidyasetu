@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import PaginationParams, get_current_user, get_db, require_role
-from app.crud.crud_misc import (
-    create_notification,
-    delete_notification,
-    get_notification,
-    get_notifications_by_user,
-    update_notification,
-)
+from app.api.deps import (PaginationParams, get_current_user, get_db,
+                          require_role)
+from app.crud.crud_misc import (create_notification, delete_notification,
+                                get_notification, get_notifications_by_user,
+                                update_notification)
 from app.models import NotificationStatus, User, UserRole
 from app.schemas.base import Page
-from app.schemas.misc import (
-    NotificationBulkCreate,
-    NotificationCreate,
-    NotificationResponse,
-    NotificationUpdate,
-)
+from app.schemas.misc import (NotificationBulkCreate, NotificationCreate,
+                              NotificationResponse, NotificationUpdate)
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -122,7 +114,7 @@ async def mark_read(
 
 @router.delete(
     "/{notification_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
     summary="Delete a notification",
 )
 async def delete_one(

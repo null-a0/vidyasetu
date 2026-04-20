@@ -1,39 +1,20 @@
 from __future__ import annotations
 
+from app.api.deps import (PaginationParams,
+                          ensure_user_can_read_assessments_for_workshop,
+                          get_current_user, get_db, require_role)
+from app.crud import (create_assessment, create_question, delete_assessment,
+                      delete_question, get_assessment,
+                      get_assessments_by_module, get_assessments_by_workshop,
+                      get_module, get_question, get_questions_by_assessment,
+                      update_assessment, update_question)
+from app.models import User, UserRole
+from app.schemas.assessment import (AssessmentCreate, AssessmentResponse,
+                                    AssessmentUpdate, QuestionCreate,
+                                    QuestionResponse, QuestionUpdate)
+from app.schemas.base import Page
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import (
-    PaginationParams,
-    ensure_user_can_read_assessments_for_workshop,
-    get_current_user,
-    get_db,
-    require_role,
-)
-from app.crud import (
-    create_assessment,
-    create_question,
-    delete_assessment,
-    delete_question,
-    get_assessment,
-    get_assessments_by_module,
-    get_assessments_by_workshop,
-    get_module,
-    get_question,
-    get_questions_by_assessment,
-    update_assessment,
-    update_question,
-)
-from app.models import User, UserRole
-from app.schemas.assessment import (
-    AssessmentCreate,
-    AssessmentResponse,
-    AssessmentUpdate,
-    QuestionCreate,
-    QuestionResponse,
-    QuestionUpdate,
-)
-from app.schemas.base import Page
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
 
@@ -147,6 +128,7 @@ async def update_one(
 @router.delete(
     "/{assessment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete an assessment (staff only)",
 )
 async def delete_one(

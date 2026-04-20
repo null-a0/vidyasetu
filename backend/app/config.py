@@ -1,3 +1,5 @@
+from typing import List, Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +25,7 @@ class Settings(BaseSettings):
     # ----- Application -----
     APP_NAME: str = "VidyaSetu"
     DEBUG: bool = False
-    BASE_URL: str = "http://localhost:8000"   # canonical URL for QR links / emails
+    BASE_URL: str = "http://localhost:8000"
     FRONTEND_ORIGINS: str = "http://localhost:8080,http://127.0.0.1:8080"
 
     # ----- AI / Gemini -----
@@ -44,18 +46,11 @@ class Settings(BaseSettings):
     AI_STUDENT_EXPLANATION_USER_RATE_LIMIT: int = 12
     AI_STUDENT_EXPLANATION_RATE_LIMIT_WINDOW_SECONDS: int = 600
     AI_STUDENT_EXPLANATION_STALE_AFTER_SECONDS: int = 900
-    # "database" is safe for multi-instance deployments sharing the primary DB.
-    # "memory" is per-process and should be used only for local/dev.
     AI_RATE_LIMIT_BACKEND: str = "database"
     AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS: int = 86400
 
-    # ----- Redis / Celery (Async jobs) -----
-    # Upstash typically uses rediss:// (TLS). Example:
-    # rediss://:<password>@<host>:<port>
+    # ----- Redis / Celery -----
     REDIS_URL: str = "rediss://default:gQAAAAAAAY6gAAIocDI1YjkxMTQyZDkwY2M0MDVmODdkODg2MDQxYWMxOGRkM3AyMTAyMDQ4@exotic-stud-102048.upstash.io:6379/0?ssl_cert_reqs=none"
-    CELERY_BROKER_URL: str | None = None
-    CELERY_RESULT_BACKEND: str | None = None
-    CELERY_TASK_DEFAULT_QUEUE: str = "vidyasetu"
 
     AI_JOB_DEDUP_LOCK_TTL_SECONDS: int = 300
     AI_JOB_IDEMPOTENCY_TTL_SECONDS: int = 86400
@@ -64,7 +59,6 @@ class Settings(BaseSettings):
     SUPPORT_RERUN_LIMIT_PER_DAY: int = 3
 
     # ----- Scheduled reports -----
-    # Scheduler ticks are handled by Celery Beat; this controls how far we look ahead.
     SCHEDULED_REPORT_LOOKAHEAD_SECONDS: int = 120
 
     # ----- Email (optional) -----
@@ -76,16 +70,8 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
 
     @property
-    def frontend_origins(self) -> list[str]:
+    def frontend_origins(self) -> List[str]:
         return [origin.strip() for origin in self.FRONTEND_ORIGINS.split(",") if origin.strip()]
-
-    @property
-    def celery_broker_url(self) -> str:
-        return (self.CELERY_BROKER_URL or self.REDIS_URL).strip()
-
-    @property
-    def celery_result_backend(self) -> str:
-        return (self.CELERY_RESULT_BACKEND or self.REDIS_URL).strip()
 
 
 settings = Settings()

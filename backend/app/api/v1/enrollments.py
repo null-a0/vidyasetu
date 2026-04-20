@@ -1,25 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import (
-    PaginationParams,
-    get_current_user,
-    get_db,
-    require_role,
-)
-from app.crud import (
-    create_enrollment,
-    delete_enrollment,
-    get_enrollment,
-    get_enrollments_by_student,
-    get_enrollments_by_workshop,
-    update_enrollment,
-)
+from app.api.deps import (PaginationParams, get_current_user, get_db,
+                          require_role)
+from app.crud import (create_enrollment, delete_enrollment, get_enrollment,
+                      get_enrollments_by_student, get_enrollments_by_workshop,
+                      update_enrollment)
 from app.models import User, UserRole
 from app.schemas.base import Page
-from app.schemas.workshop import EnrollmentCreate, EnrollmentResponse, EnrollmentUpdate
+from app.schemas.workshop import (EnrollmentCreate, EnrollmentResponse,
+                                  EnrollmentUpdate)
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])
 
@@ -163,7 +154,7 @@ async def update_one(
 
 @router.delete(
     "/{enrollment_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
     summary="Drop / delete an enrollment",
 )
 async def delete_one(

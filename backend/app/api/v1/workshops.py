@@ -1,33 +1,18 @@
 from __future__ import annotations
 
+from app.api.deps import (PaginationParams, get_current_user, get_db,
+                          require_role, verify_workshop_access)
+from app.crud import (create_workshop, delete_workshop,
+                      get_modules_by_workshop, get_workshop, get_workshops,
+                      update_workshop)
+from app.models import Enrollment, Institution, User, UserRole
+from app.schemas.base import Page
+from app.schemas.workshop import (ModuleResponse, WorkshopCreate,
+                                  WorkshopEducatorProfileResponse,
+                                  WorkshopResponse, WorkshopUpdate)
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import (
-    PaginationParams,
-    get_current_user,
-    get_db,
-    require_role,
-    verify_workshop_access,
-)
-from app.crud import (
-    create_workshop,
-    delete_workshop,
-    get_modules_by_workshop,
-    get_workshop,
-    get_workshops,
-    update_workshop,
-)
-from app.models import Enrollment, Institution, User, UserRole
-from app.schemas.base import Page
-from app.schemas.workshop import (
-    ModuleResponse,
-    WorkshopCreate,
-    WorkshopEducatorProfileResponse,
-    WorkshopResponse,
-    WorkshopUpdate,
-)
 
 router = APIRouter(prefix="/workshops", tags=["workshops"])
 
@@ -266,7 +251,7 @@ async def update_one(
 
 @router.delete(
     "/{workshop_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
     summary="Delete a workshop (admin / institution_admin only)",
 )
 async def delete_one(

@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api.deps import get_current_user, get_db, require_role
-from app.crud import (
-    delete_question,
-    get_question,
-    update_question,
-)
+from app.crud import delete_question, get_question, update_question
 from app.models import User, UserRole
 from app.schemas.assessment import QuestionResponse, QuestionUpdate
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
@@ -37,7 +32,7 @@ async def update_one(
 
 @router.delete(
     "/{question_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
     summary="Delete a question (staff only)",
 )
 async def delete_one(

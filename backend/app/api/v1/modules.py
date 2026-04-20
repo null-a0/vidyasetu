@@ -3,25 +3,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from app.api.deps import get_current_user, get_db, require_role
+from app.crud import create_module, delete_module, get_module, update_module
+from app.models import User, UserRole
+from app.schemas.workshop import (MaterialItem, ModuleCreate,
+                                  ModuleReorderRequest, ModuleResponse,
+                                  ModuleUpdate)
+from app.services.storage import save_upload
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import get_current_user, get_db, require_role
-from app.crud import (
-    create_module,
-    delete_module,
-    get_module,
-    update_module,
-)
-from app.models import User, UserRole
-from app.schemas.workshop import (
-    MaterialItem,
-    ModuleCreate,
-    ModuleReorderRequest,
-    ModuleResponse,
-    ModuleUpdate,
-)
-from app.services.storage import save_upload
 
 router = APIRouter(prefix="/modules", tags=["modules"])
 
@@ -127,7 +117,7 @@ async def update_one(
 
 @router.delete(
     "/{module_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
     summary="Delete a module",
 )
 async def delete_one(

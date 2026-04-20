@@ -1,34 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import (
-    PaginationParams,
-    get_current_user,
-    get_db,
-    require_role,
-)
-from app.crud import (
-    create_attendance,
-    create_session,
-    delete_session,
-    get_attendance_by_session,
-    get_session,
-    get_sessions_by_workshop,
-    update_attendance,
-    update_session,
-)
+from app.api.deps import (PaginationParams, get_current_user, get_db,
+                          require_role)
+from app.crud import (create_attendance, create_session, delete_session,
+                      get_attendance_by_session, get_session,
+                      get_sessions_by_workshop, update_attendance,
+                      update_session)
 from app.models import User, UserRole
 from app.schemas.base import Page
-from app.schemas.workshop import (
-    AttendanceCreate,
-    AttendanceResponse,
-    AttendanceUpdate,
-    SessionCreate,
-    SessionResponse,
-    SessionUpdate,
-)
+from app.schemas.workshop import (AttendanceCreate, AttendanceResponse,
+                                  AttendanceUpdate, SessionCreate,
+                                  SessionResponse, SessionUpdate)
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -133,7 +117,7 @@ async def update_one(
 
 @router.delete(
     "/{session_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
     summary="Delete a session (staff only)",
 )
 async def delete_one(

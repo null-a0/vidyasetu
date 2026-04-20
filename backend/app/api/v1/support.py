@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -225,6 +225,7 @@ async def get_job_detail(
 )
 async def rerun_job(
     generation_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(_support_only()),
 ) -> SupportRerunResponse:
@@ -271,27 +272,12 @@ async def rerun_job(
         ),
     )
 
-    task_name = None
     if row.feature_type == AIFeatureType.ADMIN_REPORT:
-        task_name = "app.jobs.tasks.generate_admin_ai_report"
-    if row.feature_type == AIFeatureType.STUDENT_EXPLANATION:
-        task_name = "app.jobs.tasks.generate_student_explanation"
-
-    if not task_name:
-        return SupportRerunResponse(
-            generation_id=row.id,
-            status=row.status,
-            queued=False,
-            message="Unsupported job type for re-run.",
-        )
-
-    from app.jobs.celery_app import celery_app
-
-    celery_app.send_task(
-        task_name,
-        kwargs={"generation_id": row.id},
-        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
-    )
+        from app.jobs.tasks import generate_admin_ai_report
+        background_tasks.add_task(generate_admin_ai_report, generation_id=row.id)
+    elif row.feature_type == AIFeatureType.STUDENT_EXPLANATION:
+        from app.jobs.tasks import generate_student_explanation
+        background_tasks.add_task(generate_student_explanation, generation_id=row.id)
 
     return SupportRerunResponse(
         generation_id=row.id,

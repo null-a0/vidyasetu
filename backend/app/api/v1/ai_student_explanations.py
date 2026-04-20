@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_role
@@ -14,6 +14,7 @@ from app.crud.crud_ai_generation import (
     get_ai_generation,
 )
 from app.crud.crud_assessment import get_question, get_submission
+from app.jobs.tasks import generate_student_explanation
 from app.models import AIFeatureType, AIGenerationStatus, User, UserRole
 from app.schemas.ai import (
     AIGenerationCreate,
@@ -26,7 +27,6 @@ from app.services.ai.cache import (
     build_student_explanation_request_fingerprint,
     compute_cache_expiry,
 )
-from app.jobs.celery_app import celery_app
 from app.services.ai.rate_limit import (
     DatabaseFixedWindowRateLimiter,
     InMemorySlidingWindowRateLimiter,
@@ -78,6 +78,7 @@ async def create_student_explanation(
         get_student_explanation_rate_limiter
     ),
     rate_rule: RateLimitRule = Depends(get_student_explanation_rate_limit_rule),
+    background_tasks: BackgroundTasks = None,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> StudentExplanationCreateResponse:
     redis_client = get_redis_async()
@@ -279,11 +280,7 @@ async def create_student_explanation(
         ex=settings.AI_JOB_DEDUP_LOCK_TTL_SECONDS,
     )
 
-    celery_app.send_task(
-        "app.jobs.tasks.generate_student_explanation",
-        kwargs={"generation_id": generation.id},
-        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
-    )
+    background_tasks.add_task(generate_student_explanation, generation_id=generation.id)
 
     return StudentExplanationCreateResponse(
         explanation_id=generation.id,

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-
 from app.config import settings
 from app.services.ai.retry import RetryPolicy, run_with_retry
 

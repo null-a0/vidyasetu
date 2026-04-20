@@ -1,46 +1,34 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api.deps import PaginationParams, get_db, require_role
 from app.config import settings
-from app.core.redis import (
-    get_job_progress,
-    get_redis_async,
-    job_dedup_lock_key,
-    job_idempotency_key,
-)
-from app.crud.crud_ai_generation import (
-    fail_stale_active_generations,
-    find_active_generation_by_fingerprint,
-    find_cached_completed_generation,
-    get_ai_generation,
-    list_ai_generations,
-)
-from app.models import AIFeatureType, AIGeneration, AIGenerationStatus, User, UserRole
-from app.schemas.ai import (
-    AdminAIReportCreateRequest,
-    AdminAIReportCreateResponse,
-    AdminAIReportListItem,
-    AdminAIReportResultResponse,
-    AdminAIReportStatusResponse,
-)
-from app.schemas.base import Page
-from app.services.ai.admin_report_pipeline import (
-    request_admin_report_generation,
-)
-from app.services.ai.cache import build_admin_report_request_fingerprint
-from app.jobs.celery_app import celery_app
-from app.services.ai.rate_limit import (
-    DatabaseFixedWindowRateLimiter,
-    InMemorySlidingWindowRateLimiter,
-    RateLimitRule,
-    RateLimitViolation,
-    consume_rate_limit_or_raise,
-)
-from app.services.ai.validation import validate_admin_report_output
+from app.core.redis import (get_job_progress, get_redis_async,
+                            job_dedup_lock_key, job_idempotency_key)
+from app.crud.crud_ai_generation import (fail_stale_active_generations,
+                                         find_active_generation_by_fingerprint,
+                                         find_cached_completed_generation,
+                                         get_ai_generation,
+                                         list_ai_generations)
 from app.crud.crud_rate_limit_events import create_rate_limit_event
+from app.jobs.tasks import generate_admin_ai_report
+from app.models import (AIFeatureType, AIGeneration, AIGenerationStatus, User,
+                        UserRole)
+from app.schemas.ai import (AdminAIReportCreateRequest,
+                            AdminAIReportCreateResponse, AdminAIReportListItem,
+                            AdminAIReportResultResponse,
+                            AdminAIReportStatusResponse)
+from app.schemas.base import Page
+from app.services.ai.admin_report_pipeline import \
+    request_admin_report_generation
+from app.services.ai.cache import build_admin_report_request_fingerprint
+from app.services.ai.rate_limit import (DatabaseFixedWindowRateLimiter,
+                                        InMemorySlidingWindowRateLimiter,
+                                        RateLimitRule, RateLimitViolation,
+                                        consume_rate_limit_or_raise)
+from app.services.ai.validation import validate_admin_report_output
+from fastapi import (APIRouter, BackgroundTasks, Depends, Header,
+                     HTTPException, Query, status)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/ai/reports", tags=["ai-reports"])
 
@@ -131,6 +119,7 @@ def _assert_report_access(report: AIGeneration, current_user: User) -> None:
 )
 async def create_admin_ai_report(
     payload: AdminAIReportCreateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
     limiter: InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter = Depends(get_ai_rate_limiter),
@@ -307,11 +296,7 @@ async def create_admin_ai_report(
         )
 
     if generation.status in (AIGenerationStatus.PENDING, AIGenerationStatus.PROCESSING):
-        celery_app.send_task(
-            "app.jobs.tasks.generate_admin_ai_report",
-            kwargs={"generation_id": generation.id},
-            queue=settings.CELERY_TASK_DEFAULT_QUEUE,
-        )
+        background_tasks.add_task(generate_admin_ai_report, generation_id=generation.id)
 
     return AdminAIReportCreateResponse(
         report_id=generation.id,

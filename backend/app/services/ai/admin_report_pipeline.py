@@ -3,25 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.crud.crud_ai_generation import (
-    create_ai_generation,
-    fail_stale_active_generations,
-    find_active_generation_by_fingerprint,
-    find_cached_completed_generation,
-    update_ai_generation,
-)
+from app.crud.crud_ai_generation import (create_ai_generation,
+                                         fail_stale_active_generations,
+                                         find_active_generation_by_fingerprint,
+                                         find_cached_completed_generation,
+                                         update_ai_generation)
 from app.models import AIFeatureType, AIGeneration, AIGenerationStatus
-from app.schemas.ai import (
-    ADMIN_REPORT_RESPONSE_JSON_SCHEMA,
-    AIGenerationCreate,
-    AIGenerationUpdate,
-    AITokenUsage,
-)
-from app.services.ai.cache import build_admin_report_request_fingerprint, compute_cache_expiry
+from app.schemas.ai import (ADMIN_REPORT_RESPONSE_JSON_SCHEMA,
+                            AIGenerationCreate, AIGenerationUpdate,
+                            AITokenUsage)
+from app.services.ai.cache import (build_admin_report_request_fingerprint,
+                                   compute_cache_expiry)
 from app.services.ai.gemini_client import GeminiClient
 from app.services.ai.validation import validate_admin_report_output
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @dataclass(frozen=True)
