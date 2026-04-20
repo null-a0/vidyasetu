@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, FileText, ClipboardList, Inbox, TrendingUp, TrendingDown, Eye, Upload, BarChart3 } from "lucide-react";
+import { BookOpen, FileText, ClipboardList, Inbox, TrendingUp, TrendingDown, Eye, Upload, BarChart3, Sparkles } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -30,6 +30,7 @@ const statCards = [
 ] as const;
 
 const quickActions = [
+  { label: "AI Content Generator", icon: Sparkles, route: "/ai-content-generator" },
   { label: "Upload Material", icon: Upload, route: "/materials" },
   { label: "Create Assessment", icon: ClipboardList, route: "/assessments" },
   { label: "View Submissions", icon: Inbox, route: "/submissions" },

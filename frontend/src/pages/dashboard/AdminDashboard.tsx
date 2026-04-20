@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, BookOpen, Users, GraduationCap, TrendingUp, TrendingDown, Plus, Eye, Pencil, Trash2, Zap, ArrowRight } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Bar, BarChart } from "recharts";
@@ -36,6 +37,7 @@ const statCards = [
 const AdminDashboard = () => {
   const { showToast } = useVToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: stats } = useQuery({ queryKey: ["adminStats"], queryFn: fetchAdminStats });
   const insightsQuery = useQuery({ queryKey: ["adminDashboardInsights"], queryFn: fetchAdminDashboardInsights });
   const { data: workshops = [] } = useQuery({ queryKey: ["workshops"], queryFn: fetchWorkshops });
@@ -242,9 +244,9 @@ const AdminDashboard = () => {
 
   const quickActions = [
     { label: "Create Workshop", icon: Plus, action: handleCreate },
-    { label: "View Reports", icon: TrendingUp, action: () => { window.location.href = "/reports"; showToast("info", "Navigating to Reports"); } },
-    { label: "Manage Students", icon: Users, action: () => showToast("info", "Students", "Student management panel opening...") },
-    { label: "Issue Certificates", icon: GraduationCap, action: () => { window.location.href = "/certificates"; } },
+    { label: "View Reports", icon: TrendingUp, action: () => { navigate("/reports"); showToast("info", "Navigating to Reports"); } },
+    { label: "Manage Students", icon: Users, action: () => { navigate("/manage/students"); } },
+    { label: "Issue Certificates", icon: GraduationCap, action: () => { navigate("/certificates"); } },
   ];
 
   return (
@@ -460,7 +462,13 @@ const AdminDashboard = () => {
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Workshop">
         <div className="space-y-4">
           <VInput id="create-name" label="Workshop Name" placeholder="e.g. React Fundamentals" value={formName} onChange={(e) => setFormName(e.target.value)} />
-          <VInput id="create-inst" label="Institution" placeholder="e.g. IIT Delhi" value={formInstitution} onChange={(e) => setFormInstitution(e.target.value)} />
+          <VSelect 
+            id="create-inst" 
+            label="Institution" 
+            value={formInstitution} 
+            onChange={(e) => setFormInstitution(e.target.value)} 
+            options={[{ value: "", label: "Select Institution" }, ...institutions.map(i => ({ value: i.name, label: i.name }))]}
+          />
           <div className="space-y-1.5"><label className="vidya-label">Description</label><textarea placeholder="Workshop description..." value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={3} className="vidya-input resize-none" /></div>
           <VSelect id="create-status" label="Status" value={formStatus} onChange={(e) => setFormStatus(e.target.value)} options={[
             { value: "Upcoming", label: "Upcoming" },

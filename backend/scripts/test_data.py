@@ -2463,6 +2463,9 @@ async def load_test_data() -> None:
         educators: list[User] = []
         for index, (name, institution_index) in enumerate(educator_data, start=1):
             email = "educator@vidyasetu.edu" if index == 1 else f"educator{index}@vidyasetu.edu"
+            # Assign different salary amounts based on index
+            salary_amount = 30000 + (index * 5000)  # 30000, 35000, 40000, etc.
+            salary_type = "monthly"
             educators.append(
                 User(
                     name=name,
@@ -2474,6 +2477,8 @@ async def load_test_data() -> None:
                         institutions)].id,
                     phone=f"+91 92000 {index:05d}",
                     theme="dark" if index % 2 else "light",
+                    salary_amount=salary_amount,
+                    salary_type=salary_type,
                 )
             )
         users.extend(educators)

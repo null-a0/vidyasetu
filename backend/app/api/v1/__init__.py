@@ -1,9 +1,11 @@
 from fastapi import APIRouter
 
+
 from app.api.v1 import (
     ai_student_explanations,
     ai_reports,
     ai_scheduled_reports,
+    ai_content_generator,
     support,
     analytics,
     approvals,
@@ -55,6 +57,7 @@ api_router.include_router(ai_scheduled_reports.router)
 api_router.include_router(support.router)
 api_router.include_router(notifications.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(ai_content_generator.router)
 
 # Admin panel support
 api_router.include_router(approvals.router)

@@ -131,6 +131,10 @@ class User(Base):
     institution_admin_address = Column(Text)
     institution_admin_code = Column(String)
     theme = Column(String, default="light")
+    
+    # Educator salary
+    salary_amount = Column(Integer, default=0)
+    salary_type = Column(String, default="monthly")  # monthly, per_session, per_hour
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -107,7 +107,7 @@ const WorkshopsList = () => {
         );
       } catch (err: unknown) {
         showToast(
-          "destructive",
+          "error",
           "Request Failed",
           err instanceof Error ? err.message : "Unable to send request."
         );
@@ -122,7 +122,7 @@ const WorkshopsList = () => {
     } catch (err: unknown) {
       setDeleteDialog(false);
       showToast(
-        "destructive",
+        "error",
         "Delete Failed",
         err instanceof Error ? err.message : "Unable to delete workshop."
       );
@@ -201,7 +201,16 @@ const WorkshopsList = () => {
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Workshop">
         <div className="space-y-4">
           <VInput label="Name" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Workshop name" />
-          <VInput label="Institution" value={formInst} onChange={e => setFormInst(e.target.value)} placeholder="Institution" />
+          {role === "admin" || role === "institution_admin" ? (
+            <VSelect 
+              label="Institution" 
+              value={formInst} 
+              onChange={e => setFormInst(e.target.value)} 
+              options={[{ value: "", label: "Select Institution" }, ...institutions.map(i => ({ value: i.name, label: i.name }))]}
+            />
+          ) : (
+            <VInput label="Institution" value={formInst} onChange={e => setFormInst(e.target.value)} placeholder="Institution" />
+          )}
           <div className="space-y-1.5">
             <label className="vidya-label">Description</label>
             <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Detailed workshop description..." rows={5} className="vidya-input resize-none" />
@@ -228,7 +237,7 @@ const WorkshopsList = () => {
               showToast("success", "Workshop Created");
             } catch (err: unknown) {
               showToast(
-                "destructive",
+                "error",
                 "Create Failed",
                 err instanceof Error ? err.message : "Unable to create workshop."
               );
@@ -241,6 +250,14 @@ const WorkshopsList = () => {
       <VModal isOpen={editModal} onClose={() => setEditModal(false)} title="Edit Workshop">
         <div className="space-y-4">
           <VInput label="Name" value={formName} onChange={e => setFormName(e.target.value)} />
+          {(role === "admin" || role === "institution_admin") && (
+            <VSelect 
+              label="Institution" 
+              value={formInst} 
+              onChange={e => setFormInst(e.target.value)} 
+              options={[{ value: "", label: "Select Institution" }, ...institutions.map(i => ({ value: i.name, label: i.name }))]}
+            />
+          )}
           <div className="space-y-1.5">
             <label className="vidya-label">Description</label>
             <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={5} className="vidya-input resize-none" />
@@ -253,7 +270,7 @@ const WorkshopsList = () => {
               showToast("success", "Workshop Updated");
             } catch (err: unknown) {
               showToast(
-                "destructive",
+                "error",
                 "Update Failed",
                 err instanceof Error ? err.message : "Unable to update workshop."
               );

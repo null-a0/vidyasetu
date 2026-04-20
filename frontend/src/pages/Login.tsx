@@ -22,6 +22,7 @@ const Login = () => {
   const [email, setEmail] = useState("admin@vidyasetu.edu");
   const [password, setPassword] = useState("admin123");
   const [role, setRole] = useState<UserRole>("admin");
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useAuth();
   const navigate = useNavigate();
   const roleOptions = [

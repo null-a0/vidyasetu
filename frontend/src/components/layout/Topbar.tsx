@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Search, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react';
+import { Bell, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '@/components/ui-custom/LanguageSwitcher';
@@ -11,7 +11,6 @@ interface TopbarProps {
   subtitle?: string;
   userName?: string;
   onMenuToggle?: () => void;
-  onSearch?: (query: string) => void;
   onLogout?: () => void;
 }
 
@@ -21,7 +20,6 @@ const Topbar = ({ title, subtitle, userName = 'User', onMenuToggle, onSearch, on
   const { showToast } = useVToast();
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchVal, setSearchVal] = useState('');
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 

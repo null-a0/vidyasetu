@@ -18,6 +18,7 @@ import {
   sendParentEmailMessage,
   fetchParentContactDirectory,
   fetchWorkshops,
+  updateUser,
 } from "@/services/api";
 
 interface StudentRow {
@@ -55,6 +56,9 @@ const StudentManagement = () => {
   const [emailBody, setEmailBody] = useState("");
   const [removalTarget, setRemovalTarget] = useState<StudentRow | null>(null);
   const [removalConfirm, setRemovalConfirm] = useState(false);
+  const [editModal, setEditModal] = useState(false);
+  const [editParentName, setEditParentName] = useState("");
+  const [editParentEmail, setEditParentEmail] = useState("");
 
   const isInstitutionAdmin = role === "institution_admin";
 
@@ -104,21 +108,23 @@ const StudentManagement = () => {
     queryKey: ["studentEnrollments", studentIdsKey],
     queryFn: async () => {
       const ids = studentUsers.map((s) => s.id);
-      const pairs: Array<readonly [string, { workshop_id?: string | null; status?: string | null }[]]> = [];
+      const pairs: Array<[string, { workshop_id?: string | null; status?: string | null }[]]> = [];
       const batchSize = 25;
       for (let index = 0; index < ids.length; index += batchSize) {
         const batch = ids.slice(index, index + batchSize);
-        const batchPairs = await Promise.all(
+        const batchResults = await Promise.all(
           batch.map(async (id) => {
             try {
               const page = await fetchEnrollments(id);
-              return [id, page.items] as const;
+              return { id, items: page.items };
             } catch {
-              return [id, []] as const;
+              return { id, items: [] };
             }
           })
         );
-        pairs.push(...batchPairs);
+        for (const result of batchResults) {
+          pairs.push([result.id, result.items]);
+        }
       }
       return Object.fromEntries(pairs) as Record<string, { workshop_id?: string | null; status?: string | null }[]>;
     },
@@ -182,7 +188,7 @@ const StudentManagement = () => {
       queryClient.invalidateQueries({ queryKey: ["approvalRequests"] });
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Request Failed", err instanceof Error ? err.message : "Unable to send request.");
+      showToast("error", "Request Failed", err instanceof Error ? err.message : "Unable to send request.");
     },
   });
   const parentEmailMutation = useMutation({
@@ -203,7 +209,24 @@ const StudentManagement = () => {
       setEmailModal(false);
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Send Failed", err instanceof Error ? err.message : "Unable to send parent email.");
+      showToast("error", "Send Failed", err instanceof Error ? err.message : "Unable to send parent email.");
+    },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async (payload: { userId: string; parent_name: string; parent_email: string }) => {
+      return updateUser(payload.userId, {
+        parent_name: payload.parent_name,
+        parent_email: payload.parent_email,
+      });
+    },
+    onSuccess: (_, target) => {
+      showToast("success", "Parent Updated", "Parent contact details have been updated.");
+      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+      setEditModal(false);
+    },
+    onError: (err: unknown) => {
+      showToast("error", "Update Failed", err instanceof Error ? err.message : "Unable to update parent details.");
     },
   });
 
@@ -250,6 +273,18 @@ const StudentManagement = () => {
                 title="Email Parent"
               >
                 <Mail className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  setSelected(r);
+                  setEditParentName(r.parentName);
+                  setEditParentEmail(r.parentEmail);
+                  setEditModal(true);
+                }}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
+                title="Edit Parent Details"
+              >
+                <Eye className="h-4 w-4" />
               </button>
               <button
                 onClick={() => {
@@ -429,6 +464,47 @@ const StudentManagement = () => {
               isLoading={removalMutation.isPending}
             >
               <Send className="h-4 w-4" /> Send Request
+            </VButton>
+          </div>
+        </div>
+      </VModal>
+
+      {/* Edit Parent Details Modal */}
+      <VModal isOpen={editModal} onClose={() => setEditModal(false)} title="Edit Parent Details">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Update parent/guardian contact information for <span className="font-semibold text-foreground">{selected?.name}</span>.
+          </p>
+          <VInput
+            label="Parent/Guardian Name"
+            value={editParentName}
+            onChange={(e) => setEditParentName(e.target.value)}
+            placeholder="Enter parent name"
+          />
+          <VInput
+            label="Parent Email"
+            type="email"
+            value={editParentEmail}
+            onChange={(e) => setEditParentEmail(e.target.value)}
+            placeholder="Enter parent email"
+          />
+          <div className="flex justify-end gap-3">
+            <VButton variant="ghost" onClick={() => setEditModal(false)}>
+              Cancel
+            </VButton>
+            <VButton
+              onClick={() => {
+                if (!selected) return;
+                editMutation.mutate({
+                  userId: selected.id,
+                  parent_name: editParentName,
+                  parent_email: editParentEmail,
+                });
+              }}
+              isLoading={editMutation.isPending}
+              disabled={!editParentName || !editParentEmail || editMutation.isPending}
+            >
+              Save Changes
             </VButton>
           </div>
         </div>

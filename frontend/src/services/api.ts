@@ -737,6 +737,7 @@ export const uploadModuleMaterial = async (
     return apiPost<BackendModule>(
         `/modules/${moduleId}/materials/upload`,
         formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
     );
 };
 
@@ -866,6 +867,16 @@ export const fetchInstitutions = async (): Promise<BackendInstitution[]> => {
     });
 };
 
+export const createInstitution = async (payload: {
+    name: string;
+    code?: string;
+    address?: string;
+    contact_email?: string;
+    contact_phone?: string;
+}): Promise<BackendInstitution> => {
+    return apiPost<BackendInstitution>("/institutions/", payload);
+};
+
 export const fetchUsers = async (
     options: { limit?: number; offset?: number } = {},
 ): Promise<ApiPage<BackendUser>> => {
@@ -947,6 +958,16 @@ export const paySalary = async (payload: {
         month: payload.month,
         amount: payload.amount,
     });
+};
+
+export const updateEducatorSalary = async (
+    educatorId: string,
+    payload: {
+        salary_amount: number;
+        salary_type: string;
+    },
+) => {
+    return apiPatch<BackendUser>(`/users/${educatorId}/salary`, payload);
 };
 
 export const fetchWorkshopAnalytics = async (

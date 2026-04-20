@@ -78,6 +78,8 @@ class UserResponse(BaseModel):
     institution_admin_address: Optional[str]
     institution_admin_code: Optional[str]
     theme: Optional[str]
+    salary_amount: Optional[int] = 0
+    salary_type: Optional[str] = "monthly"
     created_at: Optional[datetime]
 
 

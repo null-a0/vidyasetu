@@ -9,7 +9,6 @@ interface DashboardLayoutProps {
   title: string;
   subtitle?: string;
   children: ReactNode;
-  onSearch?: (query: string) => void;
 }
 
 const DashboardLayout = ({ title, subtitle, children, onSearch }: DashboardLayoutProps) => {
@@ -67,7 +66,6 @@ const DashboardLayout = ({ title, subtitle, children, onSearch }: DashboardLayou
           subtitle={subtitle}
           userName={user?.name ?? undefined}
           onMenuToggle={() => setSidebarOpen(true)}
-          onSearch={onSearch}
           onLogout={handleLogout}
         />
         <main className="p-4 sm:p-6 lg:p-8">{children}</main>

@@ -101,10 +101,19 @@ async def patch_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
-    # Users can only update themselves; admins can update anyone
-    if current_user.role not in (UserRole.ADMIN,):
+    # Users can only update themselves; admins/institution_admins can update students in their institution
+    if current_user.role not in (UserRole.ADMIN, UserRole.INSTITUTION_ADMIN):
         if current_user.id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    
+    # Institution admins can only update students in their institution
+    if current_user.role == UserRole.INSTITUTION_ADMIN:
+        user = await get_user(db, user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        if user.role != UserRole.STUDENT or user.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    
     user = await get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
@@ -141,3 +150,37 @@ async def upload_profile_photo(
 
     updated = await update_user(db, user, UserUpdate(profile_photo=relative_path))
     return UserResponse.model_validate(updated)
+
+
+@router.patch(
+    "/{user_id}/salary",
+    response_model=UserResponse,
+    summary="Update educator salary (admin or institution admin)",
+)
+async def update_educator_salary(
+    user_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
+) -> UserResponse:
+    user = await get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    if user.role != UserRole.EDUCATOR:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not an educator.")
+    
+    # Institution admins can only update educators from their institution
+    if current_user.role == UserRole.INSTITUTION_ADMIN:
+        if user.institution_id != current_user.institution_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot update salary for educator from different institution.")
+    
+    salary_amount = payload.get("salary_amount", 0)
+    salary_type = payload.get("salary_type", "monthly")
+    
+    user.salary_amount = salary_amount
+    user.salary_type = salary_type
+    await db.commit()
+    await db.refresh(user)
+    
+    return UserResponse.model_validate(user)

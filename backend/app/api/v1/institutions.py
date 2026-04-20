@@ -26,12 +26,12 @@ router = APIRouter(prefix="/institutions", tags=["institutions"])
     "/",
     response_model=InstitutionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create institution (admin only)",
+    summary="Create institution (admin or institution admin)",
 )
 async def create(
     payload: InstitutionCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN)),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
 ) -> InstitutionResponse:
     institution = await create_institution(db, payload)
     return InstitutionResponse.model_validate(institution)
