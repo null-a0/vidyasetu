@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # ----- AI / Gemini -----
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL_NAME: str = "gemini-3.1-flash-lite-preview"
+    GEMINI_MODEL_NAME: str = "gemini-flash-latest"
     GEMINI_API_BASE_URL: str = "https://generativelanguage.googleapis.com"
     GEMINI_TIMEOUT_SECONDS: float = 30.0
     AI_MAX_RETRIES: int = 3
