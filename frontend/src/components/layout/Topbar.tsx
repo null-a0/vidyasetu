@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from '@/components/ui-custom/LanguageSwitcher';
 import ThemeSwitcher from '@/components/ui-custom/ThemeSwitcher';
 import { useVToast } from '@/components/ui-custom/VToast';
 
 interface TopbarProps {
   title: string;
+  subtitle?: string;
   userName?: string;
   onMenuToggle?: () => void;
   onLogout?: () => void;
 }
 
-const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProps) => {
+const Topbar = ({ title, subtitle, userName = 'User', onMenuToggle, onSearch, onLogout }: TopbarProps) => {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { showToast } = useVToast();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -29,23 +33,32 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
   }, []);
 
   const notifications = [
-    { id: '1', text: 'New assessment published', time: '2 min ago', unread: true },
-    { id: '2', text: 'Workshop starting soon', time: '1 hour ago', unread: true },
-    { id: '3', text: 'Results are now available', time: '3 hours ago', unread: false },
+    { id: '1', text: t('topbar.notificationItems.newAssessment'), time: t('topbar.notificationItems.twoMinutesAgo'), unread: true },
+    { id: '2', text: t('topbar.notificationItems.workshopSoon'), time: t('topbar.notificationItems.oneHourAgo'), unread: true },
+    { id: '3', text: t('topbar.notificationItems.resultsAvailable'), time: t('topbar.notificationItems.threeHoursAgo'), unread: false },
   ];
 
   const handleLogout = () => {
     onLogout?.();
-    showToast('success', 'Logged out', 'You have been signed out successfully.');
+    showToast('success', t('topbar.loggedOutTitle'), t('topbar.loggedOutMessage'));
     navigate('/login');
   };
 
-  const today = new Date().toLocaleDateString('en-US', {
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchVal.trim();
+    if (onSearch && q) {
+      onSearch(q);
+      showToast('info', t('common.searching'), t('topbar.searchResultsMessage', { query: q }));
+    }
+  };
+
+  const today = new Intl.DateTimeFormat(i18n.language === 'hi' ? 'hi-IN' : 'en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  });
+  }).format(new Date());
 
   const initials = userName
     .split(' ')
@@ -67,11 +80,28 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
 
         <div className="flex flex-col">
           <p className="text-sm font-semibold text-foreground leading-tight">{title}</p>
-          <span className="text-xs text-muted-foreground hidden xl:block">{today}</span>
+          <span className="text-xs text-muted-foreground hidden xl:block">
+            {subtitle ? `${subtitle} • ${today}` : today}
+          </span>
         </div>
+
+        <form onSubmit={handleSearch} className="relative hidden sm:block ml-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder={t('common.searchPlaceholder')}
+            value={searchVal}
+            onChange={(e) => {
+              setSearchVal(e.target.value);
+              onSearch?.(e.target.value);
+            }}
+            className="h-9 w-48 md:w-72 rounded-xl border border-input bg-muted/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
+          />
+        </form>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        <LanguageSwitcher />
         <ThemeSwitcher />
 
         {/* Notifications dropdown */}
@@ -86,7 +116,7 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
           {notifOpen && (
             <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-border bg-card shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="px-4 py-3 border-b border-border">
-                <p className="text-sm font-semibold text-foreground">Notifications</p>
+                <p className="text-sm font-semibold text-foreground">{t('common.notifications')}</p>
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {notifications.map((n) => (
@@ -116,7 +146,7 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
                 }}
                 className="w-full px-4 py-3 text-sm text-primary font-medium border-t border-border hover:bg-accent/50 transition-colors"
               >
-                View all notifications
+                {t('common.viewAllNotifications')}
               </button>
             </div>
           )}
@@ -137,7 +167,7 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
             <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-border bg-card shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="px-4 py-3 border-b border-border">
                 <p className="text-sm font-semibold text-foreground">{userName}</p>
-                <p className="text-xs text-muted-foreground">Logged in</p>
+                <p className="text-xs text-muted-foreground">{t('common.loggedIn')}</p>
               </div>
               <div className="p-1">
                 <button
@@ -147,16 +177,16 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-foreground hover:bg-accent transition-colors"
                 >
-                  <User className="h-4 w-4 text-muted-foreground" /> My Profile
+                  <User className="h-4 w-4 text-muted-foreground" /> {t('common.myProfile')}
                 </button>
                 <button
                   onClick={() => {
                     setProfileOpen(false);
-                    showToast('info', 'Settings', 'Settings page coming soon');
+                    showToast('info', t('common.settings'), t('common.settingsComingSoon'));
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-foreground hover:bg-accent transition-colors"
                 >
-                  <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+                  <Settings className="h-4 w-4 text-muted-foreground" /> {t('common.settings')}
                 </button>
                 <button
                   onClick={() => {
@@ -165,7 +195,7 @@ const Topbar = ({ title, userName = 'User', onMenuToggle, onLogout }: TopbarProp
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
                 >
-                  <LogOut className="h-4 w-4" /> Sign out
+                  <LogOut className="h-4 w-4" /> {t('common.signOut')}
                 </button>
               </div>
             </div>

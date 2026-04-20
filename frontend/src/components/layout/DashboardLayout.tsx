@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { useAuth } from '@/hooks/useAuth';
+import VLoader from '@/components/ui-custom/VLoader';
 
 interface DashboardLayoutProps {
   title: string;
+  subtitle?: string;
   children: ReactNode;
 }
 
-const DashboardLayout = ({ title, children }: DashboardLayoutProps) => {
+const DashboardLayout = ({ title, subtitle, children, onSearch }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, isLoading, logout } = useAuth();
@@ -20,8 +22,20 @@ const DashboardLayout = ({ title, children }: DashboardLayoutProps) => {
     }
   }, [isLoading, user, navigate]);
 
-  if (isLoading || !user) {
-    return null;
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <VLoader text="Loading your workspace..." />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <VLoader text="Redirecting to login..." />
+      </div>
+    );
   }
 
   const handleLogout = () => {
@@ -49,6 +63,7 @@ const DashboardLayout = ({ title, children }: DashboardLayoutProps) => {
       <div className="lg:ml-64">
         <Topbar
           title={title}
+          subtitle={subtitle}
           userName={user?.name ?? undefined}
           onMenuToggle={() => setSidebarOpen(true)}
           onLogout={handleLogout}

@@ -20,18 +20,20 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import { useRole } from "@/hooks/useRole";
 import { useAuth } from "@/hooks/useAuth";
 import type { UserRole } from "@/mock/mockData";
 
 interface NavItem {
   to: string;
-  label: string;
+  labelKey: string;
   icon: React.ElementType;
   roles: UserRole[];
 }
 
 const navItems: NavItem[] = [
+<<<<<<< HEAD
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
   { to: "/workshops", label: "Workshops", icon: BookOpen, roles: ["admin", "institution_admin", "educator", "student"] },
   { to: "/materials", label: "Materials", icon: FileText, roles: ["admin", "institution_admin", "educator"] },
@@ -42,13 +44,25 @@ const navItems: NavItem[] = [
   { to: "/reports/ai", label: "AI Reports", icon: Sparkles, roles: ["admin", "institution_admin"] },
   { to: "/support", label: "Support", icon: LifeBuoy, roles: ["technical_support"] },
   { to: "/notifications", label: "Notifications", icon: Bell, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
+=======
+  { to: "/dashboard", labelKey: "navigation.dashboard", icon: LayoutDashboard, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
+  { to: "/workshops", labelKey: "navigation.workshops", icon: BookOpen, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/materials", labelKey: "navigation.materials", icon: FileText, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/assessments", labelKey: "navigation.assessments", icon: ClipboardList, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/submissions", labelKey: "navigation.submissions", icon: Inbox, roles: ["admin", "institution_admin", "educator"] },
+  { to: "/certificates", labelKey: "navigation.certificates", icon: Award, roles: ["admin", "institution_admin", "educator", "student"] },
+  { to: "/reports", labelKey: "navigation.reports", icon: BarChart3, roles: ["admin", "institution_admin", "educator"] },
+  { to: "/reports/ai", labelKey: "navigation.aiReports", icon: Sparkles, roles: ["admin", "institution_admin"] },
+  { to: "/support", labelKey: "navigation.support", icon: LifeBuoy, roles: ["technical_support"] },
+  { to: "/notifications", labelKey: "navigation.notifications", icon: Bell, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
+>>>>>>> ececdc39bf1497f038860b82390e293c745cd06c
   // Management items
-  { to: "/manage/students", label: "Students", icon: Users, roles: ["admin", "institution_admin"] },
-  { to: "/manage/educators", label: "Educators", icon: GraduationCap, roles: ["admin", "institution_admin"] },
-  { to: "/manage/institutes", label: "Institutes", icon: Building2, roles: ["admin"] },
-  { to: "/manage/salary", label: "Salary", icon: DollarSign, roles: ["admin"] },
-  { to: "/manage/approvals", label: "Approvals", icon: CheckSquare, roles: ["admin"] },
-  { to: "/profile", label: "Profile", icon: User, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
+  { to: "/manage/students", labelKey: "navigation.students", icon: Users, roles: ["admin", "institution_admin"] },
+  { to: "/manage/educators", labelKey: "navigation.educators", icon: GraduationCap, roles: ["admin", "institution_admin"] },
+  { to: "/manage/institutes", labelKey: "navigation.institutes", icon: Building2, roles: ["admin"] },
+  { to: "/manage/salary", labelKey: "navigation.salary", icon: DollarSign, roles: ["admin"] },
+  { to: "/manage/approvals", labelKey: "navigation.approvals", icon: CheckSquare, roles: ["admin"] },
+  { to: "/profile", labelKey: "navigation.profile", icon: User, roles: ["admin", "institution_admin", "educator", "student", "technical_support"] },
 ];
 
 interface SidebarProps {
@@ -57,6 +71,7 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
+  const { t } = useTranslation();
   const role = useRole();
   const { user: authUser } = useAuth();
 
@@ -77,7 +92,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
     return to;
   };
 
-  const renderItem = ({ to, label, icon: Icon }: NavItem) => (
+  const renderItem = ({ to, labelKey, icon: Icon }: NavItem) => (
     <NavLink
       key={to}
       to={resolveTo(to)}
@@ -92,7 +107,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
       }
     >
       <Icon className="h-[18px] w-[18px]" />
-      {label}
+      {t(labelKey)}
     </NavLink>
   );
 
@@ -103,7 +118,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl vidya-gradient">
             <GraduationCap className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold text-sidebar-foreground">VidyaSetu</span>
+          <span className="text-lg font-bold text-sidebar-foreground">{t("common.appName")}</span>
         </div>
         {onClose && (
           <button onClick={onClose} className="lg:hidden rounded-lg p-1 text-sidebar-muted hover:bg-sidebar-accent">
@@ -118,7 +133,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
         {manageItems.length > 0 && (
           <>
             <div className="pt-4 pb-1 px-3">
-              <p className="text-[10px] uppercase tracking-widest text-sidebar-muted font-semibold">Management</p>
+              <p className="text-[10px] uppercase tracking-widest text-sidebar-muted font-semibold">{t("navigation.management")}</p>
             </div>
             {manageItems.map(renderItem)}
           </>
@@ -127,7 +142,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
         {profileItem && (
           <>
             <div className="pt-4 pb-1 px-3">
-              <p className="text-[10px] uppercase tracking-widest text-sidebar-muted font-semibold">Account</p>
+              <p className="text-[10px] uppercase tracking-widest text-sidebar-muted font-semibold">{t("navigation.account")}</p>
             </div>
             {renderItem(profileItem)}
           </>
@@ -151,7 +166,7 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
         >
           <LogOut className="h-[18px] w-[18px]" />
-          Logout
+          {t("common.logout")}
         </button>
       </div>
     </aside>
@@ -159,4 +174,3 @@ const Sidebar = ({ onLogout, onClose }: SidebarProps) => {
 };
 
 export default Sidebar;
-

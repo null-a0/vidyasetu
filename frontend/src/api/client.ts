@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
+import { getStoredLanguage } from '@/lib/i18n';
 
 export const TOKEN_STORAGE_KEY = 'vidyasetu_access_token';
 export const REFRESH_TOKEN_STORAGE_KEY = 'vidyasetu_refresh_token';
@@ -100,10 +101,12 @@ const refreshAccessToken = async () => {
 
 api.interceptors.request.use((config) => {
   const token = loadToken();
+  const language = getStoredLanguage();
+  config.headers = config.headers ?? {};
   if (token) {
-    config.headers = config.headers ?? {};
     (config.headers as Record<string, string>)['Authorization'] = 'Bearer ' + token;
   }
+  (config.headers as Record<string, string>)['Accept-Language'] = language;
   return config;
 });
 
@@ -181,7 +184,7 @@ export const isApiError = (error: unknown): error is ApiError =>
 const handleError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const message = pickBackendMessage(error.response?.data) || error.message;
-    throw new ApiError(message || 'Something went wrong.', error.response?.status);
+    throw new ApiError(message || (getStoredLanguage() === 'hi' ? 'कुछ गलत हो गया।' : 'Something went wrong.'), error.response?.status);
   }
   throw error;
 };
@@ -229,7 +232,6 @@ export const getAccessToken = () => loadToken();
 export const clearAccessToken = () => storeTokens({ accessToken: null, refreshToken: null });
 
 export default api;
-
 
 
 
