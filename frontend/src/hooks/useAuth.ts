@@ -17,12 +17,15 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<BackendUser | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !!getAccessToken());
   const [error, setError] = useState<string | null>(null);
 
   const refreshUser = useCallback(async () => {
     const token = getAccessToken();
-    if (!token) return;
+    if (!token) {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const data = await fetchCurrentUser();

@@ -1,68 +1,32 @@
 from __future__ import annotations
 
+import asyncio
+from fastapi import (APIRouter, Depends, Header, HTTPException, Query, status)
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import PaginationParams, get_db, require_role
 from app.config import settings
-from app.core.redis import (get_job_progress, get_redis_async,
-                            job_dedup_lock_key, job_idempotency_key)
 from app.crud.crud_ai_generation import (fail_stale_active_generations,
                                          find_active_generation_by_fingerprint,
                                          find_cached_completed_generation,
                                          get_ai_generation,
-                                         list_ai_generations)
-from app.crud.crud_rate_limit_events import create_rate_limit_event
-from app.jobs.tasks import generate_admin_ai_report
+                                         list_ai_generations,
+                                         find_generation_by_idempotency_key)
 from app.models import (AIFeatureType, AIGeneration, AIGenerationStatus, User,
                         UserRole)
 from app.schemas.ai import (AdminAIReportCreateRequest,
                             AdminAIReportCreateResponse, AdminAIReportListItem,
                             AdminAIReportResultResponse,
-                            AdminAIReportStatusResponse)
+                            AdminAIReportStatusResponse,
+                            AIGenerationCreate)
 from app.schemas.base import Page
 from app.services.ai.admin_report_pipeline import \
     request_admin_report_generation
 from app.services.ai.cache import build_admin_report_request_fingerprint
-from app.services.ai.rate_limit import (DatabaseFixedWindowRateLimiter,
-                                        InMemorySlidingWindowRateLimiter,
-                                        RateLimitRule, RateLimitViolation,
-                                        consume_rate_limit_or_raise)
-from app.services.ai.validation import validate_admin_report_output
-from fastapi import (APIRouter, BackgroundTasks, Depends, Header,
-                     HTTPException, Query, status)
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/ai/reports", tags=["ai-reports"])
 
-
-def _build_rate_limiter() -> InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter:
-    backend = settings.AI_RATE_LIMIT_BACKEND.strip().lower()
-    if backend == "memory":
-        return InMemorySlidingWindowRateLimiter()
-    if backend == "database":
-        return DatabaseFixedWindowRateLimiter(
-            retention_seconds=settings.AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS,
-        )
-    raise ValueError("AI_RATE_LIMIT_BACKEND must be either 'database' or 'memory'.")
-
-
-_rate_limiter = _build_rate_limiter()
-
-
-def get_ai_rate_limiter() -> InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter:
-    return _rate_limiter
-
-
-def get_ai_rate_limit_rules() -> tuple[RateLimitRule, RateLimitRule]:
-    return (
-        RateLimitRule(
-            max_requests=settings.AI_ADMIN_REPORT_USER_RATE_LIMIT,
-            window_seconds=settings.AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS,
-        ),
-        RateLimitRule(
-            max_requests=settings.AI_ADMIN_REPORT_INSTITUTION_RATE_LIMIT,
-            window_seconds=settings.AI_ADMIN_REPORT_RATE_LIMIT_WINDOW_SECONDS,
-        ),
-    )
-
+# Rate limits removed as requested by user to eliminate bottlenecks
 
 def _resolve_scope(
     payload: AdminAIReportCreateRequest,
@@ -119,14 +83,10 @@ def _assert_report_access(report: AIGeneration, current_user: User) -> None:
 )
 async def create_admin_ai_report(
     payload: AdminAIReportCreateRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN, UserRole.INSTITUTION_ADMIN)),
-    limiter: InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter = Depends(get_ai_rate_limiter),
-    rate_rules: tuple[RateLimitRule, RateLimitRule] = Depends(get_ai_rate_limit_rules),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AdminAIReportCreateResponse:
-    redis_client = get_redis_async()
     institution_id, source_entity_type, source_entity_id = _resolve_scope(payload, current_user)
     request_payload = payload.model_dump(mode="json")
     fingerprint_payload = {
@@ -144,31 +104,23 @@ async def create_admin_ai_report(
         raw_prompt_input=fingerprint_payload,
     )
 
+    # Simple Database-based idempotency check
     if idempotency_key:
-        mapped = await redis_client.get(
-            job_idempotency_key(
-                user_id=current_user.id,
-                route_key="POST:/ai/reports",
-                key=idempotency_key,
-            )
+        existing = await find_generation_by_idempotency_key(
+            db,
+            user_id=current_user.id,
+            feature_type=AIFeatureType.ADMIN_REPORT,
+            idempotency_key=idempotency_key
         )
-        if mapped:
-            existing = await get_ai_generation(db, str(mapped))
-            if existing and existing.feature_type == AIFeatureType.ADMIN_REPORT:
-                return AdminAIReportCreateResponse(
-                    report_id=existing.id,
-                    status=existing.status,
-                    from_cache=False,
-                    deduplicated=True,
-                )
+        if existing:
+            return AdminAIReportCreateResponse(
+                report_id=existing.id,
+                status=existing.status,
+                from_cache=False,
+                deduplicated=True,
+                result=existing.parsed_output_json if existing.status == AIGenerationStatus.COMPLETED else None,
+            )
 
-    lock_key = job_dedup_lock_key(fingerprint=request_fingerprint)
-    got_lock = await redis_client.set(
-        lock_key,
-        current_user.id,
-        nx=True,
-        ex=settings.AI_JOB_DEDUP_LOCK_TTL_SECONDS,
-    )
     await fail_stale_active_generations(
         db,
         feature_type=AIFeatureType.ADMIN_REPORT,
@@ -176,20 +128,6 @@ async def create_admin_ai_report(
     )
 
     if not payload.force_regenerate:
-        if not got_lock:
-            active = await find_active_generation_by_fingerprint(
-                db,
-                feature_type=AIFeatureType.ADMIN_REPORT,
-                request_fingerprint=request_fingerprint,
-            )
-            if active:
-                return AdminAIReportCreateResponse(
-                    report_id=active.id,
-                    status=active.status,
-                    from_cache=False,
-                    deduplicated=True,
-                )
-
         active = await find_active_generation_by_fingerprint(
             db,
             feature_type=AIFeatureType.ADMIN_REPORT,
@@ -201,6 +139,7 @@ async def create_admin_ai_report(
                 status=active.status,
                 from_cache=False,
                 deduplicated=True,
+                result=active.parsed_output_json if active.status == AIGenerationStatus.COMPLETED else None,
             )
 
         cached = await find_cached_completed_generation(
@@ -214,95 +153,92 @@ async def create_admin_ai_report(
                 status=cached.status,
                 from_cache=True,
                 deduplicated=True,
+                result=cached.parsed_output_json,
             )
 
-    user_rule, institution_rule = rate_rules
-    institution_key = institution_id or "platform"
-    try:
-        await consume_rate_limit_or_raise(
-            limiter=limiter,
-            db=db,
-            key=f"ai_report:user:{current_user.id}",
-            rule=user_rule,
-        )
-    except RateLimitViolation as exc:
-        await create_rate_limit_event(
-            db,
-            key=f"ai_report:user:{current_user.id}",
-            allowed=False,
-            remaining=exc.decision.remaining,
-            retry_after_seconds=exc.decision.retry_after_seconds,
-            rule_max_requests=user_rule.max_requests,
-            rule_window_seconds=user_rule.window_seconds,
-            actor_user_id=current_user.id,
-            institution_id=institution_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded for report generation.",
-            headers={"Retry-After": str(exc.decision.retry_after_seconds)},
-        )
-
-    try:
-        await consume_rate_limit_or_raise(
-            limiter=limiter,
-            db=db,
-            key=f"ai_report:institution:{institution_key}",
-            rule=institution_rule,
-        )
-    except RateLimitViolation as exc:
-        await create_rate_limit_event(
-            db,
-            key=f"ai_report:institution:{institution_key}",
-            allowed=False,
-            remaining=exc.decision.remaining,
-            retry_after_seconds=exc.decision.retry_after_seconds,
-            rule_max_requests=institution_rule.max_requests,
-            rule_window_seconds=institution_rule.window_seconds,
-            actor_user_id=current_user.id,
-            institution_id=institution_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded for report generation.",
-            headers={"Retry-After": str(exc.decision.retry_after_seconds)},
-        )
-
-    request_result = await request_admin_report_generation(
+    from app.crud.crud_ai_generation import create_ai_generation
+    generation = await create_ai_generation(
         db,
-        requester_user_id=current_user.id,
-        institution_id=institution_id,
-        source_entity_type=source_entity_type,
-        source_entity_id=source_entity_id,
-        prompt_version=settings.AI_ADMIN_REPORT_PROMPT_VERSION,
-        model_name=settings.GEMINI_MODEL_NAME,
-        raw_prompt_input=fingerprint_payload,
-        fingerprint_input=fingerprint_payload,
-        cache_ttl_seconds=settings.AI_ADMIN_REPORT_CACHE_TTL_SECONDS,
-        stale_after_seconds=settings.AI_ADMIN_REPORT_STALE_AFTER_SECONDS,
-        force_regenerate=payload.force_regenerate,
+        AIGenerationCreate(
+            feature_type=AIFeatureType.ADMIN_REPORT,
+            requester_user_id=current_user.id,
+            institution_id=institution_id,
+            source_entity_type=source_entity_type,
+            source_entity_id=source_entity_id,
+            prompt_version=settings.AI_ADMIN_REPORT_PROMPT_VERSION,
+            model_name=settings.GEMINI_MODEL_NAME,
+            raw_prompt_input=fingerprint_payload,
+            request_fingerprint=request_fingerprint,
+            idempotency_key=idempotency_key,
+            cache_expires_at=None,
+        ),
     )
-    generation = request_result.generation
 
-    if idempotency_key:
-        await redis_client.set(
-            job_idempotency_key(
-                user_id=current_user.id,
-                route_key="POST:/ai/reports",
-                key=idempotency_key,
-            ),
-            generation.id,
-            ex=settings.AI_JOB_IDEMPOTENCY_TTL_SECONDS,
-        )
-
+    # Direct execution without complex pipeline
     if generation.status in (AIGenerationStatus.PENDING, AIGenerationStatus.PROCESSING):
-        background_tasks.add_task(generate_admin_ai_report, generation_id=generation.id)
+        from app.services.ai.admin_report_context import build_admin_report_context
+        from app.services.ai.admin_report_prompt import build_admin_report_prompt
+        from app.services.ai.gemini_client import GeminiClient
+        from app.crud.crud_ai_generation import update_ai_generation
+        from app.schemas.ai import AIGenerationUpdate
+        from app.services.ai.cache import compute_cache_expiry
+        import json
+        import re
+
+        try:
+            # 1. Update status
+            await update_ai_generation(db, generation, AIGenerationUpdate(status=AIGenerationStatus.PROCESSING))
+            
+            # 2. Build context and prompt (synchronous/inline)
+            context = await build_admin_report_context(
+                db, 
+                institution_id=generation.institution_id, 
+                date_from=payload.date_from, 
+                date_to=payload.date_to
+            )
+            prompt = build_admin_report_prompt(request_payload=request_payload, analytics_context=context)
+            
+            # 3. Call AI simply
+            gemini = GeminiClient.from_settings()
+            raw_text = await gemini.generate_simple(prompt=prompt)
+            
+            # 4. Extract and parse JSON (Best-Effort)
+            try:
+                parsed = json.loads(raw_text)
+            except json.JSONDecodeError:
+                match = re.search(r"(\{.*\})", raw_text, re.DOTALL)
+                if match:
+                    parsed = json.loads(match.group(1))
+                else:
+                    raise Exception("Fail to parse AI output as JSON")
+            
+            # 5. Persist
+            generation = await update_ai_generation(
+                db,
+                generation,
+                AIGenerationUpdate(
+                    status=AIGenerationStatus.COMPLETED,
+                    raw_model_output=raw_text,
+                    parsed_output_json=parsed,
+                    cache_expires_at=compute_cache_expiry(ttl_seconds=settings.AI_ADMIN_REPORT_CACHE_TTL_SECONDS),
+                ),
+            )
+        except Exception as e:
+            await update_ai_generation(
+                db,
+                generation,
+                AIGenerationUpdate(
+                    status=AIGenerationStatus.FAILED,
+                    error_details={"message": str(e)},
+                ),
+            )
 
     return AdminAIReportCreateResponse(
         report_id=generation.id,
         status=generation.status,
-        from_cache=request_result.from_cache,
-        deduplicated=request_result.deduplicated,
+        from_cache=False,
+        deduplicated=False,
+        result=generation.parsed_output_json if generation.status == AIGenerationStatus.COMPLETED else None,
     )
 
 
@@ -320,17 +256,13 @@ async def get_admin_ai_report_status(
     if not report or report.feature_type != AIFeatureType.ADMIN_REPORT:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
     _assert_report_access(report, current_user)
-    progress = None
-    try:
-        progress_obj = await get_job_progress(get_redis_async(), generation_id=report.id)
-        progress = progress_obj.__dict__ if progress_obj else None
-    except Exception:
-        progress = None
+    
+    # Progress tracking removed as it relied on Redis
     return AdminAIReportStatusResponse(
         report_id=report.id,
         status=report.status,
         error_details=report.error_details,
-        progress=progress,
+        progress=None,
         created_at=report.created_at,
         updated_at=report.updated_at,
     )
@@ -362,6 +294,7 @@ async def get_admin_ai_report_result(
             detail="Stored report output is invalid.",
         )
 
+    from app.services.ai.validation import validate_admin_report_output
     validated = validate_admin_report_output(report.parsed_output_json)
     return AdminAIReportResultResponse(
         report_id=report.id,

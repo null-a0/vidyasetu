@@ -4,12 +4,11 @@ FastAPI + SQLAlchemy async backend for the VidyaSetu full-stack application.
 
 Local development now defaults to SQLite. PostgreSQL can still be used later by changing `DATABASE_URL`.
 
-## Architecture (No Celery)
+## Architecture (Synchronous & Simple)
 
-This application uses **FastAPI BackgroundTasks** and a background **asyncio scheduler** (started in the FastAPI app lifespan) to handle asynchronously executing AI report generation and student explanations. 
-There is **NO** dependency on a Celery worker or Celery Beat anymore, which drastically simplifies deployments and resolves SQLite locking contention issues.
+This application uses a purely **synchronous architecture**. AI report generation and student explanations are performed inline within the request-response cycle. 
 
-Redis is currently used as an ephemeral data store to track real-time job progress (reporting task % internally) and idempotency locks.
+There is **NO** dependency on a Celery worker, Celery Beat, or Redis. This drastically simplifies local development and deployments.
 
 ## Development
 
@@ -78,8 +77,7 @@ AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
 AI_RATE_LIMIT_BACKEND=database
 AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
 
-# Redis is used for Job progress state and Idempotency locks (Upstash supported)
-REDIS_URL=rediss://:<password>@<host>:<port>
+# Redis/Celery are NOT required. The app is purely synchronous and DB-backed.
 ```
 
 Production notes:

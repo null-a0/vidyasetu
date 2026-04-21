@@ -108,60 +108,186 @@ class GeminiClient:
         response_json_schema: dict[str, Any],
         temperature: float,
     ) -> GeminiGenerationResult:
-        url = f"{self.api_base_url}/v1beta/models/{self.model_name}:generateContent"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": temperature,
-                "responseMimeType": "application/json",
-                "responseSchema": response_json_schema,
-            },
-        }
+        is_openai_compatible = "openrouter" in self.api_base_url.lower() or "openai" in self.api_base_url.lower()
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(url, params={"key": self.api_key}, json=payload)
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
-            raise GeminiTransientError(f"Transport error while calling Gemini: {exc}") from exc
+        if is_openai_compatible:
+            url = f"{self.api_base_url}/chat/completions"
+            
+            # Use OpenAI formatted payload
+            payload = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+            }
+            # Add json schema enforcement if response_json_schema is provided.
+            # OpenRouter / OpenAI supports tools or json_schema in response_format,
+            # but for maximum compatibility with free models, a system hint and response_format={"type": "json_object"}
+            # is best, or passing the schema directly for models that support it.
+            if response_json_schema:
+                # Some models on OpenRouter/OpenAI don't support response_format={"type": "json_object"}
+                # and throw a 400. We'll rely on the system prompt and then use our robust extraction helper.
+                payload["messages"].insert(0, {
+                    "role": "system",
+                    "content": f"You must respond with valid JSON matching this schema: {json.dumps(response_json_schema)}. Do not include any other text."
+                })
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "HTTP-Referer": "http://localhost:8080",
+                "X-Title": "VidyaSetu"
+            }
+            
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    response = await client.post(url, headers=headers, json=payload)
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                raise GeminiTransientError(f"Transport error while calling AI provider: {exc}") from exc
+                
+        else:
+            url = f"{self.api_base_url}/v1beta/models/{self.model_name}:generateContent"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": temperature,
+                    "responseMimeType": "application/json",
+                    "responseSchema": response_json_schema,
+                },
+            }
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    response = await client.post(url, params={"key": self.api_key}, json=payload)
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                raise GeminiTransientError(f"Transport error while calling Gemini: {exc}") from exc
 
         if response.status_code in self._TRANSIENT_CODES:
             raise GeminiTransientError(
-                f"Transient Gemini error {response.status_code}: {response.text[:300]}"
+                f"Transient AI error {response.status_code}: {response.text[:300]}"
             )
         if response.status_code == 404:
             raise GeminiError(
-                "Gemini model not found for generateContent. "
-                f"Configured GEMINI_MODEL_NAME='{self.model_name}'. "
-                "Set a currently available stable model (for example: gemini-3.1-flash-lite-preview) "
-                "and verify with the ListModels endpoint. "
+                f"AI model not found. "
+                f"Configured Model='{self.model_name}'. "
                 f"Raw: {response.text[:500]}"
             )
         if response.status_code >= 400:
-            raise GeminiError(f"Gemini error {response.status_code}: {response.text[:600]}")
+            raise GeminiError(f"AI error {response.status_code}: {response.text[:600]}")
 
         data = response.json()
-        raw_output = self._extract_response_text(data)
+        
+        is_openai_compatible = "openrouter" in self.api_base_url.lower() or "openai" in self.api_base_url.lower()
+        raw_output = self._extract_response_text(data, is_openai=is_openai_compatible)
+        
         if not raw_output:
-            raise GeminiResponseFormatError("Gemini response did not contain JSON text content.")
+            raise GeminiResponseFormatError("AI response did not contain JSON text content.")
 
+        # Robust JSON extraction: try to find a JSON block if not directly parsable
         try:
             parsed = json.loads(raw_output)
-        except json.JSONDecodeError as exc:
-            raise GeminiResponseFormatError("Gemini response was not valid JSON.") from exc
+        except json.JSONDecodeError:
+            # Try to extract from markdown block ```json ... ```
+            import re
+            match = re.search(r"```json\s*(.*?)\s*```", raw_output, re.DOTALL)
+            if not match:
+                match = re.search(r"```\s*(.*?)\s*```", raw_output, re.DOTALL)
+            
+            if match:
+                try:
+                    parsed = json.loads(match.group(1))
+                except json.JSONDecodeError as exc:
+                    raise GeminiResponseFormatError("Found JSON block but it was not valid JSON.") from exc
+            else:
+                raise GeminiResponseFormatError("AI response was not valid JSON and no markdown code block was found.")
 
         if not isinstance(parsed, dict):
-            raise GeminiResponseFormatError("Gemini structured response must be a JSON object.")
+            raise GeminiResponseFormatError("AI structured response must be a JSON object.")
 
-        usage_meta = data.get("usageMetadata", {}) or {}
+        usage_data = data.get("usage", {}) if is_openai_compatible else data.get("usageMetadata", {})
+        if not usage_data:
+            usage_data = {}
+            
         usage = GeminiUsage(
-            input_tokens=usage_meta.get("promptTokenCount"),
-            output_tokens=usage_meta.get("candidatesTokenCount"),
-            total_tokens=usage_meta.get("totalTokenCount"),
+            input_tokens=usage_data.get("prompt_tokens") if is_openai_compatible else usage_data.get("promptTokenCount"),
+            output_tokens=usage_data.get("completion_tokens") if is_openai_compatible else usage_data.get("candidatesTokenCount"),
+            total_tokens=usage_data.get("total_tokens") if is_openai_compatible else usage_data.get("totalTokenCount"),
         )
         return GeminiGenerationResult(raw_output=raw_output, parsed_output=parsed, usage=usage)
 
+    async def generate_simple(
+        self,
+        *,
+        prompt: str,
+        temperature: float = 0.2,
+    ) -> str:
+        """
+        Mimics the simple, direct API call style of ai_content_generator.py.
+        Returns ONLY the raw text/JSON content from the AI.
+        """
+        is_openai_compatible = "openrouter" in self.api_base_url.lower() or "openai" in self.api_base_url.lower()
+        
+        if is_openai_compatible:
+            url = f"{self.api_base_url}/chat/completions"
+            payload = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+            }
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "HTTP-Referer": "http://localhost:8080",
+                "X-Title": "VidyaSetu"
+            }
+        else:
+            url = f"{self.api_base_url}/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": temperature},
+            }
+            headers = {}
+
+        # Simple retry loop mirroring the reference implementation
+        max_retries = 3
+        last_exc = None
+        
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            for attempt in range(max_retries):
+                try:
+                    response = await client.post(url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # Extract text using the direct paths
+                    raw_text = ""
+                    if is_openai_compatible:
+                        choices = data.get("choices", [])
+                        if choices:
+                            raw_text = choices[0].get("message", {}).get("content", "")
+                    else:
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    
+                    if not raw_text:
+                        raise Exception("AI returned empty content")
+                        
+                    return raw_text.strip()
+                    
+                except Exception as e:
+                    last_exc = e
+                    if attempt < max_retries - 1:
+                        import asyncio
+                        await asyncio.sleep(0.5 * (2**attempt))
+                    continue
+        
+        raise last_exc or Exception("Failed to generate content after retries")
+
     @staticmethod
-    def _extract_response_text(response_json: dict[str, Any]) -> str:
+    def _extract_response_text(response_json: dict[str, Any], is_openai: bool = False) -> str:
+        if is_openai:
+            choices = response_json.get("choices") or []
+            if not choices:
+                return ""
+            return str((choices[0] or {}).get("message", {}).get("content") or "").strip()
+            
         candidates = response_json.get("candidates") or []
         if not candidates:
             return ""

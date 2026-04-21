@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.api.deps import PaginationParams, get_db, require_role
 from app.config import settings
-from app.core.redis import get_job_progress, get_redis_async
 from app.crud.crud_ai_generation import (get_ai_generation,
                                          list_ai_generations,
                                          update_ai_generation)
@@ -47,9 +47,8 @@ async def get_support_config(
         action="support.config.view",
     )
     return SupportConfigResponse(
-        celery_queue="celery",
-        redis_configured=bool(settings.REDIS_URL.strip()),
         smtp_configured=bool(settings.SMTP_HOST.strip() and settings.SMTP_FROM_EMAIL.strip()),
+
         ai_max_retries=settings.AI_MAX_RETRIES,
         ai_retry_base_delay_seconds=settings.AI_RETRY_BASE_DELAY_SECONDS,
         admin_report_rate_limits={
@@ -118,20 +117,8 @@ async def list_jobs(
         rows = [r for r in rows if r.status.value == status_filter]
         total = len(rows)
 
-    redis_client = None
-    try:
-        redis_client = get_redis_async()
-    except Exception:
-        redis_client = None
     items: list[SupportJobListItem] = []
     for r in rows:
-        progress = None
-        if redis_client is not None:
-            try:
-                p = await get_job_progress(redis_client, generation_id=r.id)
-                progress = p.__dict__ if p else None
-            except Exception:
-                progress = None
         items.append(
             SupportJobListItem(
                 id=r.id,
@@ -147,7 +134,7 @@ async def list_jobs(
                 error_details=r.error_details,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
-                progress=progress,
+                progress=None,
             )
         )
 
@@ -177,26 +164,6 @@ async def get_job_detail(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
 
-    redis_client = None
-    try:
-        redis_client = get_redis_async()
-    except Exception:
-        redis_client = None
-    progress = None
-    if redis_client is not None:
-        try:
-            p = await get_job_progress(redis_client, generation_id=row.id)
-            progress = p.__dict__ if p else None
-        except Exception:
-            progress = None
-
-    trace = None
-    if redis_client is not None:
-        try:
-            trace = await redis_client.get(f"trace:ai_generation:{row.id}")
-        except Exception:
-            trace = None
-
     return SupportJobDetailResponse(
         id=row.id,
         feature_type=row.feature_type,
@@ -211,15 +178,15 @@ async def get_job_detail(
         error_details=row.error_details,
         created_at=row.created_at,
         updated_at=row.updated_at,
-        progress=progress,
-        error_trace=trace,
+        progress=None,
+        error_trace=None,
     )
 
 
 @router.post(
     "/jobs/{generation_id}/rerun",
     response_model=SupportRerunResponse,
-    summary="Re-run a failed Celery job (limited)",
+    summary="Re-run a failed AI generation task",
 )
 async def rerun_job(
     generation_id: str,
@@ -232,24 +199,6 @@ async def rerun_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
     if row.status != AIGenerationStatus.FAILED:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only FAILED jobs can be re-run.")
-
-    try:
-        redis_client = get_redis_async()
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Redis is required for job re-runs and support tooling.",
-        )
-    key = f"support:rerun:{generation_id}"
-    count_raw = await redis_client.get(key)
-    count = int(count_raw) if (count_raw and str(count_raw).isdigit()) else 0
-    if count >= max(1, settings.SUPPORT_RERUN_LIMIT_PER_DAY):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Re-run limit reached for this job ({settings.SUPPORT_RERUN_LIMIT_PER_DAY} per day).",
-        )
-    await redis_client.incr(key)
-    await redis_client.expire(key, 86400)
 
     await create_audit_log(
         db,
@@ -281,7 +230,7 @@ async def rerun_job(
         generation_id=row.id,
         status=AIGenerationStatus.PENDING,
         queued=True,
-        message="Job re-queued.",
+        message="Job re-queued in background.",
     )
 
 
@@ -360,7 +309,7 @@ async def get_rate_limit_events(
 @router.get(
     "/cache-stats",
     response_model=CacheStatsResponse,
-    summary="View cache and queue stats",
+    summary="View cache stats",
 )
 async def get_cache_stats(
     db: AsyncSession = Depends(get_db),
@@ -400,18 +349,6 @@ async def get_cache_stats(
         )
     ).scalar_one()
 
-    redis_client = None
-    try:
-        redis_client = get_redis_async()
-    except Exception:
-        redis_client = None
-    dlq_length = 0
-    if redis_client is not None:
-        try:
-            dlq_length = int(await redis_client.llen("dlq:ai_generations"))
-        except Exception:
-            dlq_length = 0
-
     return CacheStatsResponse(
         now=now.isoformat(),
         ai_generations={
@@ -421,7 +358,5 @@ async def get_cache_stats(
                 "student_explanation": int(cached_expl or 0),
             },
         },
-        redis={
-            "dlq_length": dlq_length,
-        },
     )
+

@@ -66,7 +66,7 @@ const loadRefreshToken = () => {
 
 const api = axios.create({
   baseURL: API_BASE_URL + '/api/v1',
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -75,7 +75,7 @@ const api = axios.create({
 // Separate client to avoid interceptor loops during refresh.
 const refreshClient = axios.create({
   baseURL: API_BASE_URL + '/api/v1',
-  timeout: 15000,
+  timeout: 30000,
 });
 
 const refreshAccessToken = async () => {

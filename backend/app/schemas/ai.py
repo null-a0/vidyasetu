@@ -24,6 +24,7 @@ class AIGenerationCreate(BaseModel):
     model_name: str
     raw_prompt_input: dict[str, Any]
     request_fingerprint: str
+    idempotency_key: str | None = None
     cache_expires_at: datetime | None = None
 
 
@@ -146,6 +147,7 @@ class AdminAIReportCreateResponse(BaseModel):
     status: AIGenerationStatus
     from_cache: bool
     deduplicated: bool
+    result: AdminReportStructuredOutput | None = None
 
 
 class AdminAIReportStatusResponse(BaseModel):

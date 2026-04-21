@@ -4,6 +4,7 @@ import json
 from fastapi.responses import Response
 import yaml
 import uvicorn
+import os
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,8 +29,28 @@ from fastapi.staticfiles import StaticFiles
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     Path("media").mkdir(exist_ok=True)
     if settings.DATABASE_URL.startswith("sqlite+"):
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
+        import subprocess
+        import sys
+        
+        # Get the directory of the current file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        backend_dir = os.path.dirname(current_dir)
+        
+        # Run alembic upgrade head as a subprocess to avoid event loop nesting issues
+        try:
+            print("Checking/Running database migrations...")
+            subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                cwd=backend_dir,
+                check=True,
+                capture_output=False # Let technical logs show in main terminal
+            )
+            print("Migrations complete.")
+        except Exception as e:
+            print(f"Auto-migration failed via subprocess: {e}. Attempting fallback...")
+            # Fallback to create_all if alembic fails
+            async with engine.begin() as connection:
+                await connection.run_sync(Base.metadata.create_all)
     from app.jobs.tasks import tick_scheduled_ai_reports
 
     async def _scheduled_reports_loop():

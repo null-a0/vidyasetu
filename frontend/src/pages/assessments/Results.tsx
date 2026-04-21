@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
     Award,
@@ -23,6 +23,7 @@ import StudentExplanationPanel from "@/components/assessments/StudentExplanation
 import {
     createStudentAnswerExplanation,
     fetchAssessmentLeaderboard,
+    fetchSubmissionReview,
     fetchStudentExplanationResult,
     fetchStudentExplanationStatus,
 } from "@/services/api";
@@ -56,10 +57,14 @@ type ResultState = {
 const Results = () => {
     const location = useLocation();
     const state = (location.state ?? null) as ResultState | null;
+    const [searchParams] = useSearchParams();
+    const submissionIdFromUrl = searchParams.get("submissionId");
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { showToast } = useVToast();
     const role = useRole();
     const [animatedScore, setAnimatedScore] = useState(0);
+    const [animationDone, setAnimationDone] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
     const [showLeaderboard, setShowLeaderboard] = useState(false);
     const [feedbackModal, setFeedbackModal] = useState(false);
@@ -86,11 +91,44 @@ const Results = () => {
             item,
         ]),
     );
-    const assessmentId = state?.assessmentId;
+
+    // If state is missing (e.g. refresh), fetch detailed review
+    const submissionId = backendResult?.submission_id ?? submissionIdFromUrl;
+    const reviewQuery = useQuery({
+        queryKey: ["submissionReview", submissionId],
+        queryFn: () => fetchSubmissionReview(submissionId ?? ""),
+        enabled: Boolean(submissionId && (!state || !state.questions)),
+    });
+
+    const assessmentId = state?.assessmentId ?? reviewQuery.data?.assessment_id;
+    const reviewData = reviewQuery.data;
+
+    const finalScore = Number(reviewData?.score ?? score);
+    const finalTotal = Number(reviewData?.total_marks ?? total);
+    const finalPercentage = finalTotal > 0 ? Math.round((finalScore / finalTotal) * 100) : percentage;
+    const finalPassed = reviewData?.pass_fail ?? passed;
+
+    const finalAnswers = (state?.answers && Object.keys(state.answers).length > 0)
+        ? state.answers
+        : Object.fromEntries((reviewData?.questions ?? []).map(q => [q.question_id, q.selected_option_ids]));
+
+    const finalQuestions = (state?.questions && state.questions.length > 0) 
+        ? state.questions 
+        : (reviewData?.questions ?? []).map(q => ({
+            id: q.question_id,
+            text: q.question_text,
+            options: q.selected_option_ids.map((id, i) => ({ id, text: q.selected_option_texts[i] || "" }))
+        }));
+
+    // Re-map perQuestionMap if using review data
+    const finalPerQuestionMap = reviewData 
+        ? Object.fromEntries(reviewData.questions.map(q => [q.question_id, { question_id: q.question_id, earned: q.earned_marks, max: q.max_marks }]))
+        : perQuestionMap;
+
     const leaderboardQuery = useQuery({
         queryKey: ["assessmentLeaderboard", assessmentId],
         queryFn: () => fetchAssessmentLeaderboard(assessmentId ?? ""),
-        enabled: Boolean(showLeaderboard && passed && assessmentId),
+        enabled: Boolean(showLeaderboard && finalPassed && assessmentId),
     });
     const leaderboardEntries = leaderboardQuery.data?.entries ?? [];
     const explanationMutation = useMutation({
@@ -189,46 +227,69 @@ const Results = () => {
     });
 
     useEffect(() => {
-        if (percentage === 0) return;
+        const target = Number(finalPercentage) || 0;
+        
+        // Immediate show if 0
+        if (target === 0) {
+            setAnimatedScore(0);
+            setAnimationDone(true);
+            setShowDetails(true);
+            return;
+        }
 
-        const duration = 1200;
-        const steps = 24;
-        const increment = percentage / steps;
-        let current = 0;
+        let start = 0;
+        const duration = 1000;
+        const startTime = performance.now();
 
-        const interval = setInterval(() => {
-            current += increment;
+        const animate = (currentTime: number) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const current = Math.round(start + (target - start) * progress);
+            
+            setAnimatedScore(current);
 
-            if (current >= percentage) {
-                setAnimatedScore(percentage);
-                clearInterval(interval);
-
-                setTimeout(() => {
-                    setShowDetails(true);
-
-                    if (passed && role === "student") {
-                        setTimeout(() => setShowLeaderboard(true), 500);
-                        setTimeout(() => setFeedbackModal(true), 1200);
-                    }
-                }, 400);
+            if (progress < 1) {
+                requestAnimationFrame(animate);
             } else {
-                setAnimatedScore(Math.round(current));
+                setAnimationDone(true);
+                setShowDetails(true);
+                if (finalPassed && role === "student") {
+                    setTimeout(() => setShowLeaderboard(true), 400);
+                    setTimeout(() => setFeedbackModal(true), 1000);
+                }
             }
-        }, duration / steps);
+        };
 
-        return () => clearInterval(interval);
-    }, [percentage]); // ONLY dependency
+        requestAnimationFrame(animate);
+        
+        return () => {
+            // No-op for RAF cleanup here as it naturally dies if not requested again
+            // but we ensure final value is set on unexpected unmount
+            setAnimatedScore(target);
+        };
+    }, [finalPercentage, finalPassed, role]);
 
-    if (!state) {
+    if (!state && !reviewQuery.data && !reviewQuery.isLoading) {
         return (
             <DashboardLayout title="Results">
                 <div className="flex flex-col items-center justify-center py-16">
                     <p className="text-muted-foreground mb-4">
-                        No results available.
+                        No results available or invalid session.
                     </p>
                     <VButton onClick={() => navigate("/assessments")}>
                         Back to Assessments
                     </VButton>
+                </div>
+            </DashboardLayout>
+        );
+    }
+
+    if (reviewQuery.isLoading) {
+        return (
+            <DashboardLayout title="Results">
+                <div className="flex flex-col items-center justify-center py-16">
+                    <div className="vidya-spinner mb-4" />
+                    <p className="text-muted-foreground">Loading results...</p>
                 </div>
             </DashboardLayout>
         );
@@ -275,10 +336,12 @@ const Results = () => {
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <span className="text-4xl font-extrabold text-foreground">
-                                        {animatedScore}%
+                                        <span className="text-4xl font-bold text-foreground">
+                                            {animationDone ? finalPercentage : animatedScore}%
+                                        </span>
                                     </span>
                                     <span className="text-sm text-muted-foreground">
-                                        {score}/{total}
+                                        {finalScore}/{finalTotal}
                                     </span>
                                 </div>
                             </div>
@@ -287,9 +350,9 @@ const Results = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 1.2 }}>
                                 <VBadge
-                                    variant={passed ? "success" : "destructive"}
+                                    variant={finalPassed ? "success" : "destructive"}
                                     className="text-base px-4 py-1.5">
-                                    {passed ? (
+                                    {finalPassed ? (
                                         <>
                                             <CheckCircle2 className="h-4 w-4 mr-1" />{" "}
                                             Passed!
@@ -311,7 +374,7 @@ const Results = () => {
                     </VCard>
                 </motion.div>
 
-                {showLeaderboard && passed && (
+                {showLeaderboard && finalPassed && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -372,7 +435,7 @@ const Results = () => {
                     </motion.div>
                 )}
 
-                {showDetails && questions.length > 0 && (
+                {showDetails && finalQuestions.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -381,8 +444,8 @@ const Results = () => {
                         <h3 className="text-lg font-semibold text-foreground">
                             Question Feedback
                         </h3>
-                        {questions.map((q, idx) => {
-                            const selected = answers[q.id];
+        {finalQuestions.map((q, idx) => {
+                            const selected = finalAnswers[q.id];
                             const selectedIds = Array.isArray(selected)
                                 ? selected
                                 : selected
@@ -395,14 +458,14 @@ const Results = () => {
                                     )
                                     .map((opt) => opt.text)
                                     .join(", ") || "Not answered";
-                            const grading = perQuestionMap[q.id];
+                            const grading = finalPerQuestionMap[q.id];
                             const isCorrect = grading
                                 ? grading.earned === grading.max
                                 : false;
                             const canRequestExplanation = Boolean(
                                 role === "student" &&
                                 !isCorrect &&
-                                backendResult?.submission_id,
+                                submissionId,
                             );
                             return (
                                 <VCard
@@ -456,7 +519,7 @@ const Results = () => {
                                                         }
                                                         onClick={() => {
                                                             if (
-                                                                !backendResult?.submission_id
+                                                                !submissionId
                                                             )
                                                                 return;
                                                             setLoadingExplanationForQuestion(
@@ -465,7 +528,7 @@ const Results = () => {
                                                             explanationMutation.mutate(
                                                                 {
                                                                     submissionId:
-                                                                        backendResult.submission_id,
+                                                                        submissionId,
                                                                     questionId:
                                                                         q.id,
                                                                 },
@@ -510,7 +573,7 @@ const Results = () => {
                     <VButton onClick={() => navigate("/assessments")}>
                         <ArrowRight className="h-4 w-4" /> Back to Assessments
                     </VButton>
-                    {passed && (
+                    {finalPassed && (
                         <VButton
                             variant="secondary"
                             onClick={() => {
@@ -524,13 +587,13 @@ const Results = () => {
                             <Award className="h-4 w-4" /> View Certificate
                         </VButton>
                     )}
-                    {!passed && (
+                    {!finalPassed && (
                         <VButton
                             variant="secondary"
                             onClick={() =>
                                 navigate(
-                                    state.assessmentId
-                                        ? `/assessments/attempt/${state.assessmentId}`
+                                    assessmentId
+                                        ? `/assessments/attempt/${assessmentId}`
                                         : "/assessments",
                                 )
                             }>

@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 
 
 class SupportConfigResponse(BaseModel):
-    celery_queue: str
-    redis_configured: bool
+    # celery_queue and redis_configured removed
     smtp_configured: bool
+
 
     ai_max_retries: int
     ai_retry_base_delay_seconds: float
@@ -79,7 +79,8 @@ class RateLimitEventResponse(BaseModel):
 class CacheStatsResponse(BaseModel):
     now: str
     ai_generations: dict[str, Any]
-    redis: dict[str, Any]
+    # redis field removed
+
 
 
 class JobQueryParams(BaseModel):

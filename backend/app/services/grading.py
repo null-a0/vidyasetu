@@ -71,7 +71,7 @@ def grade_submission(
     for q in questions:
         q_max = q.marks or 0
         total_marks += q_max
-        q_type = str(q.type.value) if hasattr(q.type, "value") else str(q.type)
+        q_type = (str(q.type.value) if hasattr(q.type, "value") else str(q.type)).lower()
         options: list[dict] = q.options or []
         correct_ids = _correct_ids(options)
         selected_ids = answer_map.get(q.id, set())

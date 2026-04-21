@@ -49,13 +49,8 @@ class Settings(BaseSettings):
     AI_RATE_LIMIT_BACKEND: str = "database"
     AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS: int = 86400
 
-    # ----- Redis / Celery -----
-    REDIS_URL: str = "rediss://default:gQAAAAAAAY6gAAIocDI1YjkxMTQyZDkwY2M0MDVmODdkODg2MDQxYWMxOGRkM3AyMTAyMDQ4@exotic-stud-102048.upstash.io:6379/0?ssl_cert_reqs=none"
-
-    AI_JOB_DEDUP_LOCK_TTL_SECONDS: int = 300
-    AI_JOB_IDEMPOTENCY_TTL_SECONDS: int = 86400
-    AI_JOB_PROGRESS_TTL_SECONDS: int = 3600
-    AI_JOB_MAX_RETRIES: int = 5
+    # ----- Infrastructure (Residual) -----
+    # Redis and Celery have been removed from the architecture.
     SUPPORT_RERUN_LIMIT_PER_DAY: int = 3
 
     # ----- Scheduled reports -----

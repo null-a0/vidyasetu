@@ -48,6 +48,23 @@ async def update_ai_generation(
     return generation
 
 
+async def find_generation_by_idempotency_key(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    feature_type: AIFeatureType,
+    idempotency_key: str,
+) -> AIGeneration | None:
+    stmt = (
+        select(AIGeneration)
+        .where(AIGeneration.requester_user_id == user_id)
+        .where(AIGeneration.feature_type == feature_type)
+        .where(AIGeneration.idempotency_key == idempotency_key)
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 async def find_active_generation_by_fingerprint(
     db: AsyncSession,
     *,

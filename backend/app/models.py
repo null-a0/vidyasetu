@@ -337,6 +337,7 @@ class AIGeneration(Base):
 
     prompt_version = Column(String, nullable=False)
     model_name = Column(String, nullable=False)
+    idempotency_key = Column(String, nullable=True, index=True)
 
     raw_prompt_input = Column(JSON, default=dict, nullable=False)
     raw_model_output = Column(Text, nullable=True)

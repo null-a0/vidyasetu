@@ -6,7 +6,7 @@ This repo has two projects:
 - `frontend/` = React + Vite
 
 ## Architecture Overview
-This application uses **FastAPI BackgroundTasks** and a background **asyncio scheduler** (started in the FastAPI app lifespan) to handle asynchronously executing AI report generation and student explanations. There is **NO** dependency on a Celery worker or Celery Beat anymore, which drastically simplifies deployments and resolves SQLite locking contention issues. Redis is currently used as an ephemeral cache store for job progress tracking and rate limit lock synchronization.
+This application uses a simplified, **synchronous architecture**. All AI features (reports and student explanations) are executed within the standard request-response cycle for immediate results. There are **NO dependencies** on Celery workers, Redis, or background processes. Everything runs in-process, making it extremely easy to deploy and test.
 
 The root folder does NOT have a `package.json`, so you must run npm commands inside `frontend/`.
 
@@ -64,8 +64,7 @@ AI_ADMIN_REPORT_STALE_AFTER_SECONDS=900
 AI_RATE_LIMIT_BACKEND=database
 AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS=86400
 
-# Redis is used for Job progress state and Idempotency locks (Upstash supported)
-REDIS_URL=rediss://:<password>@<host>:<port>
+# Note: Redis/Celery are NOT required. The app is purely synchronous and DB-backed.
 ```
 
 Important:
@@ -74,7 +73,8 @@ Important:
 - Do not add Gemini keys in frontend env files.
 - Keep `AI_RATE_LIMIT_BACKEND=database` for multi-instance deployments.
 
-    2.5 Run backend migrations (required for AI report tables)
+    2.5 Database Initialization
+The backend **automatically runs migrations** and creates the database file (`vidyasetu.db`) when it starts. You do not need to run manual migration commands, but you can if you wish:
 
 ```powershell
 cd .\backend
@@ -118,7 +118,7 @@ Backend will be at:
 
 - http://127.0.0.1:8000
 
-(Scheduled loop for reports will auto-start in the FastAPI lifespan background tasks)
+(The app will auto-create the database and run migrations on first launch)
 
 5. Frontend setup (one-time)
    Run in a separate PowerShell window:

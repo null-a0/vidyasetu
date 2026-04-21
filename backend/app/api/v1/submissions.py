@@ -160,11 +160,17 @@ async def list_by_assessment(
 async def review_submission(
     submission_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(*_STAFF)),
+    current_user: User = Depends(get_current_user),
 ) -> SubmissionReviewResponse:
     submission = await get_submission(db, submission_id)
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+        
+    # Permission check: Staff can see any; Students can see only their own
+    is_staff = current_user.role in _STAFF
+    if not is_staff and submission.student_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
     if submission.pass_fail is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submission is not graded yet.")
 

@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+import asyncio
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_role
 from app.config import settings
-from app.core.redis import get_job_progress, get_redis_async, job_dedup_lock_key, job_idempotency_key
 from app.crud.crud_ai_generation import (
     create_ai_generation,
     fail_stale_active_generations,
     find_active_generation_by_fingerprint,
     find_cached_completed_generation,
     get_ai_generation,
+    find_generation_by_idempotency_key,
 )
 from app.crud.crud_assessment import get_question, get_submission
-from app.jobs.tasks import generate_student_explanation
 from app.models import AIFeatureType, AIGenerationStatus, User, UserRole
 from app.schemas.ai import (
     AIGenerationCreate,
@@ -27,43 +27,10 @@ from app.services.ai.cache import (
     build_student_explanation_request_fingerprint,
     compute_cache_expiry,
 )
-from app.services.ai.rate_limit import (
-    DatabaseFixedWindowRateLimiter,
-    InMemorySlidingWindowRateLimiter,
-    RateLimitRule,
-    RateLimitViolation,
-    consume_rate_limit_or_raise,
-)
-from app.services.ai.validation import validate_student_explanation_output
-from app.crud.crud_rate_limit_events import create_rate_limit_event
 
 router = APIRouter(prefix="/ai/student-explanations", tags=["ai-student-explanations"])
 
-
-def _build_rate_limiter() -> InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter:
-    backend = settings.AI_RATE_LIMIT_BACKEND.strip().lower()
-    if backend == "memory":
-        return InMemorySlidingWindowRateLimiter()
-    if backend == "database":
-        return DatabaseFixedWindowRateLimiter(
-            retention_seconds=settings.AI_RATE_LIMIT_COUNTER_RETENTION_SECONDS,
-        )
-    raise ValueError("AI_RATE_LIMIT_BACKEND must be either 'database' or 'memory'.")
-
-
-_rate_limiter = _build_rate_limiter()
-
-
-def get_student_explanation_rate_limiter() -> InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter:
-    return _rate_limiter
-
-
-def get_student_explanation_rate_limit_rule() -> RateLimitRule:
-    return RateLimitRule(
-        max_requests=settings.AI_STUDENT_EXPLANATION_USER_RATE_LIMIT,
-        window_seconds=settings.AI_STUDENT_EXPLANATION_RATE_LIMIT_WINDOW_SECONDS,
-    )
-
+# Rate limits removed as requested by user to eliminate bottlenecks
 
 @router.post(
     "/",
@@ -74,14 +41,8 @@ async def create_student_explanation(
     payload: StudentExplanationCreateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.STUDENT)),
-    limiter: InMemorySlidingWindowRateLimiter | DatabaseFixedWindowRateLimiter = Depends(
-        get_student_explanation_rate_limiter
-    ),
-    rate_rule: RateLimitRule = Depends(get_student_explanation_rate_limit_rule),
-    background_tasks: BackgroundTasks = None,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> StudentExplanationCreateResponse:
-    redis_client = get_redis_async()
     submission = await get_submission(db, payload.submission_id)
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
@@ -140,7 +101,7 @@ async def create_student_explanation(
             detail="Explanation is available only for incorrect answers.",
         )
 
-    prompt_payload_for_model = {
+    prompt_payload = {
         "question_id": question.id,
         "question_text": question.text or "",
         "question_type": question.type.value if hasattr(question.type, "value") else str(question.type or ""),
@@ -149,7 +110,7 @@ async def create_student_explanation(
         "correct_option_texts_internal_only": correct_option_texts,
     }
     raw_prompt_input = {
-        "prompt_payload": prompt_payload_for_model,
+        "prompt_payload": prompt_payload,
         "correct_option_ids": correct_option_ids,
         "correct_option_texts": correct_option_texts,
     }
@@ -162,23 +123,21 @@ async def create_student_explanation(
         raw_prompt_input=raw_prompt_input,
     )
 
+    # Simple Database-based idempotency check
     if idempotency_key:
-        mapped = await redis_client.get(
-            job_idempotency_key(
-                user_id=current_user.id,
-                route_key="POST:/ai/student-explanations",
-                key=idempotency_key,
-            )
+        existing = await find_generation_by_idempotency_key(
+            db,
+            user_id=current_user.id,
+            feature_type=AIFeatureType.STUDENT_EXPLANATION,
+            idempotency_key=idempotency_key
         )
-        if mapped:
-            existing = await get_ai_generation(db, str(mapped))
-            if existing and existing.feature_type == AIFeatureType.STUDENT_EXPLANATION:
-                return StudentExplanationCreateResponse(
-                    explanation_id=existing.id,
-                    status=existing.status,
-                    from_cache=False,
-                    explanation=None,
-                )
+        if existing:
+            return StudentExplanationCreateResponse(
+                explanation_id=existing.id,
+                status=existing.status,
+                from_cache=False,
+                explanation=None,
+            )
 
     await fail_stale_active_generations(
         db,
@@ -207,6 +166,7 @@ async def create_student_explanation(
             request_fingerprint=request_fingerprint,
         )
         if cached and isinstance(cached.parsed_output_json, dict):
+            from app.services.ai.validation import validate_student_explanation_output
             validated_cached = validate_student_explanation_output(
                 cached.parsed_output_json,
                 disallowed_option_ids=correct_option_ids,
@@ -218,31 +178,6 @@ async def create_student_explanation(
                 from_cache=True,
                 explanation=validated_cached,
             )
-
-    try:
-        await consume_rate_limit_or_raise(
-            limiter=limiter,
-            db=db,
-            key=f"ai_student_explanation:user:{current_user.id}",
-            rule=rate_rule,
-        )
-    except RateLimitViolation as exc:
-        await create_rate_limit_event(
-            db,
-            key=f"ai_student_explanation:user:{current_user.id}",
-            allowed=False,
-            remaining=exc.decision.remaining,
-            retry_after_seconds=exc.decision.retry_after_seconds,
-            rule_max_requests=rate_rule.max_requests,
-            rule_window_seconds=rate_rule.window_seconds,
-            actor_user_id=current_user.id,
-            institution_id=current_user.institution_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded for student explanations.",
-            headers={"Retry-After": str(exc.decision.retry_after_seconds)},
-        )
 
     generation = await create_ai_generation(
         db,
@@ -256,37 +191,78 @@ async def create_student_explanation(
             model_name=settings.GEMINI_MODEL_NAME,
             raw_prompt_input=raw_prompt_input,
             request_fingerprint=request_fingerprint,
-            cache_expires_at=compute_cache_expiry(
-                ttl_seconds=settings.AI_STUDENT_EXPLANATION_CACHE_TTL_SECONDS
-            ),
+            idempotency_key=idempotency_key,
+            cache_expires_at=compute_cache_expiry(ttl_seconds=settings.AI_STUDENT_EXPLANATION_CACHE_TTL_SECONDS),
         ),
     )
 
-    if idempotency_key:
-        await redis_client.set(
-            job_idempotency_key(
-                user_id=current_user.id,
-                route_key="POST:/ai/student-explanations",
-                key=idempotency_key,
+    # Directly call AI synchronously/inline
+    from app.services.ai.student_explanation_prompt import build_student_explanation_prompt
+    from app.services.ai.gemini_client import GeminiClient
+    from app.crud.crud_ai_generation import update_ai_generation
+    from app.schemas.ai import AIGenerationUpdate
+    import json
+    import re
+
+    # 1. Update status
+    await update_ai_generation(db, generation, AIGenerationUpdate(status=AIGenerationStatus.PROCESSING))
+    
+    # 2. Build prompt
+    prompt = build_student_explanation_prompt(prompt_payload=prompt_payload)
+    
+    # 3. Call AI simply
+    try:
+        gemini = GeminiClient.from_settings()
+        raw_text = await gemini.generate_simple(prompt=prompt)
+        
+        # 4. Extract and parse JSON (Best-Effort)
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError:
+            match = re.search(r"(\{.*\})", raw_text, re.DOTALL)
+            if match:
+                parsed = json.loads(match.group(1))
+            else:
+                raise Exception("Fail to parse AI output as JSON")
+        
+        # 5. Persist
+        generation = await update_ai_generation(
+            db,
+            generation,
+            AIGenerationUpdate(
+                status=AIGenerationStatus.COMPLETED,
+                raw_model_output=raw_text,
+                parsed_output_json=parsed,
+                cache_expires_at=compute_cache_expiry(ttl_seconds=settings.AI_STUDENT_EXPLANATION_CACHE_TTL_SECONDS),
             ),
-            generation.id,
-            ex=settings.AI_JOB_IDEMPOTENCY_TTL_SECONDS,
+        )
+    except Exception as e:
+        await update_ai_generation(
+            db,
+            generation,
+            AIGenerationUpdate(
+                status=AIGenerationStatus.FAILED,
+                error_details={"message": str(e)},
+            ),
         )
 
-    await redis_client.set(
-        job_dedup_lock_key(fingerprint=request_fingerprint),
-        current_user.id,
-        nx=True,
-        ex=settings.AI_JOB_DEDUP_LOCK_TTL_SECONDS,
-    )
+    # Refetch correctly formatted generation
+    generation = await get_ai_generation(db, generation.id)
 
-    background_tasks.add_task(generate_student_explanation, generation_id=generation.id)
+    validated_explanation = None
+    if generation and generation.status == AIGenerationStatus.COMPLETED and isinstance(generation.parsed_output_json, dict):
+        from app.services.ai.validation import validate_student_explanation_output
+        validated_explanation = validate_student_explanation_output(
+            generation.parsed_output_json,
+            disallowed_option_ids=correct_option_ids,
+            disallowed_option_texts=correct_option_texts,
+        )
 
     return StudentExplanationCreateResponse(
         explanation_id=generation.id,
-        status=generation.status,
+        status=generation.status if generation else AIGenerationStatus.FAILED,
         from_cache=False,
-        explanation=None,
+        explanation=validated_explanation,
     )
 
 
@@ -300,26 +276,20 @@ async def get_student_explanation_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.STUDENT)),
 ) -> StudentExplanationStatusResponse:
-    row = await get_ai_generation(db, explanation_id)
-    if not row or row.feature_type != AIFeatureType.STUDENT_EXPLANATION:
+    report = await get_ai_generation(db, explanation_id)
+    if not report or report.feature_type != AIFeatureType.STUDENT_EXPLANATION:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Explanation not found.")
-    if row.requester_user_id != current_user.id:
+    if report.requester_user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    progress = None
-    try:
-        progress_obj = await get_job_progress(get_redis_async(), generation_id=row.id)
-        progress = progress_obj.__dict__ if progress_obj else None
-    except Exception:
-        progress = None
-
+    # Progress tracking removed as it relied on Redis
     return StudentExplanationStatusResponse(
-        explanation_id=row.id,
-        status=row.status,
-        error_details=row.error_details,
-        progress=progress,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
+        explanation_id=report.id,
+        status=report.status,
+        error_details=report.error_details,
+        progress=None,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
     )
 
 
@@ -333,36 +303,31 @@ async def get_student_explanation_result(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.STUDENT)),
 ) -> StudentExplanationResultResponse:
-    row = await get_ai_generation(db, explanation_id)
-    if not row or row.feature_type != AIFeatureType.STUDENT_EXPLANATION:
+    report = await get_ai_generation(db, explanation_id)
+    if not report or report.feature_type != AIFeatureType.STUDENT_EXPLANATION:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Explanation not found.")
-    if row.requester_user_id != current_user.id:
+    if report.requester_user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    if row.status != AIGenerationStatus.COMPLETED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Explanation is not completed yet.")
-    if not isinstance(row.parsed_output_json, dict):
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored explanation output is invalid.")
+    if report.status != AIGenerationStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Explanation is not completed yet.",
+        )
+    if not isinstance(report.parsed_output_json, dict):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Stored explanation output is invalid.",
+        )
 
-    raw = row.raw_prompt_input or {}
-    disallowed_option_ids = raw.get("correct_option_ids") or []
-    disallowed_option_texts = raw.get("correct_option_texts") or []
-    if not isinstance(disallowed_option_ids, list):
-        disallowed_option_ids = []
-    if not isinstance(disallowed_option_texts, list):
-        disallowed_option_texts = []
-
-    validated = validate_student_explanation_output(
-        row.parsed_output_json,
-        disallowed_option_ids=[str(v) for v in disallowed_option_ids if v],
-        disallowed_option_texts=[str(v) for v in disallowed_option_texts if v],
-    )
+    from app.services.ai.validation import validate_student_explanation_output
+    validated = validate_student_explanation_output(report.parsed_output_json)
     return StudentExplanationResultResponse(
-        explanation_id=row.id,
-        status=row.status,
+        explanation_id=report.id,
+        status=report.status,
         explanation=validated,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
-        prompt_version=row.prompt_version,
-        model_name=row.model_name,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
+        prompt_version=report.prompt_version,
+        model_name=report.model_name,
     )
