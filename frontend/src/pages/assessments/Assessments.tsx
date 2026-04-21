@@ -21,6 +21,7 @@ import {
   fetchAssessmentLeaderboardDrilldown,
   fetchAssessmentQuestions,
   fetchAssessments,
+  fetchWorkshopModules,
   fetchWorkshops,
   updateAssessment,
 } from "@/services/api";
@@ -63,6 +64,7 @@ const AssessmentsPage = () => {
   const [selected, setSelected] = useState<AssessmentRow | null>(null);
   const [formTitle, setFormTitle] = useState("");
   const [formWorkshop, setFormWorkshop] = useState("");
+  const [formModule, setFormModule] = useState("");
   const [formTotal, setFormTotal] = useState("100");
   const [formPassing, setFormPassing] = useState("40");
 
@@ -98,6 +100,12 @@ const AssessmentsPage = () => {
     queryKey: ["assessmentQuestions", selected?.id],
     queryFn: () => fetchAssessmentQuestions(selected?.id ?? ""),
     enabled: Boolean(selected?.id && questionModal),
+  });
+
+  const { data: workshopModules = [] } = useQuery({
+    queryKey: ["workshopModules", "assessment-create", formWorkshop],
+    queryFn: () => fetchWorkshopModules(formWorkshop),
+    enabled: Boolean(createModal && formWorkshop),
   });
 
   const createAssessmentMutation = useMutation({
@@ -196,7 +204,7 @@ const AssessmentsPage = () => {
               >
                 <Trophy className="h-4 w-4" /> Leaderboard
               </VButton>
-              <VButton onClick={() => { setFormTitle(""); setFormWorkshop(""); setFormTotal("100"); setFormPassing("40"); setCreateModal(true); }}>
+              <VButton onClick={() => { setFormTitle(""); setFormWorkshop(""); setFormModule(""); setFormTotal("100"); setFormPassing("40"); setCreateModal(true); }}>
                 <Plus className="h-4 w-4" /> Create Assessment
               </VButton>
             </>
@@ -260,10 +268,30 @@ const AssessmentsPage = () => {
           <VSelect
             label="Workshop Name"
             value={formWorkshop}
-            onChange={e => setFormWorkshop(e.target.value)}
+            onChange={e => {
+              setFormWorkshop(e.target.value);
+              setFormModule("");
+            }}
             options={[
               { value: "", label: workshops.length ? "Select workshop" : "No workshops available" },
               ...workshops.map((workshop) => ({ value: workshop.id, label: workshop.name })),
+            ]}
+          />
+          <VSelect
+            label="Module"
+            value={formModule}
+            onChange={e => setFormModule(e.target.value)}
+            disabled={!formWorkshop || workshopModules.length === 0}
+            options={[
+              {
+                value: "",
+                label: !formWorkshop
+                  ? "Select workshop first"
+                  : workshopModules.length
+                  ? "No specific module"
+                  : "No modules available",
+              },
+              ...workshopModules.map((module) => ({ value: module.id, label: module.title ?? "Untitled Module" })),
             ]}
           />
           <div className="grid grid-cols-2 gap-3">
@@ -277,6 +305,7 @@ const AssessmentsPage = () => {
             }
             createAssessmentMutation.mutate({
               workshopId: formWorkshop,
+              moduleId: formModule || null,
               title: formTitle,
               totalMarks: Number(formTotal),
               passingMarks: Number(formPassing),

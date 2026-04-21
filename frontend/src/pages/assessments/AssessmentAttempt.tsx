@@ -1,20 +1,43 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, Clock, ChevronLeft, ChevronRight, Flag, Send, Shield, Maximize2 } from "lucide-react";
+import { AlertTriangle, Clock, ChevronLeft, ChevronRight, Flag, Send, Shield, Play, Maximize2 } from "lucide-react";
 import VCard from "@/components/ui-custom/VCard";
 import VButton from "@/components/ui-custom/VButton";
 import VModal from "@/components/ui-custom/VModal";
 import { useVToast } from "@/components/ui-custom/VToast";
 import {
   startAssessmentAttempt,
+  fetchAssessmentTimer,
   saveAssessmentAnswers,
   submitAssessmentAttempt,
+  type AssessmentTimerResponse,
   type StartAttemptResponse,
 } from "@/services/api";
 
 const TOTAL_TIME = 600; // 10 minutes
-const MAX_WARNINGS = 3;
+const TIMER_SYNC_INTERVAL = 5000;
+const TIMER_DRIFT_THRESHOLD_MS = 1500;
+
+type TimerPayload = Pick<
+  AssessmentTimerResponse,
+  "duration_seconds" | "remaining_seconds" | "started_at" | "server_now"
+>;
+
+const toTimestamp = (value?: string | null) => {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const getTimerDeadline = (timer: TimerPayload) => {
+  const startedAt = toTimestamp(timer.started_at);
+  if (startedAt !== null && Number.isFinite(timer.duration_seconds)) {
+    return startedAt + timer.duration_seconds * 1000;
+  }
+
+  return Date.now() + Math.max(0, timer.remaining_seconds) * 1000;
+};
 
 const AssessmentAttempt = () => {
   const navigate = useNavigate();
@@ -26,33 +49,61 @@ const AssessmentAttempt = () => {
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [currentQ, setCurrentQ] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
+  const [timerEndsAt, setTimerEndsAt] = useState<number | null>(null);
   const [started, setStarted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [warnings, setWarnings] = useState(0);
-  const [warningModal, setWarningModal] = useState(false);
-  const [warningMessage, setWarningMessage] = useState("");
   const [rulesModal, setRulesModal] = useState(true);
   const [submitModal, setSubmitModal] = useState(false);
   const [autoSubmitting, setAutoSubmitting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenRequired, setFullscreenRequired] = useState(false);
-  const warningsRef = useRef(0); // Use ref to avoid stale closure
+  const lastDisplayedTimeRef = useRef(TOTAL_TIME);
+  const autoSubmitStartedRef = useRef(false);
+  const timerEndsAtRef = useRef<number | null>(null);
 
-  // Sync ref with state for display
-  useEffect(() => {
-    warningsRef.current = warnings;
-  }, [warnings]);
+  const updateDisplayedTime = useCallback((deadline: number | null) => {
+    if (!deadline) return;
 
-  // Track fullscreen state
+    const nextTimeLeft = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    if (nextTimeLeft !== lastDisplayedTimeRef.current) {
+      lastDisplayedTimeRef.current = nextTimeLeft;
+      setTimeLeft(nextTimeLeft);
+    }
+
+    if (nextTimeLeft === 0 && !autoSubmitStartedRef.current) {
+      autoSubmitStartedRef.current = true;
+      setAutoSubmitting(true);
+    }
+  }, []);
+
+  const applyTimerSnapshot = useCallback(
+    (timer: TimerPayload, force = false) => {
+      const nextDeadline = getTimerDeadline(timer);
+      const currentDeadline = timerEndsAtRef.current;
+
+      if (
+        force ||
+        currentDeadline === null ||
+        Math.abs(currentDeadline - nextDeadline) > TIMER_DRIFT_THRESHOLD_MS
+      ) {
+        timerEndsAtRef.current = nextDeadline;
+        setTimerEndsAt(nextDeadline);
+      }
+
+      updateDisplayedTime(force ? nextDeadline : timerEndsAtRef.current ?? nextDeadline);
+    },
+    [updateDisplayedTime],
+  );
+
   useEffect(() => {
-    if (!started) return;
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+    const syncFullscreenState = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
     };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    setIsFullscreen(!!document.fullscreenElement);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, [started]);
+
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -61,13 +112,22 @@ const AssessmentAttempt = () => {
     },
     onSuccess: (data) => {
       setAttemptData(data);
+      applyTimerSnapshot(
+        {
+          duration_seconds: data.duration_seconds ?? TOTAL_TIME,
+          remaining_seconds: Math.max(0, data.remaining_seconds ?? TOTAL_TIME),
+          started_at: data.started_at,
+          server_now: data.server_now ?? new Date().toISOString(),
+        },
+        true,
+      );
       setStarted(true);
       setRulesModal(false);
       setFullscreenRequired(true);
+      autoSubmitStartedRef.current = false;
       showToast("info", "Assessment Started", "Good luck!");
-      // Request fullscreen to prevent tab switching
-      document.documentElement.requestFullscreen().catch(() => {
-        // Fullscreen denied - will show warning modal
+      void document.documentElement.requestFullscreen().catch(() => {
+        showToast("warning", "Fullscreen required", "Enter fullscreen to continue the assessment.");
       });
     },
     onError: (error: unknown) => {
@@ -106,97 +166,55 @@ const AssessmentAttempt = () => {
   }, [assessmentId, attemptData, answers, isSubmitting, navigate, showToast]);
 
   useEffect(() => {
-    if (!started || timeLeft <= 0 || isSubmitting) return;
-    const interval = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(interval);
-          setAutoSubmitting(true);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [started, isSubmitting, timeLeft]);
+    if (!started || !timerEndsAt || isSubmitting || autoSubmitting) return;
+
+    updateDisplayedTime(timerEndsAt);
+    const interval = window.setInterval(() => updateDisplayedTime(timerEndsAt), 250);
+
+    return () => window.clearInterval(interval);
+  }, [started, timerEndsAt, isSubmitting, autoSubmitting, updateDisplayedTime]);
 
   useEffect(() => {
-    if (autoSubmitting) {
-      showToast("warning", "Time's Up!", "Auto-submitting your assessment...");
-      const timeout = setTimeout(() => void handleSubmit(), 1200);
-      return () => clearTimeout(timeout);
-    }
+    if (!started || !assessmentId || !attemptData?.submission_id || isSubmitting || autoSubmitting) return;
+
+    let cancelled = false;
+
+    const syncTimer = async () => {
+      try {
+        const timer = await fetchAssessmentTimer(assessmentId, attemptData.submission_id);
+        if (cancelled) return;
+        applyTimerSnapshot(timer);
+      } catch {
+        // If the sync request briefly fails, the local deadline continues to drive the visible clock.
+      }
+    };
+
+    void syncTimer();
+    const syncOnVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncTimer();
+      }
+    };
+    window.addEventListener("focus", syncOnVisibility);
+    document.addEventListener("visibilitychange", syncOnVisibility);
+    const interval = window.setInterval(() => {
+      void syncTimer();
+    }, TIMER_SYNC_INTERVAL);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", syncOnVisibility);
+      document.removeEventListener("visibilitychange", syncOnVisibility);
+      window.clearInterval(interval);
+    };
+  }, [started, assessmentId, attemptData?.submission_id, isSubmitting, autoSubmitting, applyTimerSnapshot]);
+
+  useEffect(() => {
+    if (!autoSubmitting) return;
+    showToast("warning", "Time's Up!", "Auto-submitting your assessment...");
+    const timeout = setTimeout(() => void handleSubmit(), 1200);
+    return () => clearTimeout(timeout);
   }, [autoSubmitting, handleSubmit, showToast]);
-
-  useEffect(() => {
-    if (!started) return;
-
-    const handleTabSwitch = () => {
-      // Detect tab switch via blur or visibility change
-      const newWarnings = warningsRef.current + 1;
-      setWarnings(newWarnings);
-      setWarningMessage(`Tab switch detected! Warning ${newWarnings}/${MAX_WARNINGS}. ${newWarnings >= MAX_WARNINGS ? "Your test will be auto-submitted." : "Please stay on this tab."}`);
-      setWarningModal(true);
-      if (newWarnings >= MAX_WARNINGS) {
-        setTimeout(() => void handleSubmit(), 1200);
-      }
-    };
-
-    // Listen for visibility change (tab switching)
-    const handleVisibility = () => {
-      if (document.hidden) {
-        handleTabSwitch();
-      }
-    };
-
-    // Listen for blur (window loses focus)
-    const handleBlur = () => {
-      handleTabSwitch();
-    };
-
-    // Prevent fullscreen exit - warn if user exits fullscreen
-    const handleFullscreenChange = () => {
-      if (fullscreenRequired && !document.fullscreenElement) {
-        handleTabSwitch();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("blur", handleBlur);
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-    };
-  }, [started, handleSubmit, fullscreenRequired]);
-
-  // Cleanup fullscreen on unmount
-  useEffect(() => {
-    return () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!started) return;
-    const handler = (e: ClipboardEvent) => {
-      e.preventDefault();
-      const newWarnings = warningsRef.current + 1;
-      setWarnings(newWarnings);
-      setWarningMessage(`Copy attempt detected! Warning ${newWarnings}/${MAX_WARNINGS}.`);
-      setWarningModal(true);
-      showToast("warning", "Copy Blocked", "Copying is not allowed during the assessment.");
-      if (newWarnings >= MAX_WARNINGS) {
-        setTimeout(() => void handleSubmit(), 1200);
-      }
-    };
-    document.addEventListener("copy", handler);
-    return () => document.removeEventListener("copy", handler);
-  }, [started, showToast, handleSubmit]);
 
   const handleSelect = (qId: string, optId: string, type?: string | null) => {
     const isMSQ = (type ?? "").toUpperCase() === "MSQ";
@@ -255,50 +273,59 @@ const AssessmentAttempt = () => {
       </div>
     );
   }
-  // Show rules modal if not started OR if fullscreen is required but not in fullscreen
-  if (!started || !currentQuestion || (fullscreenRequired && !isFullscreen)) {
-    // If fullscreen is required but not in fullscreen, show a blocking message
-    if (fullscreenRequired && !isFullscreen) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <VCard className="p-8 text-center max-w-md">
-            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
-              <Maximize2 className="h-8 w-8 text-destructive" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground mb-2">Fullscreen Required</h3>
-            <p className="text-sm text-muted-foreground mb-6">Please enter fullscreen mode to continue the assessment.</p>
-            <VButton onClick={() => document.documentElement.requestFullscreen()}>
-              <Maximize2 className="h-4 w-4 mr-2" /> Enter Fullscreen
-            </VButton>
-          </VCard>
-        </div>
-      );
-    }
-
+  // Show the rules modal before the assessment starts.
+  if (!started || !currentQuestion) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <VModal isOpen={rulesModal} onClose={() => {}} title="Assessment Rules" className="max-w-md">
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-warning/10 border border-warning/20">
               <Shield className="h-5 w-5 text-warning shrink-0" />
-              <p className="text-sm text-foreground">This is a proctored assessment. Please read the rules carefully.</p>
+              <p className="text-sm text-foreground">Please read the assessment rules carefully before starting.</p>
             </div>
             <ul className="space-y-2.5 text-sm text-muted-foreground">
               <li className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> You have <strong className="text-foreground">10 minutes</strong> to complete {questions.length || "all"} questions.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Fullscreen required</strong> — assessment will run in fullscreen mode.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Do not switch tabs</strong> — this will trigger a warning.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> <strong className="text-foreground">Copying is not allowed</strong> — attempts will be detected.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> After <strong className="text-foreground">{MAX_WARNINGS} warnings</strong>, your test will be auto-submitted.</li>
-              <li className="flex items-start gap-2"><span className="text-primary font-bold">6.</span> When time runs out, your answers will be <strong className="text-foreground">automatically submitted</strong>.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Fullscreen is required while taking the assessment.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> The timer stays synced with the backend and continues even if you leave fullscreen.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> You can move between questions and review answers before submitting.</li>
+              <li className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> When time runs out, your answers will be <strong className="text-foreground">automatically submitted</strong>.</li>
             </ul>
             <div className="flex justify-end gap-3 pt-2">
               <VButton variant="ghost" onClick={() => navigate("/assessments")}>Cancel</VButton>
               <VButton onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
-                <Maximize2 className="h-4 w-4" /> {startMutation.isPending ? "Starting..." : "Start Assessment"}
+                <Play className="h-4 w-4" /> {startMutation.isPending ? "Starting..." : "Start Assessment"}
               </VButton>
             </div>
           </div>
         </VModal>
+      </div>
+    );
+  }
+
+  if (fullscreenRequired && !isFullscreen) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <VCard className="p-8 text-center max-w-md w-full">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-warning/10">
+            <Maximize2 className="h-8 w-8 text-warning" />
+          </div>
+          <h3 className="text-xl font-bold text-foreground mb-2">Enter Fullscreen</h3>
+          <p className="text-sm text-muted-foreground mb-6">
+            Fullscreen is required to continue this assessment. The timer is still running.
+          </p>
+          <div className={`mx-auto mb-6 flex w-fit items-center gap-1.5 rounded-xl px-4 py-2 text-base font-bold ${isUrgent ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+            <Clock className="h-4 w-4" />
+            {formatTime(timeLeft)}
+          </div>
+          <div className="flex justify-center gap-3">
+            <VButton variant="ghost" onClick={() => navigate("/assessments")}>Leave Assessment</VButton>
+            <VButton onClick={() => void document.documentElement.requestFullscreen().catch(() => {
+              showToast("warning", "Fullscreen required", "Your browser blocked fullscreen. Try again.");
+            })}>
+              <Maximize2 className="h-4 w-4" /> Enter Fullscreen
+            </VButton>
+          </div>
+        </VCard>
       </div>
     );
   }
@@ -320,12 +347,6 @@ const AssessmentAttempt = () => {
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card/90 backdrop-blur-md px-4 sm:px-6 py-3">
         <div className="flex items-center gap-3">
           <h2 className="text-sm sm:text-base font-semibold text-foreground">{attemptData.title || "Assessment"}</h2>
-          {warnings > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-0.5 text-xs font-semibold text-warning">
-              <AlertTriangle className="h-3 w-3" />
-              {warnings}/{MAX_WARNINGS} warnings
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-3">
           <div className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold ${isUrgent ? "bg-destructive/10 text-destructive animate-pulse" : "bg-primary/10 text-primary"}`}>
@@ -337,7 +358,6 @@ const AssessmentAttempt = () => {
           </VButton>
         </div>
       </div>
-
       <div className="max-w-5xl mx-auto p-4 sm:p-6 grid gap-5 lg:grid-cols-[1fr_200px]">
         <VCard className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -421,18 +441,6 @@ const AssessmentAttempt = () => {
           </div>
         </VCard>
       </div>
-
-      <VModal isOpen={warningModal} onClose={() => setWarningModal(false)} title="?? Warning" className="max-w-sm">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/10">
-            <AlertTriangle className="h-5 w-5 text-warning" />
-          </div>
-          <p className="text-sm text-foreground">{warningMessage}</p>
-        </div>
-        <div className="flex justify-end">
-          <VButton onClick={() => setWarningModal(false)}>I Understand</VButton>
-        </div>
-      </VModal>
 
       <VModal isOpen={submitModal} onClose={() => setSubmitModal(false)} title="Submit Assessment" className="max-w-sm">
         <div className="space-y-4">

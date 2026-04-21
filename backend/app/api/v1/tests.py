@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +20,30 @@ from app.schemas.assessment import (
     QuestionPublicResponse,
     SubmissionResponse,
     TestStartResponse,
+    TestTimerResponse,
 )
 from app.services.grading import grade_submission
 
 router = APIRouter(prefix="/tests", tags=["tests"])
+
+TEST_DURATION_SECONDS = 10 * 60
+
+
+def _test_timer_payload(submitted_at: datetime | None) -> dict:
+    server_now = datetime.now(timezone.utc)
+    started_at = submitted_at or server_now
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+
+    elapsed_seconds = int((server_now - started_at).total_seconds())
+    remaining_seconds = max(0, TEST_DURATION_SECONDS - elapsed_seconds)
+
+    return {
+        "duration_seconds": TEST_DURATION_SECONDS,
+        "remaining_seconds": remaining_seconds,
+        "started_at": started_at,
+        "server_now": server_now,
+    }
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -56,6 +78,7 @@ async def start_test(
                     assessment_id=assessment_id,
                     title=assessment.title or "",
                     total_marks=assessment.total_marks or 0,
+                    **_test_timer_payload(sub.submitted_at),
                     questions=[QuestionPublicResponse.model_validate(q) for q in questions],
                 )
 
@@ -66,7 +89,37 @@ async def start_test(
         assessment_id=assessment_id,
         title=assessment.title or "",
         total_marks=assessment.total_marks or 0,
+        **_test_timer_payload(submission.submitted_at),
         questions=[QuestionPublicResponse.model_validate(q) for q in questions],
+    )
+
+
+@router.get(
+    "/{assessment_id}/timer",
+    response_model=TestTimerResponse,
+    summary="Get backend-synced remaining test time for an active submission",
+)
+async def get_test_timer(
+    assessment_id: str,
+    submission_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.STUDENT)),
+) -> TestTimerResponse:
+    assessment = await get_assessment(db, assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found.")
+
+    submission = await get_submission(db, submission_id)
+    if not submission or submission.assessment_id != assessment_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+
+    if current_user.role == UserRole.STUDENT and submission.student_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    return TestTimerResponse(
+        submission_id=submission.id,
+        assessment_id=assessment_id,
+        **_test_timer_payload(submission.submitted_at),
     )
 
 

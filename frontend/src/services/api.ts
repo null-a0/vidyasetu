@@ -394,7 +394,20 @@ export interface StartAttemptResponse {
     assessment_id: string;
     title: string;
     total_marks: number;
+    duration_seconds?: number;
+    remaining_seconds?: number;
+    started_at?: string | null;
+    server_now?: string;
     questions: AttemptQuestion[];
+}
+
+export interface AssessmentTimerResponse {
+    submission_id: string;
+    assessment_id: string;
+    duration_seconds: number;
+    remaining_seconds: number;
+    started_at?: string | null;
+    server_now: string;
 }
 
 export interface GradeAttemptResponse {
@@ -410,6 +423,15 @@ export const startAssessmentAttempt = async (
     assessmentId: string,
 ): Promise<StartAttemptResponse> => {
     return apiPost<StartAttemptResponse>(`/tests/${assessmentId}/start`);
+};
+
+export const fetchAssessmentTimer = async (
+    assessmentId: string,
+    submissionId: string,
+): Promise<AssessmentTimerResponse> => {
+    return apiGet<AssessmentTimerResponse>(`/tests/${assessmentId}/timer`, {
+        params: { submission_id: submissionId },
+    });
 };
 
 export const saveAssessmentAnswers = async (

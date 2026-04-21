@@ -198,7 +198,21 @@ class TestStartResponse(BaseModel):
     assessment_id: str
     title: str
     total_marks: int
+    duration_seconds: int
+    remaining_seconds: int
+    started_at: Optional[datetime] = None
+    server_now: datetime
     questions: list[QuestionPublicResponse]
+
+
+class TestTimerResponse(BaseModel):
+    """Returned while a student test is active so the frontend can stay in sync."""
+    submission_id: str
+    assessment_id: str
+    duration_seconds: int
+    remaining_seconds: int
+    started_at: Optional[datetime] = None
+    server_now: datetime
 
 
 class GradeResult(BaseModel):
