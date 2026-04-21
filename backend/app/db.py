@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -14,7 +15,10 @@ def _create_engine():
     }
 
     if settings.DATABASE_URL.startswith("sqlite+"):
-        engine_kwargs["connect_args"] = {"check_same_thread": False}
+        engine_kwargs["connect_args"] = {
+            "check_same_thread": False,
+            "timeout": 20,  # Increase busy_timeout to 20 seconds
+        }
     else:
         engine_kwargs["pool_pre_ping"] = True
         engine_kwargs["pool_size"] = 10
@@ -27,6 +31,15 @@ def _create_engine():
 # Engine
 # ---------------------------------------------------------------------------
 engine = _create_engine()
+
+# Enable WAL mode for SQLite to improve concurrency
+if settings.DATABASE_URL.startswith("sqlite+"):
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 # ---------------------------------------------------------------------------
 # Session factory

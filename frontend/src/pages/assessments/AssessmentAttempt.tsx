@@ -1,6 +1,7 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { AlertTriangle, Clock, ChevronLeft, ChevronRight, Flag, Send, Shield, Maximize2 } from "lucide-react";
 import VCard from "@/components/ui-custom/VCard";
 import VButton from "@/components/ui-custom/VButton";
@@ -105,8 +106,10 @@ const AssessmentAttempt = () => {
     }
   }, [assessmentId, attemptData, answers, isSubmitting, navigate, showToast]);
 
+  // Stable timer logic
   useEffect(() => {
-    if (!started || timeLeft <= 0 || isSubmitting) return;
+    if (!started || isSubmitting) return;
+    
     const interval = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -117,8 +120,9 @@ const AssessmentAttempt = () => {
         return t - 1;
       });
     }, 1000);
+    
     return () => clearInterval(interval);
-  }, [started, isSubmitting, timeLeft]);
+  }, [started, isSubmitting]);
 
   useEffect(() => {
     if (autoSubmitting) {
@@ -352,31 +356,39 @@ const AssessmentAttempt = () => {
               {flagged.has(currentQuestion.id) ? "Flagged" : "Flag"}
             </button>
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-6">{currentQuestion.text}</h3>
-          <div className="space-y-3">
-            {currentQuestion.options.map((opt, oi) => (
-              <button
-                key={opt.id}
-                onClick={() => handleSelect(currentQuestion.id, opt.id, currentQuestion.type)}
-                className={`w-full text-left rounded-xl border px-5 py-4 text-sm transition-all ${
-                  (answers[currentQuestion.id] ?? []).includes(opt.id)
-                    ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/30"
-                    : "border-border text-foreground hover:bg-accent hover:border-primary/20"
-                }`}
-              >
-                <span className="inline-flex items-center gap-3">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+          <motion.div
+            key={currentQuestion.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h3 className="text-lg font-semibold text-foreground mb-6">{currentQuestion.text}</h3>
+            <div className="space-y-3">
+              {currentQuestion.options.map((opt, oi) => (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSelect(currentQuestion.id, opt.id, currentQuestion.type)}
+                  className={`w-full text-left rounded-xl border px-5 py-4 text-sm transition-all ${
                     (answers[currentQuestion.id] ?? []).includes(opt.id)
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}>
-                    {String.fromCharCode(65 + oi)}
+                      ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/30"
+                      : "border-border text-foreground hover:bg-accent hover:border-primary/20"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-3">
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                      (answers[currentQuestion.id] ?? []).includes(opt.id)
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      {String.fromCharCode(65 + oi)}
+                    </span>
+                    {opt.text}
                   </span>
-                  {opt.text}
-                </span>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          </motion.div>
           <div className="flex justify-between mt-8">
             <VButton variant="secondary" disabled={currentQ === 0} onClick={() => setCurrentQ(currentQ - 1)}>
               <ChevronLeft className="h-4 w-4" /> Previous

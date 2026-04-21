@@ -93,6 +93,7 @@ async def _run_admin_report_attempt(db: AsyncSession, generation_id: str, schedu
         return
 
     await update_ai_generation(db, generation, AIGenerationUpdate(status=AIGenerationStatus.PROCESSING))
+    await db.commit()  # Release lock during AI call
 
     request_payload = generation.raw_prompt_input or {}
     date_from = _parse_date(request_payload.get("date_from"))
@@ -197,6 +198,7 @@ async def _run_student_explanation_attempt(db: AsyncSession, generation_id: str)
         return
 
     await update_ai_generation(db, generation, AIGenerationUpdate(status=AIGenerationStatus.PROCESSING))
+    await db.commit()  # Release lock during AI call
 
     try:
         raw = generation.raw_prompt_input or {}

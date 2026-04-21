@@ -188,6 +188,7 @@ async def create_admin_ai_report(
         try:
             # 1. Update status
             await update_ai_generation(db, generation, AIGenerationUpdate(status=AIGenerationStatus.PROCESSING))
+            await db.commit()  # Release DB lock while processing AI
             
             # 2. Build context and prompt (synchronous/inline)
             context = await build_admin_report_context(

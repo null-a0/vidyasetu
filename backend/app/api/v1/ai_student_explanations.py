@@ -206,6 +206,7 @@ async def create_student_explanation(
 
     # 1. Update status
     await update_ai_generation(db, generation, AIGenerationUpdate(status=AIGenerationStatus.PROCESSING))
+    await db.commit()  # Release DB lock while processing AI
     
     # 2. Build prompt
     prompt = build_student_explanation_prompt(prompt_payload=prompt_payload)
