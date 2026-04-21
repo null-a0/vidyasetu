@@ -257,24 +257,31 @@ const AssessmentsPage = () => {
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Assessment">
         <div className="space-y-4">
           <VInput label="Title" placeholder="Assessment title" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
-          <VInput label="Workshop" placeholder="Workshop name" value={formWorkshop} onChange={e => setFormWorkshop(e.target.value)} />
+          <VSelect
+            label="Workshop Name"
+            value={formWorkshop}
+            onChange={e => setFormWorkshop(e.target.value)}
+            options={[
+              { value: "", label: workshops.length ? "Select workshop" : "No workshops available" },
+              ...workshops.map((workshop) => ({ value: workshop.id, label: workshop.name })),
+            ]}
+          />
           <div className="grid grid-cols-2 gap-3">
             <VInput label="Total Marks" type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} />
             <VInput label="Passing Marks" type="number" value={formPassing} onChange={e => setFormPassing(e.target.value)} />
           </div>
           <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setCreateModal(false)}>Cancel</VButton><VButton onClick={() => {
-            const workshopId = workshops.find((workshop) => workshop.name === formWorkshop)?.id;
-            if (!workshopId) {
-              showToast("warning", "Workshop Required", "Select a workshop name that exists.");
+            if (!formWorkshop) {
+              showToast("warning", "Workshop Required", "Select a workshop name.");
               return;
             }
             createAssessmentMutation.mutate({
-              workshopId,
+              workshopId: formWorkshop,
               title: formTitle,
               totalMarks: Number(formTotal),
               passingMarks: Number(formPassing),
             });
-          }} disabled={!formTitle || createAssessmentMutation.isPending}>Create</VButton></div>
+          }} disabled={!formTitle || !formWorkshop || createAssessmentMutation.isPending}>Create</VButton></div>
         </div>
       </VModal>
 

@@ -11,7 +11,7 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const DashboardLayout = ({ title, subtitle, children, onSearch }: DashboardLayoutProps) => {
+const DashboardLayout = ({ title, subtitle, children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, isLoading, logout } = useAuth();
