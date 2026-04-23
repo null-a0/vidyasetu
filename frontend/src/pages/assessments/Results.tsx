@@ -105,24 +105,46 @@ const Results = () => {
 
     const finalScore = Number(reviewData?.score ?? score);
     const finalTotal = Number(reviewData?.total_marks ?? total);
-    const finalPercentage = finalTotal > 0 ? Math.round((finalScore / finalTotal) * 100) : percentage;
+    const finalPercentage =
+        finalTotal > 0
+            ? Math.round((finalScore / finalTotal) * 100)
+            : percentage;
     const finalPassed = reviewData?.pass_fail ?? passed;
 
-    const finalAnswers = (state?.answers && Object.keys(state.answers).length > 0)
-        ? state.answers
-        : Object.fromEntries((reviewData?.questions ?? []).map(q => [q.question_id, q.selected_option_ids]));
+    const finalAnswers =
+        state?.answers && Object.keys(state.answers).length > 0
+            ? state.answers
+            : Object.fromEntries(
+                  (reviewData?.questions ?? []).map((q) => [
+                      q.question_id,
+                      q.selected_option_ids,
+                  ]),
+              );
 
-    const finalQuestions = (state?.questions && state.questions.length > 0) 
-        ? state.questions 
-        : (reviewData?.questions ?? []).map(q => ({
-            id: q.question_id,
-            text: q.question_text,
-            options: q.selected_option_ids.map((id, i) => ({ id, text: q.selected_option_texts[i] || "" }))
-        }));
+    const finalQuestions =
+        state?.questions && state.questions.length > 0
+            ? state.questions
+            : (reviewData?.questions ?? []).map((q) => ({
+                  id: q.question_id,
+                  text: q.question_text,
+                  options: q.selected_option_ids.map((id, i) => ({
+                      id,
+                      text: q.selected_option_texts[i] || "",
+                  })),
+              }));
 
     // Re-map perQuestionMap if using review data
-    const finalPerQuestionMap = reviewData 
-        ? Object.fromEntries(reviewData.questions.map(q => [q.question_id, { question_id: q.question_id, earned: q.earned_marks, max: q.max_marks }]))
+    const finalPerQuestionMap = reviewData
+        ? Object.fromEntries(
+              reviewData.questions.map((q) => [
+                  q.question_id,
+                  {
+                      question_id: q.question_id,
+                      earned: q.earned_marks,
+                      max: q.max_marks,
+                  },
+              ]),
+          )
         : perQuestionMap;
 
     const leaderboardQuery = useQuery({
@@ -228,7 +250,7 @@ const Results = () => {
 
     useEffect(() => {
         const target = Number(finalPercentage) || 0;
-        
+
         // Immediate show if 0
         if (target === 0) {
             setAnimatedScore(0);
@@ -245,7 +267,7 @@ const Results = () => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const current = Math.round(start + (target - start) * progress);
-            
+
             setAnimatedScore(current);
 
             if (progress < 1) {
@@ -261,7 +283,7 @@ const Results = () => {
         };
 
         requestAnimationFrame(animate);
-        
+
         return () => {
             // No-op for RAF cleanup here as it naturally dies if not requested again
             // but we ensure final value is set on unexpected unmount
@@ -337,7 +359,7 @@ const Results = () => {
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <span className="text-4xl font-extrabold text-foreground">
                                         <span className="text-4xl font-bold text-foreground">
-                                            {animationDone ? finalPercentage : animatedScore}%
+                                            {finalPercentage}%
                                         </span>
                                     </span>
                                     <span className="text-sm text-muted-foreground">
@@ -350,7 +372,9 @@ const Results = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 1.2 }}>
                                 <VBadge
-                                    variant={finalPassed ? "success" : "destructive"}
+                                    variant={
+                                        finalPassed ? "success" : "destructive"
+                                    }
                                     className="text-base px-4 py-1.5">
                                     {finalPassed ? (
                                         <>
@@ -444,7 +468,7 @@ const Results = () => {
                         <h3 className="text-lg font-semibold text-foreground">
                             Question Feedback
                         </h3>
-        {finalQuestions.map((q, idx) => {
+                        {finalQuestions.map((q, idx) => {
                             const selected = finalAnswers[q.id];
                             const selectedIds = Array.isArray(selected)
                                 ? selected
@@ -518,9 +542,7 @@ const Results = () => {
                                                             q.id
                                                         }
                                                         onClick={() => {
-                                                            if (
-                                                                !submissionId
-                                                            )
+                                                            if (!submissionId)
                                                                 return;
                                                             setLoadingExplanationForQuestion(
                                                                 q.id,
