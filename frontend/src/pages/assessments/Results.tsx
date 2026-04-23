@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
     Award,
@@ -23,35 +23,16 @@ import StudentExplanationPanel from "@/components/assessments/StudentExplanation
 import {
     createStudentAnswerExplanation,
     fetchAssessmentLeaderboard,
-    fetchSubmissionReview,
+    fetchSubmissionResult,
     fetchStudentExplanationResult,
     fetchStudentExplanationStatus,
 } from "@/services/api";
-import type { BackendStudentExplanationResult } from "@/api/types";
+import type { BackendStudentExplanationResult, BackendSubmissionResult } from "@/api/types";
 
 type ResultState = {
     assessmentId?: string;
     assessmentTitle?: string;
-    result?: {
-        submission_id: string;
-        score: number;
-        total_marks: number;
-        percentage: number;
-        pass_fail: boolean;
-        per_question: Array<{
-            question_id: string;
-            earned: number;
-            max: number;
-        }>;
-    };
-    answers?: Record<string, string | string[]>;
-    questions?: Array<{
-        id: string;
-        text?: string | null;
-        options: Array<{ id: string; text: string }>;
-    }>;
-    score?: number;
-    total?: number;
+    result?: BackendSubmissionResult;
 };
 
 const Results = () => {
@@ -60,11 +41,9 @@ const Results = () => {
     const [searchParams] = useSearchParams();
     const submissionIdFromUrl = searchParams.get("submissionId");
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
     const { showToast } = useVToast();
     const role = useRole();
     const [animatedScore, setAnimatedScore] = useState(0);
-    const [animationDone, setAnimationDone] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
     const [showLeaderboard, setShowLeaderboard] = useState(false);
     const [feedbackModal, setFeedbackModal] = useState(false);
@@ -78,59 +57,39 @@ const Results = () => {
     const [loadingExplanationForQuestion, setLoadingExplanationForQuestion] =
         useState<string | null>(null);
 
-    const backendResult = state?.result;
-    const score = backendResult?.score ?? state?.score ?? 0;
-    const total = backendResult?.total_marks ?? state?.total ?? 0;
-    const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
-    const passed = backendResult?.pass_fail ?? percentage >= 60;
-    const answers = state?.answers ?? {};
-    const questions = state?.questions ?? [];
-    const perQuestionMap = Object.fromEntries(
-        (backendResult?.per_question ?? []).map((item) => [
-            item.question_id,
-            item,
-        ]),
-    );
-
-    // If state is missing (e.g. refresh), fetch detailed review
-    const submissionId = backendResult?.submission_id ?? submissionIdFromUrl;
-    const reviewQuery = useQuery({
-        queryKey: ["submissionReview", submissionId],
-        queryFn: () => fetchSubmissionReview(submissionId ?? ""),
-        enabled: Boolean(submissionId && (!state || !state.questions)),
+    const resultQuery = useQuery({
+        queryKey: ["submissionResult", submissionIdFromUrl],
+        queryFn: () => fetchSubmissionResult(submissionIdFromUrl ?? ""),
+        enabled: Boolean(submissionIdFromUrl),
     });
 
-    const assessmentId = state?.assessmentId ?? reviewQuery.data?.assessment_id;
-    const reviewData = reviewQuery.data;
+    const backendResult = resultQuery.data ?? state?.result;
+    const submissionId = backendResult?.submission_id ?? submissionIdFromUrl ?? null;
+    const assessmentId = state?.assessmentId ?? backendResult?.assessment_id;
 
-    const finalScore = Number(reviewData?.score ?? score);
-    const finalTotal = Number(reviewData?.total_marks ?? total);
-    const finalPercentage = finalTotal > 0 ? Math.round((finalScore / finalTotal) * 100) : percentage;
-    const finalPassed = reviewData?.pass_fail ?? passed;
+    // Backend always returns score as 0-100 percentage (e.g., 33.3 for 2/6 correct)
+    // This is the single source of truth for all displays
+    const percentage = backendResult?.score ?? 0;
 
-    const finalAnswers = (state?.answers && Object.keys(state.answers).length > 0)
-        ? state.answers
-        : Object.fromEntries((reviewData?.questions ?? []).map(q => [q.question_id, q.selected_option_ids]));
+    // Single source of truth for pass/fail — used everywhere (ring color, badge, message, buttons)
+    const isPassed = backendResult
+        ? (backendResult.pass_fail ?? (percentage >= 60))
+        : false;
 
-    const finalQuestions = (state?.questions && state.questions.length > 0) 
-        ? state.questions 
-        : (reviewData?.questions ?? []).map(q => ({
-            id: q.question_id,
-            text: q.question_text,
-            options: q.selected_option_ids.map((id, i) => ({ id, text: q.selected_option_texts[i] || "" }))
-        }));
-
-    // Re-map perQuestionMap if using review data
-    const finalPerQuestionMap = reviewData 
-        ? Object.fromEntries(reviewData.questions.map(q => [q.question_id, { question_id: q.question_id, earned: q.earned_marks, max: q.max_marks }]))
-        : perQuestionMap;
+    const ringRadius = 70;
+    const ringCircumference = 2 * Math.PI * ringRadius;
+    // Ring offset: convert percentage (0-100) to fraction (0-1) then calculate offset
+    const ringOffset = backendResult
+        ? ringCircumference - (percentage / 100) * ringCircumference
+        : ringCircumference;
 
     const leaderboardQuery = useQuery({
         queryKey: ["assessmentLeaderboard", assessmentId],
         queryFn: () => fetchAssessmentLeaderboard(assessmentId ?? ""),
-        enabled: Boolean(showLeaderboard && finalPassed && assessmentId),
+        enabled: Boolean(showLeaderboard && isPassed && assessmentId),
     });
     const leaderboardEntries = leaderboardQuery.data?.entries ?? [];
+
     const explanationMutation = useMutation({
         mutationFn: (payload: { submissionId: string; questionId: string }) =>
             createStudentAnswerExplanation({
@@ -151,9 +110,7 @@ const Results = () => {
                 });
                 showToast(
                     data.from_cache ? "info" : "success",
-                    data.from_cache
-                        ? "Loaded Cached Explanation"
-                        : "Explanation Ready",
+                    data.from_cache ? "Loaded Cached Explanation" : "Explanation Ready",
                     data.from_cache
                         ? "Reused a previous explanation."
                         : "Generated a new explanation.",
@@ -170,9 +127,7 @@ const Results = () => {
             const maxAttempts = 30;
             for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
                 await new Promise((r) => setTimeout(r, 2000));
-                const status = await fetchStudentExplanationStatus(
-                    data.explanation_id,
-                );
+                const status = await fetchStudentExplanationStatus(data.explanation_id);
                 if (status.status === "failed") {
                     throw new Error(
                         typeof status.error_details?.message === "string"
@@ -181,9 +136,7 @@ const Results = () => {
                     );
                 }
                 if (status.status !== "completed") continue;
-                const result = await fetchStudentExplanationResult(
-                    data.explanation_id,
-                );
+                const result = await fetchStudentExplanationResult(data.explanation_id);
                 setExplanationsByQuestion((prev) => ({
                     ...prev,
                     [variables.questionId]: result.explanation,
@@ -193,32 +146,22 @@ const Results = () => {
                     delete next[variables.questionId];
                     return next;
                 });
-                showToast(
-                    "success",
-                    "Explanation Ready",
-                    "Generated a new explanation.",
-                );
+                showToast("success", "Explanation Ready", "Generated a new explanation.");
                 return;
             }
 
-            throw new Error(
-                "Explanation is still processing. Please try again in a moment.",
-            );
+            throw new Error("Explanation is still processing. Please try again in a moment.");
         },
         onError: (error, variables) => {
             setExplanationErrorsByQuestion((prev) => ({
                 ...prev,
                 [variables.questionId]:
-                    error instanceof Error
-                        ? error.message
-                        : "Unable to generate explanation.",
+                    error instanceof Error ? error.message : "Unable to generate explanation.",
             }));
             showToast(
-                "destructive",
+                "error",
                 "Explanation Failed",
-                error instanceof Error
-                    ? error.message
-                    : "Unable to generate explanation.",
+                error instanceof Error ? error.message : "Unable to generate explanation.",
             );
         },
         onSettled: () => {
@@ -227,49 +170,43 @@ const Results = () => {
     });
 
     useEffect(() => {
-        const target = Number(finalPercentage) || 0;
+        if (!backendResult) return;
         
-        // Immediate show if 0
-        if (target === 0) {
-            setAnimatedScore(0);
-            setAnimationDone(true);
-            setShowDetails(true);
-            return;
+        // Set animated score to the final percentage value immediately
+        // This ensures center text, ring, and stat card all show the same value
+        setAnimatedScore(Math.round(percentage * 10) / 10); // Keep decimal precision
+        setShowDetails(true);
+        
+        // Show leaderboard and feedback after a short delay
+        if (isPassed && role === "student") {
+            setTimeout(() => setShowLeaderboard(true), 400);
+            setTimeout(() => setFeedbackModal(true), 1000);
         }
+    }, [percentage, isPassed, role, backendResult]);
 
-        let start = 0;
-        const duration = 1000;
-        const startTime = performance.now();
+    if (submissionIdFromUrl && resultQuery.isLoading) {
+        return (
+            <DashboardLayout title="Results">
+                <div className="flex flex-col items-center justify-center py-16">
+                    <div className="vidya-spinner mb-4" />
+                    <p className="text-muted-foreground">Loading results...</p>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
-        const animate = (currentTime: number) => {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const current = Math.round(start + (target - start) * progress);
-            
-            setAnimatedScore(current);
+    if (submissionIdFromUrl && resultQuery.isError) {
+        return (
+            <DashboardLayout title="Results">
+                <div className="flex flex-col items-center justify-center py-16">
+                    <p className="text-muted-foreground mb-4">We could not load this result.</p>
+                    <VButton onClick={() => navigate("/assessments")}>Go back to assessments</VButton>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            } else {
-                setAnimationDone(true);
-                setShowDetails(true);
-                if (finalPassed && role === "student") {
-                    setTimeout(() => setShowLeaderboard(true), 400);
-                    setTimeout(() => setFeedbackModal(true), 1000);
-                }
-            }
-        };
-
-        requestAnimationFrame(animate);
-        
-        return () => {
-            // No-op for RAF cleanup here as it naturally dies if not requested again
-            // but we ensure final value is set on unexpected unmount
-            setAnimatedScore(target);
-        };
-    }, [finalPercentage, finalPassed, role]);
-
-    if (!state && !reviewQuery.data && !reviewQuery.isLoading) {
+    if (submissionIdFromUrl && !backendResult && !resultQuery.isLoading) {
         return (
             <DashboardLayout title="Results">
                 <div className="flex flex-col items-center justify-center py-16">
@@ -284,7 +221,7 @@ const Results = () => {
         );
     }
 
-    if (reviewQuery.isLoading) {
+    if (!backendResult) {
         return (
             <DashboardLayout title="Results">
                 <div className="flex flex-col items-center justify-center py-16">
@@ -309,6 +246,7 @@ const Results = () => {
                                 <svg
                                     className="h-40 w-40 -rotate-90"
                                     viewBox="0 0 160 160">
+                                    {/* Background track */}
                                     <circle
                                         cx="80"
                                         cy="80"
@@ -317,64 +255,80 @@ const Results = () => {
                                         stroke="hsl(var(--muted))"
                                         strokeWidth="8"
                                     />
+                                    {/* Progress arc — color driven by single isPassed variable */}
                                     <circle
                                         cx="80"
                                         cy="80"
                                         r="70"
                                         fill="none"
-                                        stroke={
-                                            passed
-                                                ? "hsl(var(--success))"
-                                                : "hsl(var(--destructive))"
-                                        }
+                                        stroke={isPassed ? "hsl(var(--success))" : "hsl(var(--destructive))"}
                                         strokeWidth="8"
-                                        strokeDasharray={`${2 * Math.PI * 70}`}
-                                        strokeDashoffset={`${2 * Math.PI * 70 * (1 - animatedScore / 100)}`}
+                                        strokeDasharray={`${ringCircumference}`}
+                                        strokeDashoffset={`${ringOffset}`}
                                         strokeLinecap="round"
                                         className="transition-all duration-300"
                                     />
                                 </svg>
+                                {/* FIX: Single percentage display — removed duplicate nested span */}
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-4xl font-extrabold text-foreground">
-                                        <span className="text-4xl font-bold text-foreground">
-                                            {animationDone ? finalPercentage : animatedScore}%
-                                        </span>
+                                    <span className="text-4xl font-bold text-foreground">
+                                        {Math.round(animatedScore)}%
                                     </span>
-                                    <span className="text-sm text-muted-foreground">
-                                        {finalScore}/{finalTotal}
-                                    </span>
+                                    <span className="text-xs text-muted-foreground">Score</span>
                                 </div>
                             </div>
+
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 1.2 }}>
+                                {/* FIX: isPassed is the single source of truth for badge */}
                                 <VBadge
-                                    variant={finalPassed ? "success" : "destructive"}
+                                    variant={isPassed ? "success" : "destructive"}
                                     className="text-base px-4 py-1.5">
-                                    {finalPassed ? (
+                                    {isPassed ? (
                                         <>
-                                            <CheckCircle2 className="h-4 w-4 mr-1" />{" "}
-                                            Passed!
+                                            <CheckCircle2 className="h-4 w-4 mr-1" /> Passed!
                                         </>
                                     ) : (
                                         <>
-                                            <XCircle className="h-4 w-4 mr-1" />{" "}
-                                            Failed
+                                            <XCircle className="h-4 w-4 mr-1" /> Failed
                                         </>
                                     )}
                                 </VBadge>
                                 <p className="mt-3 text-sm text-muted-foreground">
-                                    {passed
-                                        ? "Great work! Backend grading marked this attempt as pass."
-                                        : "Keep going — backend grading marked this attempt as not passed yet."}
+                                    {isPassed
+                                        ? "Great work! You passed this assessment."
+                                        : "Keep going — review the questions below and try again."}
                                 </p>
                             </motion.div>
+
+                            {/* FIX: All three stat cards use normalized percentage */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 text-left">
+                                <VCard className="p-4">
+                                    <p className="text-xs text-muted-foreground">Score</p>
+                                    <p className="text-xl font-semibold text-foreground">
+                                        {Math.round(percentage)}%
+                                    </p>
+                                </VCard>
+                                <VCard className="p-4">
+                                    <p className="text-xs text-muted-foreground">Correct</p>
+                                    <p className="text-xl font-semibold text-foreground">
+                                        {backendResult.correct_count}/{backendResult.total}
+                                    </p>
+                                </VCard>
+                                <VCard className="p-4">
+                                    <p className="text-xs text-muted-foreground">Status</p>
+                                    <p className={`text-xl font-semibold ${isPassed ? "text-success" : "text-destructive"}`}>
+                                        {isPassed ? "Passed" : "Failed"}
+                                    </p>
+                                </VCard>
+                            </div>
                         </div>
                     </VCard>
                 </motion.div>
 
-                {showLeaderboard && finalPassed && (
+                {showLeaderboard && isPassed && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -413,10 +367,7 @@ const Results = () => {
                                             </p>
                                         </div>
                                         <span className="text-sm font-bold text-foreground">
-                                            {Math.round(
-                                                entry.average_percentage,
-                                            )}
-                                            %
+                                            {Math.round(entry.average_percentage)}%
                                         </span>
                                         <span className="text-xs text-muted-foreground">
                                             {entry.attempts} attempts
@@ -435,41 +386,31 @@ const Results = () => {
                     </motion.div>
                 )}
 
-                {showDetails && finalQuestions.length > 0 && (
+                {showDetails && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4 }}
                         className="space-y-4 mb-8">
                         <h3 className="text-lg font-semibold text-foreground">
-                            Question Feedback
+                            Question review
                         </h3>
-        {finalQuestions.map((q, idx) => {
-                            const selected = finalAnswers[q.id];
-                            const selectedIds = Array.isArray(selected)
-                                ? selected
-                                : selected
-                                  ? [selected]
-                                  : [];
-                            const userAnswer =
-                                q.options
-                                    .filter((opt) =>
-                                        selectedIds.includes(opt.id),
-                                    )
-                                    .map((opt) => opt.text)
-                                    .join(", ") || "Not answered";
-                            const grading = finalPerQuestionMap[q.id];
-                            const isCorrect = grading
-                                ? grading.earned === grading.max
-                                : false;
+                        {(backendResult.per_question ?? []).map((q, idx) => {
+                            // Support both single ID (MCQ) and multiple IDs (MSQ)
+                            const selectedIds = q.student_answer_ids && q.student_answer_ids.length > 0 
+                                ? q.student_answer_ids 
+                                : (q.student_answer_id ? [q.student_answer_id] : []);
+                            const correctIds = q.correct_answer_ids && q.correct_answer_ids.length > 0 
+                                ? q.correct_answer_ids 
+                                : (q.correct_answer_id ? [q.correct_answer_id] : []);
+                            
+                            const isCorrect = q.is_correct;
                             const canRequestExplanation = Boolean(
-                                role === "student" &&
-                                !isCorrect &&
-                                submissionId,
+                                role === "student" && !isCorrect && submissionId,
                             );
                             return (
                                 <VCard
-                                    key={q.id}
+                                    key={q.question_id}
                                     className={`p-5 border-l-4 ${isCorrect ? "border-l-success" : "border-l-destructive"}`}>
                                     <div className="flex items-start gap-3">
                                         <div
@@ -482,81 +423,72 @@ const Results = () => {
                                         </div>
                                         <div className="flex-1">
                                             <p className="font-medium text-foreground mb-2">
-                                                {idx + 1}. {q.text}
+                                                {idx + 1}. {q.question_text}
                                             </p>
-                                            <p className="text-sm">
-                                                <span className="text-muted-foreground">
-                                                    Your answer:{" "}
-                                                </span>
-                                                <span className="text-foreground font-medium">
-                                                    {userAnswer}
-                                                </span>
-                                            </p>
-                                            {grading && (
-                                                <p className="text-sm mt-1">
-                                                    <span className="text-muted-foreground">
-                                                        Marks awarded:{" "}
-                                                    </span>
-                                                    <span
-                                                        className={
-                                                            isCorrect
-                                                                ? "text-success font-medium"
-                                                                : "text-destructive font-medium"
-                                                        }>
-                                                        {grading.earned}/
-                                                        {grading.max}
-                                                    </span>
-                                                </p>
+
+                                            <div className="mt-3 space-y-2">
+                                                {q.options.map((opt) => {
+                                                    const optionId = String(opt.id);
+                                                    const isStudentPick = selectedIds.includes(optionId);
+                                                    const isCorrectOption = correctIds.includes(optionId);
+                                                    const isWrongStudentPick = isStudentPick && !isCorrectOption;
+
+                                                    let optClass = "bg-background border-border text-foreground";
+                                                    if (isCorrectOption) {
+                                                        optClass = "bg-success/10 border-success text-success";
+                                                    } else if (isWrongStudentPick) {
+                                                        optClass = "bg-destructive/10 border-destructive text-destructive";
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            key={opt.id}
+                                                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${optClass}`}>
+                                                            <span>{opt.text}</span>
+                                                            {isCorrectOption && (
+                                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                            )}
+                                                            {isWrongStudentPick && (
+                                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {q.explanation && (
+                                                <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3">
+                                                    <p className="text-xs font-semibold text-muted-foreground mb-1">
+                                                        Explanation
+                                                    </p>
+                                                    <p className="text-sm text-foreground">{q.explanation}</p>
+                                                </div>
                                             )}
+
                                             {canRequestExplanation && (
                                                 <div className="mt-3">
                                                     <VButton
                                                         size="sm"
                                                         variant="secondary"
-                                                        isLoading={
-                                                            loadingExplanationForQuestion ===
-                                                            q.id
-                                                        }
+                                                        isLoading={loadingExplanationForQuestion === q.question_id}
                                                         onClick={() => {
-                                                            if (
-                                                                !submissionId
-                                                            )
-                                                                return;
-                                                            setLoadingExplanationForQuestion(
-                                                                q.id,
-                                                            );
-                                                            explanationMutation.mutate(
-                                                                {
-                                                                    submissionId:
-                                                                        submissionId,
-                                                                    questionId:
-                                                                        q.id,
-                                                                },
-                                                            );
+                                                            if (!submissionId) return;
+                                                            setLoadingExplanationForQuestion(q.question_id);
+                                                            explanationMutation.mutate({
+                                                                submissionId,
+                                                                questionId: q.question_id,
+                                                            });
                                                         }}>
-                                                        <Sparkles className="h-4 w-4" />{" "}
-                                                        Explain This
+                                                        <Sparkles className="h-4 w-4" /> Explain This
                                                     </VButton>
-                                                    {explanationErrorsByQuestion[
-                                                        q.id
-                                                    ] && (
+                                                    {explanationErrorsByQuestion[q.question_id] && (
                                                         <p className="text-xs text-destructive mt-2">
-                                                            {
-                                                                explanationErrorsByQuestion[
-                                                                    q.id
-                                                                ]
-                                                            }
+                                                            {explanationErrorsByQuestion[q.question_id]}
                                                         </p>
                                                     )}
-                                                    {explanationsByQuestion[
-                                                        q.id
-                                                    ] && (
+                                                    {explanationsByQuestion[q.question_id] && (
                                                         <StudentExplanationPanel
-                                                            explanation={
-                                                                explanationsByQuestion[
-                                                                    q.id
-                                                                ]
-                                                            }
+                                                            explanation={explanationsByQuestion[q.question_id]}
                                                         />
                                                     )}
                                                 </div>
@@ -566,6 +498,13 @@ const Results = () => {
                                 </VCard>
                             );
                         })}
+                        {(backendResult.per_question ?? []).length === 0 && (
+                            <VCard className="p-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Detailed review not available for this attempt.
+                                </p>
+                            </VCard>
+                        )}
                     </motion.div>
                 )}
 
@@ -573,21 +512,17 @@ const Results = () => {
                     <VButton onClick={() => navigate("/assessments")}>
                         <ArrowRight className="h-4 w-4" /> Back to Assessments
                     </VButton>
-                    {finalPassed && (
+                    {isPassed && (
                         <VButton
                             variant="secondary"
                             onClick={() => {
                                 navigate("/certificates");
-                                showToast(
-                                    "success",
-                                    "Certificate",
-                                    "Check your certificates!",
-                                );
+                                showToast("success", "Certificate", "Check your certificates!");
                             }}>
                             <Award className="h-4 w-4" /> View Certificate
                         </VButton>
                     )}
-                    {!finalPassed && (
+                    {!isPassed && (
                         <VButton
                             variant="secondary"
                             onClick={() =>
@@ -610,8 +545,7 @@ const Results = () => {
                 className="max-w-md">
                 <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        Help us improve! Rate the assessment and share your
-                        thoughts.
+                        Help us improve! Rate the assessment and share your thoughts.
                     </p>
                     <div className="flex items-center justify-center gap-2">
                         {[1, 2, 3, 4, 5].map((s) => (
@@ -626,9 +560,7 @@ const Results = () => {
                         ))}
                     </div>
                     <div>
-                        <label className="vidya-label">
-                            Comments (optional)
-                        </label>
+                        <label className="vidya-label">Comments (optional)</label>
                         <textarea
                             value={feedbackText}
                             onChange={(e) => setFeedbackText(e.target.value)}
@@ -638,22 +570,15 @@ const Results = () => {
                         />
                     </div>
                     <div className="flex justify-end gap-3">
-                        <VButton
-                            variant="ghost"
-                            onClick={() => setFeedbackModal(false)}>
+                        <VButton variant="ghost" onClick={() => setFeedbackModal(false)}>
                             Skip
                         </VButton>
                         <VButton
                             onClick={() => {
                                 setFeedbackModal(false);
-                                showToast(
-                                    "success",
-                                    "Thank You!",
-                                    "Your feedback has been submitted.",
-                                );
+                                showToast("success", "Thank You!", "Your feedback has been submitted.");
                             }}>
-                            <MessageSquare className="h-4 w-4" /> Submit
-                            Feedback
+                            <MessageSquare className="h-4 w-4" /> Submit Feedback
                         </VButton>
                     </div>
                 </div>

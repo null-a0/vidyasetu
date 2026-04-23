@@ -14,18 +14,7 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 
 def get_available_model(api_key: str) -> str:
     """Get an available Gemini model that supports generateContent."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-    try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        models = data.get('models', [])
-        for model in models:
-            if 'generateContent' in model.get('supportedGenerationMethods', []):
-                return model['name'].split('/')[-1]  # Extract model name like 'gemini-1.5-flash'
-        raise Exception("No model supporting generateContent found")
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to list models: {str(e)}")
+    return "gemini-flash-latest"
 
 class GenerateContentRequest(BaseModel):
     topic: str

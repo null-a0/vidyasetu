@@ -22,6 +22,8 @@ import type {
     BackendEnrollment,
     BackendCertificate,
     BackendNotification,
+    BackendSubmissionResult,
+    BackendStudentProgress,
     BackendUser,
     BackendInstitution,
     BackendApprovalRequest,
@@ -197,6 +199,7 @@ export const updateWorkshop = async (
     payload: {
         title?: string | null;
         description?: string | null;
+        institution_id?: string | null;
         start_date?: string | null;
         end_date?: string | null;
     },
@@ -211,6 +214,18 @@ export const updateWorkshop = async (
         offset: 0,
         limit: 1,
     })[0];
+};
+
+export const updateAssessmentQuestion = async (
+    questionId: string,
+    payload: {
+        text?: string;
+        type?: string;
+        marks?: number;
+        options?: Array<{ id: string; text: string; is_correct: boolean }>;
+    },
+): Promise<BackendQuestion> => {
+    return apiPatch<BackendQuestion>(`/questions/${questionId}`, payload);
 };
 
 export const deleteWorkshop = async (workshopId: string): Promise<void> => {
@@ -402,10 +417,18 @@ export interface StartAttemptResponse {
 export interface GradeAttemptResponse {
     submission_id: string;
     score: number;
-    total_marks: number;
-    percentage: number;
+    correct_count: number;
+    total: number;
     pass_fail: boolean;
-    per_question: Array<{ question_id: string; earned: number; max: number }>;
+    per_question: Array<{
+        question_id: string;
+        question_text: string;
+        options: Array<{ id: string; text: string }>;
+        student_answer_id?: string | null;
+        correct_answer_id?: string | null;
+        is_correct: boolean;
+        explanation?: string | null;
+    }>;
 }
 
 export const startAssessmentAttempt = async (
@@ -437,6 +460,24 @@ export const submitAssessmentAttempt = async (
             params: { submission_id: submissionId },
         },
     );
+};
+
+export const fetchSubmissionResult = async (submissionId: string): Promise<BackendSubmissionResult> => {
+    return apiGet<BackendSubmissionResult>(`/submissions/${submissionId}/result`);
+};
+
+export const fetchStudentProgress = async (): Promise<BackendStudentProgress[]> => {
+    return apiGet<BackendStudentProgress[]>('/progress/');
+};
+
+export const updateStudentProgress = async (payload: {
+    workshopId: string;
+    moduleIndex: number;
+}): Promise<BackendStudentProgress> => {
+    return apiPatch<BackendStudentProgress>('/progress/', {
+        workshop_id: payload.workshopId,
+        current_module_index: payload.moduleIndex,
+    });
 };
 
 export const fetchWorkshopModules = async (
@@ -580,7 +621,7 @@ const fetchUserLookup = async (ids: string[]) => {
         ids.map(async (id) => {
             try {
                 const result = await apiGet<BackendUser>("/users/" + id);
-                map[id] = result.name ?? "";
+                map[id] = result.name ?? result.email ?? "";
             } catch {
                 map[id] = "";
             }
@@ -646,12 +687,21 @@ export const fetchNotifications = async (
     return adaptNotifications(data.items);
 };
 
+export const fetchMyNotifications = async (): Promise<Notification[]> => {
+    const items = await apiGet<BackendNotification[]>('/notifications');
+    return adaptNotifications(items);
+};
+
 export const markNotificationRead = async (
     notificationId: string,
 ): Promise<BackendNotification> => {
     return apiPatch<BackendNotification>(
         `/notifications/${notificationId}/read`,
     );
+};
+
+export const markAllNotificationsRead = async (): Promise<BackendNotification[]> => {
+    return apiPatch<BackendNotification[]>('/notifications/read-all');
 };
 
 export const deleteNotification = async (
@@ -724,12 +774,6 @@ export const fetchSubmissions = async (): Promise<Submission[]> => {
     }));
 };
 
-export const fetchSubmissionResult = async (
-    submissionId: string,
-): Promise<BackendSubmission> => {
-    return apiGet<BackendSubmission>(`/submissions/${submissionId}/result`);
-};
-
 export const uploadModuleMaterial = async (
     moduleId: string,
     file: File,
@@ -741,6 +785,21 @@ export const uploadModuleMaterial = async (
         formData,
         { headers: { "Content-Type": "multipart/form-data" } },
     );
+};
+
+export const createModuleMaterial = async (
+    moduleId: string,
+    payload: {
+        title: string;
+        type: "video" | "pdf" | "link" | "text";
+        content: string;
+    },
+): Promise<BackendModule> => {
+    return apiPost<BackendModule>(`/materials/${moduleId}`, {
+        title: payload.title,
+        type: payload.type,
+        content: payload.content,
+    });
 };
 
 export const deleteModuleMaterial = async (
@@ -877,6 +936,15 @@ export const createInstitution = async (payload: {
     contact_phone?: string;
 }): Promise<BackendInstitution> => {
     return apiPost<BackendInstitution>("/institutions/", payload);
+};
+
+export const updateInstitutionStatus = async (
+    institutionId: string,
+    isActive: boolean,
+): Promise<BackendInstitution> => {
+    return apiPatch<BackendInstitution>(`/institutions/${institutionId}/status`, {
+        is_active: isActive,
+    });
 };
 
 export const fetchUsers = async (

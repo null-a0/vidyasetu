@@ -50,6 +50,9 @@ class QuestionType(str, Enum):
 
 
 class NotificationType(str, Enum):
+    INFO = "info"
+    SUCCESS = "success"
+    WARNING = "warning"
     GENERAL = "general"
     TEST = "test"
     FEES = "fees"
@@ -96,6 +99,7 @@ class Institution(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     name = Column(String, nullable=False)
     address = Column(Text)
+    is_active = Column(Boolean, default=True)
 
     admin_id = Column(String, ForeignKey("users.id"))
 
@@ -509,6 +513,7 @@ class Notification(Base):
 
     user_id = Column(String, ForeignKey("users.id"))
 
+    title = Column(String, nullable=False, default="Notification")
     message = Column(Text, nullable=False)
     status = Column(SqlEnum(NotificationStatus),
                     default=NotificationStatus.UNREAD)
@@ -517,6 +522,16 @@ class Notification(Base):
     )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class StudentProgress(Base):
+    __tablename__ = "student_progress"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    student_id = Column(String, ForeignKey("users.id"), nullable=False)
+    workshop_id = Column(String, ForeignKey("workshops.id"), nullable=False)
+    current_module_index = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 # --------------------------------------------------
 # APPROVAL REQUESTS (minimal workflow for admin panels)

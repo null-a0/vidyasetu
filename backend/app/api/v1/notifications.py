@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-from app.api.deps import (PaginationParams, get_current_user, get_db,
-                          require_role)
-from app.crud.crud_misc import (create_notification, delete_notification,
-                                get_notification, get_notifications_by_user,
-                                update_notification)
+from app.api.deps import PaginationParams, get_current_user, get_db, require_role
+from app.crud.crud_misc import (
+    create_notification,
+    delete_notification,
+    get_notification,
+    get_notifications_by_user,
+    update_notification,
+)
 from app.models import NotificationStatus, User, UserRole
 from app.schemas.base import Page
-from app.schemas.misc import (NotificationBulkCreate, NotificationCreate,
-                              NotificationResponse, NotificationUpdate)
+from app.schemas.misc import (
+    NotificationBulkCreate,
+    NotificationCreate,
+    NotificationResponse,
+    NotificationUpdate,
+)
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +24,16 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 _STAFF = (UserRole.ADMIN, UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR)
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# POST /notifications/send  (Bulk Support via type-based tagging)
-# ────────────────────────────────────────────────────────────────────────────
+def _to_response(notification) -> NotificationResponse:
+    return NotificationResponse(
+        id=notification.id,
+        user_id=notification.user_id,
+        title=getattr(notification, "title", None) or "Notification",
+        message=notification.message,
+        status=notification.status,
+        notification_type=notification.notification_type,
+        created_at=notification.created_at,
+    )
 
 
 @router.post(
@@ -34,24 +48,31 @@ async def send_notification(
     _: User = Depends(require_role(*_STAFF)),
 ) -> list[NotificationResponse]:
     results: list[NotificationResponse] = []
-    
-    # In a very large scale system, this would be chunked/backgrounded.
-    # For standard deployment, linear loop is acceptable for typical cohort sizes.
+
     for uid in set(payload.user_ids):
         data = NotificationCreate(
             user_id=uid,
+            title=payload.title,
             message=payload.message,
             notification_type=payload.notification_type,
         )
         notif = await create_notification(db, data)
-        results.append(NotificationResponse.model_validate(notif))
+        results.append(_to_response(notif))
 
     return results
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# GET /notifications/{user_id}
-# ────────────────────────────────────────────────────────────────────────────
+@router.get(
+    "",
+    response_model=list[NotificationResponse],
+    summary="List notifications for the authenticated user",
+)
+async def list_current_user_notifications(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[NotificationResponse]:
+    items, _ = await get_notifications_by_user(db, current_user.id, offset=0, limit=50)
+    return [_to_response(item) for item in items]
 
 
 @router.get(
@@ -65,24 +86,21 @@ async def list_notifications(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Page[NotificationResponse]:
-    # Users can only see their own notifications
     if current_user.role == UserRole.STUDENT and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     items, total = await get_notifications_by_user(
-        db, user_id, offset=page.offset, limit=page.limit
+        db,
+        user_id,
+        offset=page.offset,
+        limit=page.limit,
     )
     return Page(
-        items=[NotificationResponse.model_validate(n) for n in items],
+        items=[_to_response(item) for item in items],
         total=total,
         offset=page.offset,
         limit=page.limit,
     )
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# PATCH /notifications/{notification_id}/read
-# ────────────────────────────────────────────────────────────────────────────
 
 
 @router.patch(
@@ -99,17 +117,37 @@ async def mark_read(
     if not notif:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found.")
 
-    # Only owner can map as read
     if notif.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    updated = await update_notification(db, notif, NotificationUpdate(status=NotificationStatus.READ))
-    return NotificationResponse.model_validate(updated)
+    updated = await update_notification(
+        db,
+        notif,
+        NotificationUpdate(status=NotificationStatus.READ),
+    )
+    return _to_response(updated)
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# DELETE /notifications/{notification_id}
-# ────────────────────────────────────────────────────────────────────────────
+@router.patch(
+    "/read-all",
+    response_model=list[NotificationResponse],
+    summary="Mark all notifications as read",
+)
+async def mark_all_read(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[NotificationResponse]:
+    items, _ = await get_notifications_by_user(db, current_user.id, offset=0, limit=500)
+    updated_items: list[NotificationResponse] = []
+    for item in items:
+        if item.status != NotificationStatus.READ:
+            item = await update_notification(
+                db,
+                item,
+                NotificationUpdate(status=NotificationStatus.READ),
+            )
+        updated_items.append(_to_response(item))
+    return updated_items
 
 
 @router.delete(
@@ -126,7 +164,6 @@ async def delete_one(
     if not notif:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found.")
 
-    # Only owner can delete
     if notif.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 

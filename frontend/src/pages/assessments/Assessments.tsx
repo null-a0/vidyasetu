@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Play, Eye, ClipboardList, Trophy, BarChart3 } from "lucide-react";
@@ -16,12 +16,15 @@ import { useRole } from "@/hooks/useRole";
 import {
   createAssessment,
   createAssessmentQuestion,
+  createWorkshopModule,
   deleteAssessment,
   fetchAssessmentLeaderboard,
   fetchAssessmentLeaderboardDrilldown,
   fetchAssessmentQuestions,
   fetchAssessments,
+  fetchWorkshopModules,
   fetchWorkshops,
+  updateAssessmentQuestion,
   updateAssessment,
 } from "@/services/api";
 type AssessmentRow = Awaited<ReturnType<typeof fetchAssessments>>[number];
@@ -63,6 +66,9 @@ const AssessmentsPage = () => {
   const [selected, setSelected] = useState<AssessmentRow | null>(null);
   const [formTitle, setFormTitle] = useState("");
   const [formWorkshop, setFormWorkshop] = useState("");
+  const [formWorkshopId, setFormWorkshopId] = useState("");
+  const [formModuleId, setFormModuleId] = useState("");
+  const [newModuleTitle, setNewModuleTitle] = useState("");
   const [formTotal, setFormTotal] = useState("100");
   const [formPassing, setFormPassing] = useState("40");
 
@@ -73,6 +79,13 @@ const AssessmentsPage = () => {
   const [qOptions, setQOptions] = useState(["", "", "", ""]);
   const [qCorrect, setQCorrect] = useState<number[]>([0]);
   const [qMarks, setQMarks] = useState("10");
+  const [editQuestionModal, setEditQuestionModal] = useState(false);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editingQuestionText, setEditingQuestionText] = useState("");
+  const [editingQuestionType, setEditingQuestionType] = useState<QuestionType>("MCQ");
+  const [editingQuestionOptions, setEditingQuestionOptions] = useState(["", "", "", ""]);
+  const [editingQuestionCorrect, setEditingQuestionCorrect] = useState<number[]>([0]);
+  const [editingQuestionMarks, setEditingQuestionMarks] = useState("10");
 
   // Leaderboard & Student Performance
   const [leaderboardModal, setLeaderboardModal] = useState(false);
@@ -100,6 +113,34 @@ const AssessmentsPage = () => {
     enabled: Boolean(selected?.id && questionModal),
   });
 
+  const { data: workshopModules = [] } = useQuery({
+    queryKey: ["workshopModules", formWorkshopId],
+    queryFn: () => fetchWorkshopModules(formWorkshopId),
+    enabled: canManage && Boolean(formWorkshopId),
+  });
+
+  useEffect(() => {
+    if (!formWorkshopId) {
+      setFormModuleId("");
+      return;
+    }
+    if (!workshopModules.some((item) => item.id === formModuleId)) {
+      setFormModuleId(workshopModules[0]?.id ?? "");
+    }
+  }, [formWorkshopId, formModuleId, workshopModules]);
+
+  const workshopOptions = useMemo(
+    () => [{ value: "", label: "Select a workshop" }].concat(workshops.map((w) => ({ value: w.id, label: w.name }))),
+    [workshops],
+  );
+
+  const moduleOptions = useMemo(
+    () => [{ value: "", label: "Select a module" }].concat(
+      workshopModules.map((m) => ({ value: m.id, label: m.title ?? "Module" })),
+    ),
+    [workshopModules],
+  );
+
   const createAssessmentMutation = useMutation({
     mutationFn: createAssessment,
     onSuccess: async () => {
@@ -108,12 +149,26 @@ const AssessmentsPage = () => {
       showToast("success", "Assessment Created");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Create Failed", err instanceof Error ? err.message : "Unable to create assessment.");
+      showToast("error", "Create Failed", err instanceof Error ? err.message : "Unable to create assessment.");
+    },
+  });
+
+  const createModuleMutation = useMutation({
+    mutationFn: (payload: { workshopId: string; title: string }) =>
+      createWorkshopModule(payload),
+    onSuccess: async (module) => {
+      await queryClient.invalidateQueries({ queryKey: ["workshopModules", formWorkshopId] });
+      setFormModuleId(module.id);
+      setNewModuleTitle("");
+      showToast("success", "Module Created", "New module selected automatically.");
+    },
+    onError: (err: unknown) => {
+      showToast("error", "Module Create Failed", err instanceof Error ? err.message : "Unable to create module.");
     },
   });
 
   const updateAssessmentMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { title?: string; totalMarks?: number; passingMarks?: number } }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: { title?: string; totalMarks?: number; passingMarks?: number; moduleId?: string | null } }) =>
       updateAssessment(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["assessments"] });
@@ -121,7 +176,7 @@ const AssessmentsPage = () => {
       showToast("success", "Assessment Updated");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Update Failed", err instanceof Error ? err.message : "Unable to update assessment.");
+      showToast("error", "Update Failed", err instanceof Error ? err.message : "Unable to update assessment.");
     },
   });
 
@@ -133,7 +188,7 @@ const AssessmentsPage = () => {
       showToast("success", "Assessment Deleted");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Delete Failed", err instanceof Error ? err.message : "Unable to delete assessment.");
+      showToast("error", "Delete Failed", err instanceof Error ? err.message : "Unable to delete assessment.");
     },
   });
 
@@ -157,7 +212,33 @@ const AssessmentsPage = () => {
       showToast("success", "Question Added");
     },
     onError: (err: unknown) => {
-      showToast("destructive", "Add Question Failed", err instanceof Error ? err.message : "Unable to add question.");
+      showToast("error", "Add Question Failed", err instanceof Error ? err.message : "Unable to add question.");
+    },
+  });
+
+  const updateQuestionMutation = useMutation({
+    mutationFn: (payload: { questionId: string; question: QuestionItem }) =>
+      updateAssessmentQuestion(payload.questionId, {
+        text: payload.question.text,
+        type: payload.question.type,
+        marks: payload.question.marks,
+        options:
+          payload.question.type === "Integer"
+            ? []
+            : payload.question.options.map((opt, idx) => ({
+                id: `opt-${idx + 1}`,
+                text: opt,
+                is_correct: payload.question.correct.includes(idx),
+              })),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["assessmentQuestions", selected?.id] });
+      setEditQuestionModal(false);
+      setEditingQuestionId(null);
+      showToast("success", "Question Updated");
+    },
+    onError: (err: unknown) => {
+      showToast("error", "Update Question Failed", err instanceof Error ? err.message : "Unable to update question.");
     },
   });
 
@@ -178,6 +259,23 @@ const AssessmentsPage = () => {
       marks: question.marks ?? 1,
     })) ?? [];
 
+  const openQuestionEditor = (questionIndex: number) => {
+    const question = questionsQuery.data?.[questionIndex];
+    if (!question) return;
+    const options = (question.options ?? []).map((option) => option.text);
+    while (options.length < 4) options.push("");
+    const correct = (question.options ?? [])
+      .map((option, index) => (option.is_correct ? index : -1))
+      .filter((index) => index >= 0);
+    setEditingQuestionId(question.id);
+    setEditingQuestionText(question.text ?? "");
+    setEditingQuestionType((question.type?.toUpperCase() as QuestionType) || "MCQ");
+    setEditingQuestionOptions(options.slice(0, 4));
+    setEditingQuestionCorrect(correct.length > 0 ? correct : [0]);
+    setEditingQuestionMarks(String(question.marks ?? 1));
+    setEditQuestionModal(true);
+  };
+
   return (
     <DashboardLayout title="Assessments">
       <div className="flex items-center justify-between mb-6">
@@ -196,7 +294,16 @@ const AssessmentsPage = () => {
               >
                 <Trophy className="h-4 w-4" /> Leaderboard
               </VButton>
-              <VButton onClick={() => { setFormTitle(""); setFormWorkshop(""); setFormTotal("100"); setFormPassing("40"); setCreateModal(true); }}>
+              <VButton onClick={() => {
+                setFormTitle("");
+                setFormWorkshop("");
+                setFormWorkshopId("");
+                setFormModuleId("");
+                setNewModuleTitle("");
+                setFormTotal("100");
+                setFormPassing("40");
+                setCreateModal(true);
+              }}>
                 <Plus className="h-4 w-4" /> Create Assessment
               </VButton>
             </>
@@ -233,7 +340,18 @@ const AssessmentsPage = () => {
                   <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setQuestionModal(true); }}>
                     <Eye className="h-3.5 w-3.5" /> Questions
                   </VButton>
-                  <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setFormTitle(a.title); setFormWorkshop(a.workshop); setFormTotal(String(a.totalMarks)); setFormPassing(String(a.passingMarks)); setEditModal(true); }}>
+                  <VButton variant="secondary" size="sm" onClick={() => {
+                    const workshopId = workshops.find((workshop) => workshop.name === a.workshop)?.id ?? "";
+                    setSelected(a);
+                    setFormTitle(a.title);
+                    setFormWorkshop(a.workshop);
+                    setFormWorkshopId(workshopId);
+                    setFormModuleId("");
+                    setNewModuleTitle("");
+                    setFormTotal(String(a.totalMarks));
+                    setFormPassing(String(a.passingMarks));
+                    setEditModal(true);
+                  }}>
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </VButton>
                   <VButton variant="secondary" size="sm" onClick={() => { setSelected(a); setLeaderboardModal(true); }}>
@@ -257,24 +375,62 @@ const AssessmentsPage = () => {
       <VModal isOpen={createModal} onClose={() => setCreateModal(false)} title="Create Assessment">
         <div className="space-y-4">
           <VInput label="Title" placeholder="Assessment title" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
-          <VInput label="Workshop" placeholder="Workshop name" value={formWorkshop} onChange={e => setFormWorkshop(e.target.value)} />
+          <VSelect label="Workshop" value={formWorkshopId} onChange={e => {
+            const workshopId = e.target.value;
+            const workshopName = workshops.find((workshop) => workshop.id === workshopId)?.name ?? "";
+            setFormWorkshopId(workshopId);
+            setFormWorkshop(workshopName);
+          }} options={workshopOptions} />
+          <VSelect label="Module" value={formModuleId} onChange={e => setFormModuleId(e.target.value)} options={moduleOptions} />
+          {formWorkshopId && workshopModules.length === 0 && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 space-y-2">
+              <p className="text-sm text-foreground">No modules yet — create one first.</p>
+              <div className="flex gap-2">
+                <VInput
+                  placeholder="New module title"
+                  value={newModuleTitle}
+                  onChange={e => setNewModuleTitle(e.target.value)}
+                />
+                <VButton
+                  variant="secondary"
+                  onClick={() => {
+                    if (!newModuleTitle.trim()) {
+                      showToast("warning", "Module Title Required", "Enter a module title.");
+                      return;
+                    }
+                    createModuleMutation.mutate({
+                      workshopId: formWorkshopId,
+                      title: newModuleTitle.trim(),
+                    });
+                  }}
+                  isLoading={createModuleMutation.isPending}
+                >
+                  Create Module
+                </VButton>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <VInput label="Total Marks" type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} />
             <VInput label="Passing Marks" type="number" value={formPassing} onChange={e => setFormPassing(e.target.value)} />
           </div>
           <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setCreateModal(false)}>Cancel</VButton><VButton onClick={() => {
-            const workshopId = workshops.find((workshop) => workshop.name === formWorkshop)?.id;
-            if (!workshopId) {
+            if (!formWorkshopId) {
               showToast("warning", "Workshop Required", "Select a workshop name that exists.");
               return;
             }
+            if (!formModuleId) {
+              showToast("warning", "Module Required", "Select or create a module first.");
+              return;
+            }
             createAssessmentMutation.mutate({
-              workshopId,
+              workshopId: formWorkshopId,
+              moduleId: formModuleId,
               title: formTitle,
               totalMarks: Number(formTotal),
               passingMarks: Number(formPassing),
             });
-          }} disabled={!formTitle || createAssessmentMutation.isPending}>Create</VButton></div>
+          }} disabled={!formTitle || !formWorkshopId || !formModuleId || createAssessmentMutation.isPending}>Create</VButton></div>
         </div>
       </VModal>
 
@@ -282,7 +438,41 @@ const AssessmentsPage = () => {
       <VModal isOpen={editModal} onClose={() => setEditModal(false)} title="Edit Assessment">
         <div className="space-y-4">
           <VInput label="Title" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
-          <VInput label="Workshop" value={formWorkshop} onChange={e => setFormWorkshop(e.target.value)} />
+          <VSelect label="Workshop" value={formWorkshopId} onChange={e => {
+            const workshopId = e.target.value;
+            const workshopName = workshops.find((workshop) => workshop.id === workshopId)?.name ?? "";
+            setFormWorkshopId(workshopId);
+            setFormWorkshop(workshopName);
+          }} options={workshopOptions} />
+          <VSelect label="Module" value={formModuleId} onChange={e => setFormModuleId(e.target.value)} options={moduleOptions} />
+          {formWorkshopId && workshopModules.length === 0 && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 space-y-2">
+              <p className="text-sm text-foreground">No modules yet — create one first.</p>
+              <div className="flex gap-2">
+                <VInput
+                  placeholder="New module title"
+                  value={newModuleTitle}
+                  onChange={e => setNewModuleTitle(e.target.value)}
+                />
+                <VButton
+                  variant="secondary"
+                  onClick={() => {
+                    if (!newModuleTitle.trim()) {
+                      showToast("warning", "Module Title Required", "Enter a module title.");
+                      return;
+                    }
+                    createModuleMutation.mutate({
+                      workshopId: formWorkshopId,
+                      title: newModuleTitle.trim(),
+                    });
+                  }}
+                  isLoading={createModuleMutation.isPending}
+                >
+                  Create Module
+                </VButton>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <VInput label="Total Marks" type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} />
             <VInput label="Passing Marks" type="number" value={formPassing} onChange={e => setFormPassing(e.target.value)} />
@@ -291,7 +481,7 @@ const AssessmentsPage = () => {
             if (!selected) return;
             updateAssessmentMutation.mutate({
               id: selected.id,
-              payload: { title: formTitle, totalMarks: Number(formTotal), passingMarks: Number(formPassing) },
+              payload: { title: formTitle, totalMarks: Number(formTotal), passingMarks: Number(formPassing), moduleId: formModuleId || null },
             });
           }} disabled={updateAssessmentMutation.isPending}>Save</VButton></div>
         </div>
@@ -308,6 +498,9 @@ const AssessmentsPage = () => {
                   <VBadge variant="outline">{q.type}</VBadge>
                   <span className="text-xs text-muted-foreground">{q.marks} marks</span>
                 </div>
+                <VButton variant="secondary" size="sm" onClick={() => openQuestionEditor(i)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </VButton>
               </div>
               {q.type !== "Integer" && (
                 <div className="grid grid-cols-2 gap-2">
@@ -389,6 +582,104 @@ const AssessmentsPage = () => {
           }} disabled={addQuestionMutation.isPending}>
             <Plus className="h-4 w-4" /> Add Question
           </VButton>
+        </div>
+      </VModal>
+
+      <VModal isOpen={editQuestionModal} onClose={() => setEditQuestionModal(false)} title="Edit Question" className="max-w-2xl">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <VSelect
+              label="Question Type"
+              value={editingQuestionType}
+              onChange={e => {
+                const nextType = e.target.value as QuestionType;
+                setEditingQuestionType(nextType);
+                setEditingQuestionCorrect(nextType === "MCQ" ? [0] : []);
+              }}
+              options={[
+                { value: "MCQ", label: "MCQ (Single Choice)" },
+                { value: "MSQ", label: "MSQ (Multiple Select)" },
+              ]}
+            />
+            <VInput label="Marks" type="number" value={editingQuestionMarks} onChange={e => setEditingQuestionMarks(e.target.value)} />
+          </div>
+          <VInput label="Question" value={editingQuestionText} onChange={e => setEditingQuestionText(e.target.value)} />
+          <div className="grid grid-cols-2 gap-2">
+            {editingQuestionOptions.map((opt, i) => (
+              <VInput
+                key={i}
+                placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                value={opt}
+                onChange={e => {
+                  const next = [...editingQuestionOptions];
+                  next[i] = e.target.value;
+                  setEditingQuestionOptions(next);
+                }}
+              />
+            ))}
+          </div>
+          {editingQuestionType === "MCQ" ? (
+            <VSelect
+              label="Correct Answer"
+              value={String(editingQuestionCorrect[0] ?? 0)}
+              onChange={e => setEditingQuestionCorrect([Number(e.target.value)])}
+              options={editingQuestionOptions.map((_, i) => ({ value: String(i), label: `Option ${String.fromCharCode(65 + i)}` }))}
+            />
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Correct Answers</p>
+              <div className="grid grid-cols-2 gap-2">
+                {editingQuestionOptions.map((_, i) => {
+                  const isSelected = editingQuestionCorrect.includes(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setEditingQuestionCorrect((prev) =>
+                          prev.includes(i)
+                            ? prev.filter((idx) => idx !== i)
+                            : [...prev, i].sort((a, b) => a - b)
+                        );
+                      }}
+                      className={`rounded-lg border px-3 py-2 text-sm text-left ${isSelected ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground hover:bg-accent"}`}
+                    >
+                      Option {String.fromCharCode(65 + i)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
+            <VButton variant="ghost" onClick={() => setEditQuestionModal(false)}>Cancel</VButton>
+            <VButton
+              onClick={() => {
+                if (!editingQuestionId) return;
+                if (!editingQuestionText) {
+                  showToast("warning", "Enter question text");
+                  return;
+                }
+                if (editingQuestionType !== "Integer" && editingQuestionOptions.some((option) => !option)) {
+                  showToast("warning", "Fill all options");
+                  return;
+                }
+                updateQuestionMutation.mutate({
+                  questionId: editingQuestionId,
+                  question: {
+                    text: editingQuestionText,
+                    type: editingQuestionType,
+                    options: editingQuestionOptions,
+                    correct: editingQuestionCorrect,
+                    marks: Number(editingQuestionMarks) || 1,
+                  },
+                });
+              }}
+              isLoading={updateQuestionMutation.isPending}
+            >
+              Save
+            </VButton>
+          </div>
         </div>
       </VModal>
 

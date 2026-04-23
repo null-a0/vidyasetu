@@ -20,13 +20,41 @@ from app.crud.crud_assessment import (
     get_submissions_by_student,
 )
 from app.models import User, UserRole
-from app.schemas.assessment import AnswerBatch, SubmissionResponse, SubmissionReviewQuestion, SubmissionReviewResponse
+from app.schemas.assessment import (
+    AnswerBatch,
+    SubmissionResponse,
+    SubmissionResultResponse,
+    SubmissionReviewQuestion,
+    SubmissionReviewResponse,
+)
 from app.schemas.base import Page
-from app.services.grading import grade_submission
+from app.services.grading import build_per_question_review
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 
 _STAFF = (UserRole.ADMIN, UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR)
+
+
+def _build_submission_result_payload(submission, questions) -> SubmissionResultResponse:
+    per_question = build_per_question_review(
+        questions=list(questions),
+        answers=submission.answers or [],
+    )
+    correct_count = sum(1 for item in per_question if item["is_correct"])
+    total = len(per_question)
+    score = round((correct_count / total) * 100, 1) if total > 0 else 0.0
+    pass_fail = score >= 60.0
+
+    return SubmissionResultResponse(
+        submission_id=str(submission.id),
+        assessment_id=str(submission.assessment_id),
+        student_id=str(submission.student_id or ""),
+        score=score,
+        correct_count=correct_count,
+        total=total,
+        pass_fail=pass_fail,
+        per_question=per_question,
+    )
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -71,14 +99,14 @@ async def post_answers(
 
 @router.get(
     "/{submission_id}/result",
-    response_model=SubmissionResponse,
+    response_model=SubmissionResultResponse,
     summary="Get graded result of a submission",
 )
 async def get_result(
     submission_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> SubmissionResponse:
+) -> SubmissionResultResponse:
     submission = await get_submission(db, submission_id)
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
@@ -93,7 +121,8 @@ async def get_result(
             detail="This submission has not been graded yet. Submit first.",
         )
 
-    return SubmissionResponse.model_validate(submission)
+    questions, _ = await get_questions_by_assessment(db, submission.assessment_id, limit=500)
+    return _build_submission_result_payload(submission, questions)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -228,14 +257,14 @@ async def review_submission(
 
 @router.post(
     "/{submission_id}/grade",
-    response_model=SubmissionResponse,
+    response_model=SubmissionResultResponse,
     summary="Auto-grade a pending submission (staff only)",
 )
 async def grade_pending_submission(
     submission_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(*_STAFF)),
-) -> SubmissionResponse:
+) -> SubmissionResultResponse:
     submission = await get_submission(db, submission_id)
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
@@ -248,16 +277,12 @@ async def grade_pending_submission(
     await ensure_user_can_read_assessments_for_workshop(db, current_user, assessment.workshop_id)
 
     questions, _ = await get_questions_by_assessment(db, submission.assessment_id, limit=500)
-    report = grade_submission(
-        questions=list(questions),
-        answers=submission.answers or [],
-        pass_mark=int(assessment.pass_mark or 0),
-    )
-    graded = await apply_grade(
+    payload = _build_submission_result_payload(submission, questions)
+    await apply_grade(
         db,
         submission,
-        score=int(report.score),
-        total_marks=int(report.total_marks),
-        pass_fail=bool(report.pass_fail),
+        score=round(payload.score),
+        total_marks=100,
+        pass_fail=bool(payload.pass_fail),
     )
-    return SubmissionResponse.model_validate(graded)
+    return payload

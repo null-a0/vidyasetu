@@ -10,6 +10,8 @@ Routes:
 """
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,6 +25,7 @@ from app.models import Enrollment, User, UserRole, Workshop
 from app.schemas.misc import MaterialDownloadResponse
 from app.schemas.workshop import (
     MaterialItem,
+    MaterialItemCreate,
     MaterialItemUpdate,
     ModuleResponse,
     ModuleUpdate,
@@ -31,6 +34,40 @@ from app.schemas.workshop import (
 router = APIRouter(prefix="/materials", tags=["materials"])
 
 _WRITE_ROLES = (UserRole.ADMIN, UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR)
+
+
+@router.post(
+    "/{module_id}",
+    response_model=ModuleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a material item to a module (staff only)",
+)
+async def create_material(
+    module_id: str,
+    payload: MaterialItemCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(*_WRITE_ROLES)),
+) -> ModuleResponse:
+    module = await get_module(db, module_id)
+    if not module:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found.")
+
+    existing: list = list(module.materials or [])
+    existing_items = [
+        MaterialItem(**entry) if isinstance(entry, dict) else entry for entry in existing
+    ]
+
+    new_item = MaterialItem(
+        id=str(uuid.uuid4()),
+        title=payload.title,
+        type=payload.type,
+        content=payload.content,
+        created_at=datetime.now(tz=timezone.utc).isoformat(),
+    )
+    existing_items.append(new_item)
+
+    updated_module = await update_module(db, module, ModuleUpdate(materials=existing_items))
+    return ModuleResponse.model_validate(updated_module)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -63,6 +100,8 @@ async def patch_material(
         if item.id == material_id:
             # Apply partial update
             patch = payload.model_dump(exclude_unset=True)
+            if "type" in patch and isinstance(patch["type"], str):
+                patch["type"] = patch["type"].lower()
             item = item.model_copy(update=patch)
             updated_any = True
         new_materials.append(item)

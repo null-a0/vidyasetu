@@ -19,7 +19,9 @@ from app.schemas.assessment import (
     SubmissionResponse,
     TestStartResponse,
 )
-from app.services.grading import grade_submission
+from app.services.grading import build_per_question_review
+from app.crud.crud_misc import create_notification
+from app.schemas.misc import NotificationCreate
 
 router = APIRouter(prefix="/tests", tags=["tests"])
 
@@ -108,30 +110,46 @@ async def submit_test(
     # Load all questions (up to 500) for grading
     questions, _ = await get_questions_by_assessment(db, assessment_id, limit=500)
 
-    # Run auto-grader
-    report = grade_submission(
+    per_question = build_per_question_review(
         questions=list(questions),
         answers=submission.answers or [],
-        pass_mark=assessment.pass_mark or 0,
     )
+    correct_count = sum(1 for item in per_question if item["is_correct"])
+    total_questions = len(per_question)
+    percentage_score = round((correct_count / total_questions) * 100, 1) if total_questions > 0 else 0.0
+    pass_fail = percentage_score >= 60.0
+
+    print("[grading] answers received:", submission.answers or [])
+    print("[grading] correct answers:", [
+        {"question_id": question.id, "correct_option_ids": [opt.get("id") for opt in (question.options or []) if opt.get("is_correct")]}
+        for question in questions
+    ])
 
     # Persist grades
     await apply_grade(
         db,
         submission,
-        score=report.score,
-        total_marks=report.total_marks,
-        pass_fail=report.pass_fail,
+        score=round(percentage_score),
+        total_marks=100,
+        pass_fail=pass_fail,
     )
+
+    if submission.student_id:
+        await create_notification(
+            db,
+            NotificationCreate(
+                user_id=submission.student_id,
+                title="Assessment graded",
+                message=f"Your score: {round(percentage_score)}%",
+                notification_type="success",
+            ),
+        )
 
     return GradeResult(
         submission_id=submission.id,
-        score=report.score,
-        total_marks=report.total_marks,
-        percentage=report.percentage,
-        pass_fail=report.pass_fail,
-        per_question=[
-            {"question_id": d.question_id, "earned": d.earned, "max": d.max_marks}
-            for d in report.details
-        ],
+        score=percentage_score,
+        correct_count=correct_count,
+        total=total_questions,
+        pass_fail=pass_fail,
+        per_question=per_question,
     )

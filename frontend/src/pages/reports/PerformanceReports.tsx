@@ -120,9 +120,9 @@ const PerformanceReports = () => {
 
     return [
       { label: "Average Score", value: `${avgScore}%`, description: "Across available assessments" },
-      { label: "Completion Rate", value: `${completion}%`, description: "Workshop completion (enrollments)" },
-      { label: "Top Workshop", value: totals.topWorkshop || "—", description: "Highest enrollment (sampled)" },
-      { label: "Pass Rate", value: `${passRate}%`, description: "Across available submissions" },
+      { label: "Completion Rate", value: `${completion}%`, description: "Workshop completion from live enrollments" },
+      { label: "Top Workshop", value: totals.topWorkshop || "—", description: "Highest enrollment from live workshops" },
+      { label: "Pass Rate", value: `${passRate}%`, description: "Across live submission records" },
     ];
   }, [workshopAnalyticsQuery.data]);
 
@@ -213,7 +213,7 @@ const PerformanceReports = () => {
         <VCard className="p-0">
           <div className="px-5 pt-5 pb-2">
             <h3 className="text-base font-semibold text-foreground">Monthly Score Trend</h3>
-            <p className="text-sm text-muted-foreground">Average across sampled student submissions</p>
+            <p className="text-sm text-muted-foreground">Average across live student submissions</p>
           </div>
           <div className="h-56 px-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -229,7 +229,7 @@ const PerformanceReports = () => {
 
         <VCard className="p-5">
           <h3 className="text-base font-semibold text-foreground mb-2">Pass/Fail Distribution</h3>
-          <p className="text-sm text-muted-foreground mb-4">Across sampled student submissions</p>
+          <p className="text-sm text-muted-foreground mb-4">Across live student submissions</p>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

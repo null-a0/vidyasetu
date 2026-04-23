@@ -40,6 +40,7 @@ const WorkshopsList = () => {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formInst, setFormInst] = useState("");
+  const [formStatus, setFormStatus] = useState<Workshop["status"]>("Upcoming");
   const {
     data: institutions = [] as BackendInstitution[],
   } = useQuery({ queryKey: ["institutions"], queryFn: fetchInstitutions });
@@ -70,7 +71,7 @@ const WorkshopsList = () => {
   const canEdit = role === "admin" || role === "institution_admin" || role === "educator";
 
   const createMutation = useMutation({
-    mutationFn: (payload: { title: string; description?: string | null; institution_id?: string | null }) =>
+    mutationFn: (payload: { title: string; description?: string | null; institution_id?: string | null; start_date?: string | null; end_date?: string | null }) =>
       createWorkshop(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["workshops"] });
@@ -78,8 +79,14 @@ const WorkshopsList = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { workshopId: string; title: string; description: string }) =>
-      updateWorkshop(payload.workshopId, { title: payload.title, description: payload.description }),
+    mutationFn: (payload: { workshopId: string; title: string; description: string; institution_id?: string | null; start_date?: string | null; end_date?: string | null }) =>
+      updateWorkshop(payload.workshopId, {
+        title: payload.title,
+        description: payload.description,
+        institution_id: payload.institution_id,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["workshops"] });
     },
@@ -91,6 +98,29 @@ const WorkshopsList = () => {
       await queryClient.invalidateQueries({ queryKey: ["workshops"] });
     },
   });
+
+  const resolveStatusDates = (status: Workshop["status"]) => {
+    const now = new Date();
+    if (status === "Completed") {
+      const end = new Date(now);
+      end.setDate(now.getDate() - 1);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 14);
+      return { start, end };
+    }
+    if (status === "Upcoming") {
+      const start = new Date(now);
+      start.setDate(now.getDate() + 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 14);
+      return { start, end };
+    }
+    const start = new Date(now);
+    start.setDate(now.getDate() - 7);
+    const end = new Date(now);
+    end.setDate(now.getDate() + 14);
+    return { start, end };
+  };
 
   const handleDelete = async (w: Workshop) => {
     if (isInstitution) {
@@ -148,7 +178,7 @@ const WorkshopsList = () => {
             <button onClick={() => { setSelected(r); setLeaderboardModal(true); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-warning transition-colors" title="Leaderboard">
               <Trophy className="h-4 w-4" />
             </button>
-            <button onClick={() => { setSelected(r); setFormName(r.name); setFormDesc(r.description); setFormInst(r.institution); setEditModal(true); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-info transition-colors">
+            <button onClick={() => { setSelected(r); setFormName(r.name); setFormDesc(r.description); setFormInst(r.institution); setFormStatus(r.status); setEditModal(true); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-info transition-colors">
               <Pencil className="h-4 w-4" />
             </button>
             <button onClick={() => { setSelected(r); setDeleteDialog(true); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
@@ -175,7 +205,7 @@ const WorkshopsList = () => {
           ))}
         </div>
         {canEdit && (
-          <VButton onClick={() => { setFormName(""); setFormDesc(""); setFormInst(""); setCreateModal(true); }}>
+          <VButton onClick={() => { setFormName(""); setFormDesc(""); setFormInst(""); setFormStatus("Upcoming"); setCreateModal(true); }}>
             <Plus className="h-4 w-4" /> Create
           </VButton>
         )}
@@ -228,10 +258,13 @@ const WorkshopsList = () => {
                 }
                 resolvedInstitutionId = match.id;
               }
+              const dateRange = resolveStatusDates(formStatus);
               await createMutation.mutateAsync({
                 title: formName,
                 description: formDesc,
                 institution_id: resolvedInstitutionId,
+                start_date: dateRange.start.toISOString(),
+                end_date: dateRange.end.toISOString(),
               });
               setCreateModal(false);
               showToast("success", "Workshop Created");
@@ -262,10 +295,38 @@ const WorkshopsList = () => {
             <label className="vidya-label">Description</label>
             <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={5} className="vidya-input resize-none" />
           </div>
+          <VSelect
+            label="Status"
+            value={formStatus}
+            onChange={e => setFormStatus(e.target.value as Workshop["status"])}
+            options={[
+              { value: "Upcoming", label: "Upcoming" },
+              { value: "Active", label: "Active" },
+              { value: "Completed", label: "Completed" },
+            ]}
+          />
           <div className="flex justify-end gap-3"><VButton variant="ghost" onClick={() => setEditModal(false)}>Cancel</VButton><VButton onClick={async () => {
             if (!selected) return;
             try {
-              await updateMutation.mutateAsync({ workshopId: selected.id, title: formName, description: formDesc });
+              const dateRange = resolveStatusDates(formStatus);
+              let resolvedInstitutionId: string | null | undefined = undefined;
+              if (role === "admin" && formInst.trim()) {
+                const trimmed = formInst.trim().toLowerCase();
+                const match = institutions.find((i) => i.name.toLowerCase() === trimmed);
+                if (!match) {
+                  showToast("error", "Invalid Institution", `No institution found matching "${formInst}". Please check the name.`);
+                  return;
+                }
+                resolvedInstitutionId = match.id;
+              }
+              await updateMutation.mutateAsync({
+                workshopId: selected.id,
+                title: formName,
+                description: formDesc,
+                institution_id: role === "admin" ? resolvedInstitutionId : undefined,
+                start_date: dateRange.start.toISOString(),
+                end_date: dateRange.end.toISOString(),
+              });
               setEditModal(false);
               showToast("success", "Workshop Updated");
             } catch (err: unknown) {

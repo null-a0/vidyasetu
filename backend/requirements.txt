@@ -57,6 +57,7 @@ PyYAML>=6.0.1              # yaml.dump() used in main.py /openapi.yaml endpoint
 # Environment / config helpers
 # ---------------------------------------------------------------------------
 python-dotenv>=1.0.0       # load_dotenv() used in ai_content_generator router
+reportlab>=4.2.0           # certificate PDF generation
 
 # ---------------------------------------------------------------------------
 # Development & testing

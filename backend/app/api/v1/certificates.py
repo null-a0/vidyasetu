@@ -13,13 +13,15 @@ from app.crud.crud_user import get_user
 from app.crud.crud_workshop import get_workshop
 from app.models import Certificate, NotificationType, User, UserRole, Workshop
 from app.schemas.base import Page
-from app.schemas.misc import (CertificateCreate, CertificateDownloadResponse,
+from app.schemas.misc import (CertificateCreate,
                               CertificateRecommendationRequest,
                               CertificateRecommendationResponse,
                               CertificateResponse, NotificationCreate)
 from app.services.certificate import (generate_certificate_pdf,
-                                      generate_verification_code)
+                                      generate_verification_code,
+                                      is_valid_pdf_file)
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,12 +40,14 @@ def _pdf_background(
     student_name: str,
     workshop_title: str,
     verification_code: str,
+    completion_date: str | None,
     cert_id: str,
 ) -> None:
     generate_certificate_pdf(
         student_name=student_name,
         workshop_title=workshop_title,
         verification_code=verification_code,
+        completion_date=completion_date,
         certificate_id=cert_id,
     )
 
@@ -126,6 +130,7 @@ async def generate_certificate(
         student_name=student.name or "Student",
         workshop_title=workshop.title or "Workshop",
         verification_code=verification_code,
+        completion_date=cert.issue_date.isoformat() if cert.issue_date else None,
         cert_id=cert.id,
     )
 
@@ -290,14 +295,13 @@ async def recommend_certificate(
 
 @router.get(
     "/{certificate_id}/download",
-    response_model=CertificateDownloadResponse,
-    summary="Get protected certificate download URL",
+    summary="Download certificate PDF",
 )
 async def certificate_download_url(
     certificate_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> CertificateDownloadResponse:
+) -> FileResponse:
     logger = logging.getLogger(__name__)
     logger.info(
         f"Download request for certificate: {certificate_id} by user: {current_user.id} role: {current_user.role}")
@@ -317,18 +321,39 @@ async def certificate_download_url(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    relative_pdf = f"media/certificates/{cert.id}.pdf"
-    if not Path(relative_pdf).exists():
+    cert_dir = Path("media/certificates")
+    cert_file = cert_dir / f"{cert.id}.pdf"
+
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    if not is_valid_pdf_file(cert_file):
+        logger.info(f"Generating PDF for certificate {cert.id}")
         student = await get_user(db, cert.student_id) if cert.student_id else None
         workshop = await get_workshop(db, cert.workshop_id) if cert.workshop_id else None
-        generate_certificate_pdf(
-            student_name=(student.name if student else "Student"),
-            workshop_title=(workshop.title if workshop else "Workshop"),
-            verification_code=cert.verification_code or generate_verification_code(),
-            certificate_id=cert.id,
+        try:
+            generate_certificate_pdf(
+                student_name=(student.name if student else "Student"),
+                workshop_title=(workshop.title if workshop else "Workshop"),
+                verification_code=cert.verification_code or generate_verification_code(),
+                completion_date=cert.issue_date.isoformat() if cert.issue_date else None,
+                certificate_id=cert.id,
+            )
+            logger.info(f"Successfully generated PDF at {cert_file}")
+        except Exception as e:
+            logger.error(f"Failed to generate certificate PDF: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate certificate. Please try again later."
+            )
+
+    if not is_valid_pdf_file(cert_file):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Certificate PDF is invalid or could not be generated.",
         )
 
-    return CertificateDownloadResponse(
-        certificate_id=cert.id,
-        download_url=f"{_BASE_URL}/{relative_pdf}",
+    return FileResponse(
+        path=cert_file,
+        media_type="application/pdf",
+        filename=f"certificate_{cert.id}.pdf",
     )

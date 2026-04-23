@@ -194,6 +194,29 @@ async def assessment_leaderboard(
         workshop = await db.get(Workshop, assessment.workshop_id)
         if not workshop or workshop.institution_id != current_user.institution_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    elif current_user.role == UserRole.STUDENT:
+        has_access = (
+            await db.execute(
+                select(Enrollment.id)
+                .where(Enrollment.student_id == current_user.id)
+                .where(Enrollment.workshop_id == assessment.workshop_id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if has_access is None:
+            attempted = (
+                await db.execute(
+                    select(Submission.id)
+                    .where(Submission.student_id == current_user.id)
+                    .where(Submission.assessment_id == assessment_id)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if attempted is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not enrolled in this workshop.",
+                )
 
     rows = (
         await db.execute(
@@ -244,6 +267,20 @@ async def workshop_leaderboard(
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         if workshop.institution_id != current_user.institution_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    elif current_user.role == UserRole.STUDENT:
+        has_access = (
+            await db.execute(
+                select(Enrollment.id)
+                .where(Enrollment.student_id == current_user.id)
+                .where(Enrollment.workshop_id == workshop_id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if has_access is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not enrolled in this workshop.",
+            )
 
     assessment_ids = [
         row[0]

@@ -24,8 +24,11 @@ export interface Material {
   title: string;
   workshop: string;
   fileType: string;
+  materialType?: "video" | "pdf" | "link" | "text";
+  content?: string;
   uploadDate: string;
   moduleId?: string;
+  moduleTitle?: string;
 }
 
 export interface Assessment {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, ClipboardList, Award, TrendingUp, Play, CheckCircle2, Clock, Star, Search, FileText, Users, Download, Eye } from "lucide-react";
+import { BookOpen, ClipboardList, Award, TrendingUp, Play, CheckCircle2, Clock, Star, Search, FileText, Users, Download, Eye, Link2, ExternalLink, PlayCircle, StickyNote } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -18,9 +18,11 @@ import {
   fetchStudentAnalytics,
   fetchStudentLearningCourses,
   fetchStudentStats,
+  fetchStudentProgress,
   fetchWorkshopModules,
   fetchWorkshops,
   resolveBackendMediaUrl,
+  updateStudentProgress,
   type StudentLearningCourse,
   type StudentLearningModule,
 } from "@/services/api";
@@ -88,7 +90,28 @@ const StudentDashboard = () => {
   const [enrollModal, setEnrollModal] = useState<Workshop | null>(null);
   const [learningCourse, setLearningCourse] = useState<MyCourse | null>(null);
   const [activeModule, setActiveModule] = useState(0);
+  const [activeMaterial, setActiveMaterial] = useState(0);
+  const [moduleSavePending, setModuleSavePending] = useState(false);
+  const [resolvedMaterialUrl, setResolvedMaterialUrl] = useState("");
+  const [materialTextPreview, setMaterialTextPreview] = useState("");
+  const [materialLoading, setMaterialLoading] = useState(false);
   const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
+
+  const { data: studentProgress = [] } = useQuery({
+    queryKey: ["studentProgress", user?.id],
+    queryFn: fetchStudentProgress,
+    enabled: Boolean(user?.id),
+  });
+
+  const progressByWorkshop = useMemo(
+    () => Object.fromEntries(studentProgress.map((item) => [item.workshop_id, item.current_module_index])),
+    [studentProgress],
+  );
+
+  const progressMutation = useMutation({
+    mutationFn: (payload: { workshopId: string; moduleIndex: number }) =>
+      updateStudentProgress(payload),
+  });
 
   const { data: certificates = [] } = useQuery({
     queryKey: ["certificates", user?.id],
@@ -126,8 +149,9 @@ const StudentDashboard = () => {
       const moduleCount = Math.max(1, courseData?.modules.length ?? 1);
       const statusRaw = (enrollment.status ?? "").toLowerCase();
       const isCompleted = statusRaw === "completed";
-      const progress = isCompleted ? 100 : 0;
-      const completedModules = isCompleted ? moduleCount : 0;
+      const currentIndex = Math.max(0, Math.min(progressByWorkshop[workshopId] ?? 0, Math.max(0, moduleCount - 1)));
+      const progress = moduleCount > 0 ? Math.round((currentIndex / moduleCount) * 100) : 0;
+      const completedModules = Math.min(moduleCount, currentIndex);
 
       map.set(workshopId, {
         id: workshopId,
@@ -144,7 +168,7 @@ const StudentDashboard = () => {
       if (a.status !== b.status) return a.status === "In Progress" ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-  }, [enrollments, workshops, learningCourseMap]);
+  }, [enrollments, workshops, learningCourseMap, progressByWorkshop]);
 
   const categories = useMemo(() => {
     const institutions = Array.from(new Set(workshops.map((w) => w.institution).filter(Boolean)));
@@ -169,7 +193,12 @@ const StudentDashboard = () => {
   const isProgressEmpty = progressData.length === 0;
 
   useEffect(() => {
-    setActiveModule(0);
+    if (!learningCourse?.workshopId) {
+      setActiveModule(0);
+      return;
+    }
+    const saved = progressByWorkshop[learningCourse.workshopId] ?? 0;
+    setActiveModule(saved);
   }, [learningCourse?.workshopId]);
 
   const handleEnroll = async (workshop: Workshop) => {
@@ -187,13 +216,103 @@ const StudentDashboard = () => {
     }
   };
 
-  const moduleContentText = (module: StudentLearningModule) => {
-    const firstMaterial = module.materials[0];
-    if (!firstMaterial) return "No material uploaded for this module yet.";
-    return firstMaterial.content || `Study material: ${firstMaterial.title}`;
+  const currentModule = modules[activeModule];
+  const currentMaterial = currentModule?.materials?.[activeMaterial] ?? null;
+
+  const isAbsoluteUrl = (value: string) =>
+    value.startsWith("http://") || value.startsWith("https://");
+
+  const toYouTubeEmbedUrl = (url: string): string | null => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.includes("youtube.com")) {
+        const id = parsed.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (parsed.hostname.includes("youtu.be")) {
+        const id = parsed.pathname.replace("/", "").trim();
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   };
 
-  const currentModule = modules[activeModule];
+  useEffect(() => {
+    setActiveMaterial(0);
+  }, [currentModule?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const resolveMaterial = async () => {
+      setResolvedMaterialUrl("");
+      setMaterialTextPreview("");
+
+      if (!currentModule || !currentMaterial) return;
+
+      const fallbackUrl = currentMaterial.content
+        ? (isAbsoluteUrl(currentMaterial.content)
+          ? currentMaterial.content
+          : resolveBackendMediaUrl(currentMaterial.content))
+        : "";
+
+      setMaterialLoading(true);
+      try {
+        const response = await fetchMaterialDownload(currentModule.id, currentMaterial.id);
+        const resolved = response.download_url
+          ? (isAbsoluteUrl(response.download_url)
+            ? response.download_url
+            : resolveBackendMediaUrl(response.download_url))
+          : fallbackUrl;
+        if (!cancelled) setResolvedMaterialUrl(resolved);
+      } catch {
+        if (!cancelled) setResolvedMaterialUrl(fallbackUrl);
+      } finally {
+        if (!cancelled) setMaterialLoading(false);
+      }
+
+      if (currentMaterial.type === "text") {
+        const textLikeContent = currentMaterial.content || "";
+        if (!textLikeContent || textLikeContent.includes("/") || isAbsoluteUrl(textLikeContent)) {
+          const candidateUrl = fallbackUrl;
+          if (candidateUrl) {
+            try {
+              const textResponse = await fetch(candidateUrl);
+              const textValue = await textResponse.text();
+              if (!cancelled) setMaterialTextPreview(textValue);
+              return;
+            } catch {
+              // Fallback to raw text content below.
+            }
+          }
+        }
+        if (!cancelled) setMaterialTextPreview(textLikeContent);
+      }
+    };
+
+    void resolveMaterial();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentModule?.id, currentMaterial?.id]);
+
+  const openCurrentMaterial = () => {
+    if (!currentMaterial) {
+      showToast("warning", "No material", "No material available for this module yet.");
+      return;
+    }
+    const targetUrl = resolvedMaterialUrl || (currentMaterial.content
+      ? (isAbsoluteUrl(currentMaterial.content)
+        ? currentMaterial.content
+        : resolveBackendMediaUrl(currentMaterial.content))
+      : "");
+    if (!targetUrl) {
+      showToast("warning", "Unavailable", "Material URL is unavailable.");
+      return;
+    }
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <DashboardLayout title="Student Dashboard">
@@ -234,7 +353,7 @@ const StudentDashboard = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "�"}</p>
+                <p className="text-3xl font-bold text-foreground mt-1">{stats ? (key === "averageScore" ? `${stats[key]}%` : stats[key]) : "--"}</p>
               </VCard>
             ))}
           </div>
@@ -451,44 +570,116 @@ const StudentDashboard = () => {
                 </div>
 
                 <div className="prose prose-sm max-w-none">
-                  <p className="text-foreground leading-relaxed">{moduleContentText(currentModule)}</p>
+                  <p className="text-foreground leading-relaxed">{selectedLearningData?.workshopDescription || "Continue with the selected module materials below."}</p>
                 </div>
 
-                <div className="mt-6 rounded-xl bg-muted/50 border border-border p-8 text-center">
-                  <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                    <FileText className="h-8 w-8 text-primary" />
+                <div className="mt-6 grid gap-4 lg:grid-cols-[260px_1fr]">
+                  <div className="rounded-xl border border-border bg-muted/20 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Materials</p>
+                    <div className="space-y-1">
+                      {currentModule.materials.map((material, idx) => (
+                        <button
+                          key={material.id}
+                          onClick={() => setActiveMaterial(idx)}
+                          className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors ${
+                            activeMaterial === idx ? "bg-primary text-primary-foreground" : "hover:bg-accent text-foreground"
+                          }`}>
+                          {material.type === "video" && <PlayCircle className="h-4 w-4" />}
+                          {material.type === "pdf" && <FileText className="h-4 w-4" />}
+                          {material.type === "link" && <Link2 className="h-4 w-4" />}
+                          {material.type === "text" && <StickyNote className="h-4 w-4" />}
+                          <span className="truncate">{material.title}</span>
+                        </button>
+                      ))}
+                      {currentModule.materials.length === 0 && (
+                        <p className="px-2 py-3 text-xs text-muted-foreground">No materials in this module yet.</p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground">Study material for this module</p>
-                  <VButton
-                    variant="secondary"
-                    className="mt-3"
-                    onClick={async () => {
-                      const material = currentModule.materials[0];
-                      if (!material) {
-                        showToast("warning", "No material", "No file available for this module yet.");
-                        return;
-                      }
-                      try {
-                        const response = await fetchMaterialDownload(currentModule.id, material.id);
-                        const url = resolveBackendMediaUrl(response.download_url);
-                        if (!url) {
-                          showToast("warning", "Unavailable", "Download URL is unavailable for this material.");
-                          return;
-                        }
-                        window.open(url, "_blank", "noopener,noreferrer");
-                      } catch (err: unknown) {
-                        showToast("error", "Unable to open material", err instanceof Error ? err.message : "Please try again.");
-                      }
-                    }}
-                  >
-                    Read Material
-                  </VButton>
+
+                  <div className="rounded-xl border border-border bg-muted/50 p-4">
+                    {!currentMaterial ? (
+                      <p className="text-sm text-muted-foreground">Select a material to preview.</p>
+                    ) : (
+                      <>
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground truncate">{currentMaterial.title}</p>
+                          <VBadge variant="outline">{String(currentMaterial.type || "").toUpperCase()}</VBadge>
+                        </div>
+
+                        {currentMaterial.type === "video" && (
+                          <>
+                            {resolvedMaterialUrl && toYouTubeEmbedUrl(resolvedMaterialUrl) ? (
+                              <iframe
+                                title={currentMaterial.title}
+                                className="h-[320px] w-full rounded-lg border border-border"
+                                src={toYouTubeEmbedUrl(resolvedMaterialUrl) || ""}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            ) : (
+                              <video className="w-full rounded-lg" controls src={resolvedMaterialUrl}>
+                                Your browser does not support video playback.
+                              </video>
+                            )}
+                          </>
+                        )}
+
+                        {currentMaterial.type === "pdf" && (
+                          <iframe
+                            title={currentMaterial.title}
+                            className="h-[420px] w-full rounded-lg border border-border"
+                            src={resolvedMaterialUrl}
+                          />
+                        )}
+
+                        {currentMaterial.type === "link" && (
+                          <div className="rounded-lg border border-border bg-background p-4 text-center">
+                            <p className="mb-3 text-sm text-muted-foreground break-all">{resolvedMaterialUrl || currentMaterial.content}</p>
+                            <VButton variant="secondary" onClick={openCurrentMaterial}>
+                              <ExternalLink className="h-4 w-4" /> Open Link
+                            </VButton>
+                          </div>
+                        )}
+
+                        {currentMaterial.type === "text" && (
+                          <div className="min-h-[220px] whitespace-pre-wrap rounded-lg border border-border bg-background p-4 text-sm text-foreground">
+                            {materialLoading ? "Loading..." : (materialTextPreview || currentMaterial.content || "No text content available.")}
+                          </div>
+                        )}
+
+                        <div className="mt-3">
+                          <VButton variant="secondary" onClick={openCurrentMaterial}>
+                            <Download className="h-4 w-4" /> Open Material
+                          </VButton>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex justify-between mt-6 pt-6 border-t border-border">
                   <VButton variant="secondary" disabled={activeModule === 0} onClick={() => setActiveModule(Math.max(0, activeModule - 1))}>Previous Module</VButton>
                   {activeModule < modules.length - 1 ? (
-                    <VButton onClick={() => { setActiveModule(activeModule + 1); showToast("success", "Module Complete!"); }}>Next Module</VButton>
+                    <VButton
+                      disabled={moduleSavePending}
+                      onClick={async () => {
+                        if (!learningCourse) return;
+                        const nextIndex = Math.min(modules.length - 1, activeModule + 1);
+                        setModuleSavePending(true);
+                        try {
+                          await progressMutation.mutateAsync({ workshopId: learningCourse.workshopId, moduleIndex: nextIndex });
+                          setActiveModule(nextIndex);
+                          showToast("success", "Module Complete!");
+                        } catch (error: unknown) {
+                          showToast("error", "Progress update failed", error instanceof Error ? error.message : "Please try again.");
+                        } finally {
+                          setModuleSavePending(false);
+                        }
+                      }}
+                    >
+                      {moduleSavePending ? "Saving..." : "Next Module"}
+                    </VButton>
                   ) : (
                     <VButton onClick={() => { navigate("/assessments"); showToast("success", "Course Complete!", "Time to take the assessment."); }}>Take Assessment</VButton>
                   )}
@@ -503,33 +694,6 @@ const StudentDashboard = () => {
           </VCard>
         </div>
       )}
-
-      <VModal isOpen={!!enrollModal} onClose={() => setEnrollModal(null)} title="Enroll in Workshop">
-        {enrollModal && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold text-foreground">{enrollModal.name}</h3>
-            <p className="text-sm text-muted-foreground">{enrollModal.description}</p>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Institution</p><p className="font-medium text-foreground">{enrollModal.institution}</p></div>
-              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Duration</p><p className="font-medium text-foreground">{enrollModal.startDate} - {enrollModal.endDate}</p></div>
-              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Students</p><p className="font-medium text-foreground">{enrollModal.studentsEnrolled} enrolled</p></div>
-              <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">Status</p><p className="font-medium text-foreground">{enrollModal.status}</p></div>
-            </div>
-            <div className="bg-primary/5 rounded-xl p-4 border border-primary/20">
-              <h4 className="text-sm font-semibold text-foreground mb-2">Syllabus</h4>
-              <ul className="space-y-1.5 text-sm text-muted-foreground">
-                {(modalModules.length > 0 ? modalModules.slice(0, 4).map((module) => module.title || "Untitled Module") : ["Syllabus will be available after module setup"]).map((label, index) => (
-                  <li key={`${label}-${index}`} className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> {label}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <VButton variant="ghost" onClick={() => setEnrollModal(null)}>Cancel</VButton>
-              <VButton onClick={() => handleEnroll(enrollModal)}>Confirm Enrollment</VButton>
-            </div>
-          </div>
-        )}
-      </VModal>
 
       {activeTab === "certificates" && (
         <div className="space-y-6">

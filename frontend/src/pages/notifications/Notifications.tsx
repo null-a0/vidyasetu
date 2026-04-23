@@ -10,7 +10,7 @@ import VInput from '@/components/ui-custom/VInput';
 import { useVToast } from '@/components/ui-custom/VToast';
 import { useRole } from '@/hooks/useRole';
 import { useAuth } from '@/hooks/useAuth';
-import { deleteNotification, fetchAllUsers, fetchNotifications, markNotificationRead, sendParentEmailMessage, fetchParentContactDirectory } from '@/services/api';
+import { deleteNotification, fetchAllUsers, fetchMyNotifications, markAllNotificationsRead, markNotificationRead, sendParentEmailMessage, fetchParentContactDirectory } from '@/services/api';
 import type { Notification } from '@/mock/mockData';
 
 const iconMap = {
@@ -27,8 +27,9 @@ const Notifications = () => {
 
   const { data: fetched = [] } = useQuery({
     queryKey: ['notifications', user?.id],
-    queryFn: () => (user ? fetchNotifications(user.id) : []),
+    queryFn: () => (user ? fetchMyNotifications() : []),
     enabled: Boolean(user),
+    refetchInterval: 60_000,
   });
 
   const [filter, setFilter] = useState('All');
@@ -84,8 +85,7 @@ const Notifications = () => {
   };
 
   const markAllRead = () => {
-    const unread = all.filter((item) => !item.read);
-    Promise.all(unread.map((item) => markNotificationRead(item.id)))
+    markAllNotificationsRead()
       .then(async () => {
         await queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
         showToast('success', 'All notifications marked as read');

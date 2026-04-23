@@ -5,7 +5,7 @@ from typing import Optional, Sequence, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Certificate, FeePlan, Notification, Payment, StudentFee
+from app.models import Certificate, FeePlan, Notification, Payment, StudentFee, StudentProgress
 from app.schemas.misc import (
     CertificateCreate,
     FeePlanCreate,
@@ -13,6 +13,8 @@ from app.schemas.misc import (
     NotificationCreate,
     NotificationUpdate,
     PaymentCreate,
+    StudentProgressCreate,
+    StudentProgressUpdate,
     StudentFeeCreate,
     StudentFeeUpdate,
 )
@@ -216,7 +218,10 @@ async def delete_payment(db: AsyncSession, payment: Payment) -> None:
 async def create_notification(
     db: AsyncSession, data: NotificationCreate
 ) -> Notification:
-    notification = Notification(**data.model_dump())
+    payload = data.model_dump()
+    if not payload.get("title"):
+        payload["title"] = "Notification"
+    notification = Notification(**payload)
     db.add(notification)
     await db.flush()
     await db.refresh(notification)
@@ -256,3 +261,47 @@ async def update_notification(
 async def delete_notification(db: AsyncSession, notification: Notification) -> None:
     await db.delete(notification)
     await db.flush()
+
+
+# ---------------------------------------------------------------------------
+# StudentProgress CRUD
+# ---------------------------------------------------------------------------
+
+
+async def get_student_progress_by_student(
+    db: AsyncSession, student_id: str
+) -> Sequence[StudentProgress]:
+    result = await db.execute(select(StudentProgress).where(StudentProgress.student_id == student_id))
+    return result.scalars().all()
+
+
+async def get_student_progress_entry(
+    db: AsyncSession, student_id: str, workshop_id: str
+) -> Optional[StudentProgress]:
+    result = await db.execute(
+        select(StudentProgress).where(
+            StudentProgress.student_id == student_id,
+            StudentProgress.workshop_id == workshop_id,
+        )
+    )
+    return result.scalars().first()
+
+
+async def upsert_student_progress(
+    db: AsyncSession, student_id: str, data: StudentProgressCreate | StudentProgressUpdate
+) -> StudentProgress:
+    workshop_id = data.workshop_id
+    current_module_index = data.current_module_index
+    entry = await get_student_progress_entry(db, student_id, workshop_id)
+    if entry is None:
+        entry = StudentProgress(
+            student_id=student_id,
+            workshop_id=workshop_id,
+            current_module_index=current_module_index,
+        )
+        db.add(entry)
+    else:
+        entry.current_module_index = current_module_index
+    await db.flush()
+    await db.refresh(entry)
+    return entry

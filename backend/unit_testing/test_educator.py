@@ -400,7 +400,8 @@ def test_educator_certificate_recommend_and_download(client_and_state):
 
     download = client.get("/api/v1/certificates/certificate-1/download")
     assert download.status_code == 200
-    assert "/media/certificates/certificate-1.pdf" in download.json()["download_url"]
+    assert download.headers["content-type"].startswith("application/pdf")
+    assert download.content.startswith(b"%PDF-")
 
 
 def test_educator_performance_export_available(client_and_state):

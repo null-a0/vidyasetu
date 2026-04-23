@@ -16,15 +16,21 @@ from app.models import EnrollmentStatus
 class MaterialItem(BaseModel):
     id: str
     title: str
-    type: Literal["video", "text", "link"]
+    type: Literal["video", "pdf", "text", "link"]
     content: str
     created_at: Optional[str] = None
+
+
+class MaterialItemCreate(BaseModel):
+    title: str
+    type: Literal["video", "pdf", "text", "link"]
+    content: str
 
 
 class MaterialItemUpdate(BaseModel):
     """Partial update schema for a single material embedded in Module.materials."""
     title: Optional[str] = None
-    type: Optional[Literal["video", "text", "link"]] = None
+    type: Optional[Literal["video", "pdf", "text", "link"]] = None
     content: Optional[str] = None
 
 
@@ -57,6 +63,7 @@ class WorkshopUpdate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    institution_id: Optional[str] = None
 
 
 class WorkshopResponse(BaseModel):

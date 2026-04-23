@@ -126,12 +126,14 @@ class PaymentResponse(BaseModel):
 
 class NotificationCreate(BaseModel):
     user_id: str
+    title: Optional[str] = None
     message: str
     notification_type: NotificationType = NotificationType.GENERAL
 
 
 class NotificationBulkCreate(BaseModel):
     user_ids: list[str]
+    title: Optional[str] = None
     message: str
     notification_type: NotificationType = NotificationType.GENERAL
 
@@ -145,10 +147,31 @@ class NotificationResponse(BaseModel):
 
     id: str
     user_id: Optional[str]
+    title: Optional[str] = None
     message: Optional[str]
     status: Optional[NotificationStatus]
     notification_type: Optional[NotificationType]
     created_at: Optional[datetime]
+
+
+class StudentProgressCreate(BaseModel):
+    workshop_id: str
+    current_module_index: int = 0
+
+
+class StudentProgressUpdate(BaseModel):
+    workshop_id: str
+    current_module_index: int
+
+
+class StudentProgressResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: str
+    student_id: str
+    workshop_id: str
+    current_module_index: int
+    updated_at: Optional[datetime]
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, FileText, ClipboardList, Inbox, TrendingUp, TrendingDown, Eye, Upload, BarChart3, Sparkles } from "lucide-react";
+import { BookOpen, FileText, ClipboardList, Inbox, Eye, Upload, BarChart3, Sparkles } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import VCard from "@/components/ui-custom/VCard";
@@ -18,9 +18,6 @@ const iconColors = [
   "bg-warning/10 text-warning",
   "bg-destructive/10 text-destructive",
 ];
-
-const trends = ["+8.2%", "+3", "-2.1%", "+12.5%"];
-const trendUp = [true, true, false, true];
 
 const statCards = [
   { key: "assignedWorkshops", label: "Assigned Workshops", icon: BookOpen },
@@ -83,16 +80,12 @@ const EducatorDashboard = () => {
     <DashboardLayout title="Educator Dashboard">
       {/* Stat Cards */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-8">
-        {statCards.map(({ key, label, icon: Icon }, i) => (
+        {statCards.map(({ key, label, icon: Icon }) => (
           <VCard key={key} hover className="p-5 cursor-pointer" onClick={() => showToast("info", label, `Showing details for ${label.toLowerCase()}`)}>
             <div className="flex items-center justify-between mb-4">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconColors[i]}`}>
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconColors[statCards.findIndex((item) => item.key === key)]}`}>
                 <Icon className="h-5 w-5" />
               </div>
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${trendUp[i] ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
-                {trendUp[i] ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {trends[i]}
-              </span>
             </div>
             <p className="text-sm text-muted-foreground">{label}</p>
             <p className="text-3xl font-bold text-foreground mt-1">{stats ? stats[key] : "—"}</p>

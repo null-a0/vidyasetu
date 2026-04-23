@@ -8,8 +8,9 @@ import VBadge from "@/components/ui-custom/VBadge";
 import VModal from "@/components/ui-custom/VModal";
 import VButton from "@/components/ui-custom/VButton";
 import VInput from "@/components/ui-custom/VInput";
+import VConfirmDialog from "@/components/ui-custom/VConfirmDialog";
 import { useVToast } from "@/components/ui-custom/VToast";
-import { fetchInstitutions, fetchUsers, fetchWorkshops, createInstitution } from "@/services/api";
+import { fetchInstitutions, fetchUsers, fetchWorkshops, createInstitution, updateInstitutionStatus } from "@/services/api";
 import type { BackendInstitution, BackendUser } from "@/api/types";
 
 interface InstituteRow {
@@ -20,7 +21,7 @@ interface InstituteRow {
   workshops: number;
   educators: number;
   students: number;
-  status: "Active" | "Pending";
+  status: "Active" | "Inactive";
 }
 
 const InstituteManagement = () => {
@@ -28,8 +29,10 @@ const InstituteManagement = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InstituteRow | null>(null);
+  const [selectedInstitution, setSelectedInstitution] = useState<BackendInstitution | null>(null);
   const [viewModal, setViewModal] = useState(false);
   const [addModal, setAddModal] = useState(false);
+  const [toggleConfirm, setToggleConfirm] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", code: "", address: "", contact_email: "", contact_phone: "" });
 
   const {
@@ -80,13 +83,38 @@ const InstituteManagement = () => {
       id: i.id,
       name: i.name,
       code: `INST-${i.id.slice(0, 8).toUpperCase()}`,
-      location: i.address ?? "�",
+      location: i.address ?? "—",
       workshops: workshopsByInstName[i.name] ?? 0,
       educators: educatorCountByInst[i.id] ?? 0,
       students: studentCountByInst[i.id] ?? 0,
-      status: "Active",
+      status: i.is_active === false ? "Inactive" : "Active",
     }));
   }, [institutions, usersPage, workshops]);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: (payload: { institutionId: string; isActive: boolean }) =>
+      updateInstitutionStatus(payload.institutionId, payload.isActive),
+    onSuccess: async (updatedInstitution) => {
+      setSelectedInstitution(updatedInstitution);
+      await queryClient.invalidateQueries({ queryKey: ["institutions"] });
+      await queryClient.refetchQueries({ queryKey: ["institutions"], type: "active" });
+      setToggleConfirm(false);
+      showToast(
+        "success",
+        "Status Updated",
+        updatedInstitution.is_active === false
+          ? "Institution deactivated successfully."
+          : "Institution activated successfully."
+      );
+    },
+    onError: (error: unknown) => {
+      showToast(
+        "destructive",
+        "Update Failed",
+        error instanceof Error ? error.message : "Unable to update institution status."
+      );
+    },
+  });
 
   const filtered = rows.filter((i) =>
     i.name.toLowerCase().includes(search.toLowerCase()) || i.code.toLowerCase().includes(search.toLowerCase())
@@ -127,7 +155,7 @@ const InstituteManagement = () => {
       key: "status",
       header: "Status",
       render: (r: InstituteRow) => (
-        <VBadge variant={r.status === "Active" ? "success" : "warning"}>{r.status}</VBadge>
+        <VBadge variant={r.status === "Active" ? "success" : "destructive"}>{r.status}</VBadge>
       ),
     },
     {
@@ -137,6 +165,8 @@ const InstituteManagement = () => {
         <button
           onClick={() => {
             setSelected(r);
+            const institution = institutions.find((i) => i.id === r.id);
+            setSelectedInstitution(institution ?? null);
             setViewModal(true);
           }}
           className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
@@ -204,26 +234,27 @@ const InstituteManagement = () => {
         <VTable columns={columns} data={filtered} emptyText={emptyText} />
       </div>
 
-      <VModal isOpen={viewModal} onClose={() => setViewModal(false)} title="Institute Details">
+      <VModal isOpen={viewModal} onClose={() => { setViewModal(false); setSelectedInstitution(null); }} title="Institute Details">
         {selected && (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Building2 className="h-7 w-7 text-primary" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="text-lg font-bold text-foreground">{selected.name}</h3>
                 <p className="text-sm text-muted-foreground">{selected.code}</p>
+              </div>
+              <div>
+                <VBadge variant={selectedInstitution?.is_active !== false ? "success" : "destructive"}>
+                  {selectedInstitution?.is_active !== false ? "Active" : "Inactive"}
+                </VBadge>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-muted p-3">
                 <p className="text-xs text-muted-foreground">Location</p>
                 <p className="text-sm font-medium text-foreground">{selected.location}</p>
-              </div>
-              <div className="rounded-xl bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Status</p>
-                <VBadge variant="success">{selected.status}</VBadge>
               </div>
               <div className="rounded-xl bg-muted p-3">
                 <p className="text-xs text-muted-foreground">Workshops</p>
@@ -237,6 +268,15 @@ const InstituteManagement = () => {
                 <p className="text-xs text-muted-foreground">Students</p>
                 <p className="text-lg font-bold text-foreground">{selected.students}</p>
               </div>
+            </div>
+            <div className="border-t border-border pt-4 flex justify-end gap-2">
+              <VButton
+                variant={selectedInstitution?.is_active !== false ? "destructive" : "default"}
+                onClick={() => setToggleConfirm(true)}
+                isLoading={updateStatusMutation.isPending}
+              >
+                {selectedInstitution?.is_active !== false ? "Deactivate" : "Activate"}
+              </VButton>
             </div>
           </div>
         )}
@@ -270,6 +310,26 @@ const InstituteManagement = () => {
           </div>
         </div>
       </VModal>
+
+      {/* Status Toggle Confirmation */}
+      <VConfirmDialog
+        isOpen={toggleConfirm}
+        title={selectedInstitution?.is_active !== false ? "Deactivate Institution?" : "Activate Institution?"}
+        description={
+          selectedInstitution?.is_active !== false
+            ? "This will deactivate the institution and may affect active workshops and enrollments."
+            : "This will activate the institution."
+        }
+        onConfirm={() => {
+          if (selectedInstitution) {
+            updateStatusMutation.mutate({
+              institutionId: selectedInstitution.id,
+              isActive: selectedInstitution.is_active === false,
+            });
+          }
+        }}
+        onCancel={() => setToggleConfirm(false)}
+      />
     </DashboardLayout>
   );
 };

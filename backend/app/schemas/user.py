@@ -92,12 +92,18 @@ class InstitutionCreate(BaseModel):
     name: str
     address: Optional[str] = None
     admin_id: Optional[str] = None
+    is_active: Optional[bool] = True
 
 
 class InstitutionUpdate(BaseModel):
     name: Optional[str] = None
     address: Optional[str] = None
     admin_id: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class InstitutionStatusUpdate(BaseModel):
+    is_active: bool
 
 
 class InstitutionResponse(BaseModel):
@@ -107,6 +113,8 @@ class InstitutionResponse(BaseModel):
     name: str
     address: Optional[str]
     admin_id: Optional[str]
+    is_active: bool = True
+
 
 
 # ---------------------------------------------------------------------------

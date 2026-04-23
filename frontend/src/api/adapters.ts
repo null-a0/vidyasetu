@@ -113,8 +113,11 @@ export const adaptModulesToMaterials = (
     module.materials.map((material) => ({
       id: material.id,
       moduleId: module.id,
+      moduleTitle: module.title ?? "Module",
       title: material.title,
       workshop: workshopLookup[module.workshop_id ?? ''] ?? 'Workshop',
+      materialType: (material.type ?? "link") as Material["materialType"],
+      content: material.content,
       fileType: material.type.toUpperCase(),
       uploadDate: formatDate(material.created_at),
     }))
@@ -162,7 +165,7 @@ const notificationVisualType: Record<string, Notification['type']> = {
 export const adaptNotifications = (notifications: BackendNotification[]): Notification[] =>
   notifications.map((notif) => ({
     id: notif.id,
-    title: notif.notification_type ? notif.notification_type.replace(/_/g, ' ') : 'Notification',
+    title: notif.title ?? (notif.notification_type ? notif.notification_type.replace(/_/g, ' ') : 'Notification'),
     message: notif.message ?? '',
     type: notificationVisualType[notif.notification_type ?? ''] ?? 'info',
     date: formatDate(notif.created_at),

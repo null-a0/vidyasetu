@@ -240,6 +240,11 @@ async def update_one(
     if current_user.role in (UserRole.INSTITUTION_ADMIN, UserRole.EDUCATOR):
         if workshop.institution_id != current_user.institution_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        if payload.institution_id and payload.institution_id != current_user.institution_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only assign workshops to your own institution.",
+            )
     updated = await update_workshop(db, workshop, payload)
     return WorkshopResponse.model_validate(updated)
 

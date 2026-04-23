@@ -5,12 +5,15 @@ from datetime import datetime, timezone
 
 from app.api.deps import get_current_user, get_db, require_role
 from app.crud import create_module, delete_module, get_module, update_module
-from app.models import User, UserRole
+from app.crud.crud_misc import create_notification
+from app.models import Enrollment, User, UserRole
+from app.schemas.misc import NotificationCreate
 from app.schemas.workshop import (MaterialItem, ModuleCreate,
                                   ModuleReorderRequest, ModuleResponse,
                                   ModuleUpdate)
 from app.services.storage import save_upload
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/modules", tags=["modules"])
@@ -166,9 +169,12 @@ async def upload_material(
 
     # Detect media type from content_type / extension
     ct = (file.content_type or "").lower()
-    if "video" in ct:
+    filename = (file.filename or "").lower()
+    if "video" in ct or filename.endswith((".mp4", ".webm", ".mov", ".m4v")):
         mat_type = "video"
-    elif "text" in ct or file.filename.endswith((".md", ".txt", ".html")):
+    elif "pdf" in ct or filename.endswith(".pdf"):
+        mat_type = "pdf"
+    elif "text" in ct or filename.endswith((".md", ".txt", ".html")):
         mat_type = "text"
     else:
         mat_type = "link"
@@ -189,4 +195,22 @@ async def upload_material(
 
     patch = ModuleUpdate(materials=existing_items)
     updated = await update_module(db, module, patch)
+
+    enrolled_rows = (
+        await db.execute(
+            select(Enrollment.student_id).where(Enrollment.workshop_id == module.workshop_id)
+        )
+    ).all()
+    student_ids = sorted({row[0] for row in enrolled_rows if row[0]})
+    for student_id in student_ids:
+        await create_notification(
+            db,
+            NotificationCreate(
+                user_id=student_id,
+                title="New material available",
+                message=f"New material available in module {module.title or module.id}",
+                notification_type="info",
+            ),
+        )
+
     return ModuleResponse.model_validate(updated)

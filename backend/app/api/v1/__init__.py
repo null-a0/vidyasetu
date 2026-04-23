@@ -21,6 +21,7 @@ from app.api.v1 import (
     materials,
     modules,
     notifications,
+    progress,
     payments,
     questions,
     salaries,
@@ -56,6 +57,7 @@ api_router.include_router(ai_student_explanations.router)
 api_router.include_router(ai_scheduled_reports.router)
 api_router.include_router(support.router)
 api_router.include_router(notifications.router)
+api_router.include_router(progress.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(ai_content_generator.router)
 

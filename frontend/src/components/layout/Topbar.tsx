@@ -5,6 +5,9 @@ import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/ui-custom/LanguageSwitcher";
 import ThemeSwitcher from "@/components/ui-custom/ThemeSwitcher";
 import { useVToast } from "@/components/ui-custom/VToast";
+import { useAuth } from "@/hooks/useAuth";
+import { fetchMyNotifications } from "@/services/api";
+import { useQuery } from "@tanstack/react-query";
 
 interface TopbarProps {
     title: string;
@@ -24,6 +27,7 @@ const Topbar = ({
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { showToast } = useVToast();
+    const { user } = useAuth();
 
     const [notifOpen, setNotifOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
@@ -50,26 +54,14 @@ const Topbar = ({
         return () => document.removeEventListener("mousedown", handler);
     }, []);
 
-    const notifications = [
-        {
-            id: "1",
-            text: t("topbar.notificationItems.newAssessment"),
-            time: t("topbar.notificationItems.twoMinutesAgo"),
-            unread: true,
-        },
-        {
-            id: "2",
-            text: t("topbar.notificationItems.workshopSoon"),
-            time: t("topbar.notificationItems.oneHourAgo"),
-            unread: true,
-        },
-        {
-            id: "3",
-            text: t("topbar.notificationItems.resultsAvailable"),
-            time: t("topbar.notificationItems.threeHoursAgo"),
-            unread: false,
-        },
-    ];
+    const { data: notifications = [] } = useQuery({
+        queryKey: ["topbarNotifications", user?.id],
+        queryFn: fetchMyNotifications,
+        enabled: Boolean(user?.id),
+        refetchInterval: 60_000,
+    });
+
+    const unreadCount = notifications.filter((item) => !item.read).length;
 
     const handleLogout = () => {
         onLogout?.();
@@ -127,7 +119,9 @@ const Topbar = ({
                         onClick={() => setNotifOpen((v) => !v)}
                         className="relative rounded-xl p-2 text-muted-foreground hover:bg-accent transition-all">
                         <Bell className="h-5 w-5" />
-                        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+                        {unreadCount > 0 && (
+                            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+                        )}
                     </button>
 
                     {notifOpen && (
@@ -139,28 +133,28 @@ const Topbar = ({
                             </div>
 
                             <div className="max-h-64 overflow-y-auto">
-                                {notifications.map((n) => (
+                                {notifications.slice(0, 6).map((n) => (
                                     <button
                                         key={n.id}
                                         onClick={() => {
                                             setNotifOpen(false);
                                             navigate("/notifications");
-                                            showToast("info", n.text);
+                                            showToast("info", n.title, n.message);
                                         }}
                                         className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent/50">
                                         <div
                                             className={`mt-1.5 h-2 w-2 rounded-full ${
-                                                n.unread
+                                                !n.read
                                                     ? "bg-destructive"
                                                     : "bg-muted"
                                             }`}
                                         />
                                         <div>
                                             <p className="text-sm text-foreground">
-                                                {n.text}
+                                                {n.title}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-0.5">
-                                                {n.time}
+                                                {n.date}
                                             </p>
                                         </div>
                                     </button>

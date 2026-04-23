@@ -63,10 +63,47 @@ export interface BackendCertificate {
 export interface BackendNotification {
   id: string;
   user_id?: string | null;
+  title?: string | null;
   message?: string | null;
   status?: string | null;
   notification_type?: string | null;
   created_at?: string | null;
+}
+
+export interface BackendSubmissionResult {
+  submission_id: string;
+  student_id: string;
+  assessment_id: string;
+  score: number;
+  correct_count: number;
+  total: number;
+  pass_fail: boolean;
+  per_question: BackendSubmissionPerQuestion[];
+}
+
+export interface BackendSubmissionPerQuestionOption {
+  id: string;
+  text: string;
+}
+
+export interface BackendSubmissionPerQuestion {
+  question_id: string;
+  question_text: string;
+  options: BackendSubmissionPerQuestionOption[];
+  student_answer_id?: string | null;
+  correct_answer_id?: string | null;
+  is_correct: boolean;
+  explanation?: string | null;
+  student_answer_ids?: string[];
+  correct_answer_ids?: string[];
+}
+
+export interface BackendStudentProgress {
+  id: string;
+  student_id: string;
+  workshop_id: string;
+  current_module_index: number;
+  updated_at?: string | null;
 }
 
 export interface BackendUser {
@@ -192,6 +229,7 @@ export interface BackendInstitution {
   name: string;
   address?: string | null;
   admin_id?: string | null;
+  is_active?: boolean;
 }
 
 export interface BackendApprovalRequest {

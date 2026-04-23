@@ -5,7 +5,7 @@ from app.crud import (create_institution, delete_institution, get_institution,
                       get_institutions, update_institution)
 from app.models import User, UserRole
 from app.schemas.user import (InstitutionCreate, InstitutionResponse,
-                              InstitutionUpdate)
+                              InstitutionStatusUpdate, InstitutionUpdate)
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -99,6 +99,34 @@ async def update_one(
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     updated = await update_institution(db, institution, payload)
+    return InstitutionResponse.model_validate(updated)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /institutions/{institution_id}/status
+# ---------------------------------------------------------------------------
+
+
+@router.patch(
+    "/{institution_id}/status",
+    response_model=InstitutionResponse,
+    summary="Toggle institution active/inactive status (admin only)",
+)
+async def toggle_status(
+    institution_id: str,
+    payload: InstitutionStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+) -> InstitutionResponse:
+    institution = await get_institution(db, institution_id)
+    if not institution:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Institution not found.")
+
+    updated = await update_institution(
+        db,
+        institution,
+        InstitutionUpdate(is_active=payload.is_active),
+    )
     return InstitutionResponse.model_validate(updated)
 
 

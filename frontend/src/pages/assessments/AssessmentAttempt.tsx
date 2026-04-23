@@ -38,11 +38,47 @@ const AssessmentAttempt = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenRequired, setFullscreenRequired] = useState(false);
   const warningsRef = useRef(0); // Use ref to avoid stale closure
+  const deadlineRef = useRef<number | null>(null);
 
   // Sync ref with state for display
   useEffect(() => {
     warningsRef.current = warnings;
   }, [warnings]);
+
+  useEffect(() => {
+    if (!assessmentId) return;
+    const storedDeadline = sessionStorage.getItem(`assessment_deadline_${assessmentId}`);
+    if (!storedDeadline) return;
+    const parsedDeadline = Number(storedDeadline);
+    if (Number.isNaN(parsedDeadline) || parsedDeadline <= 0) return;
+
+    let cancelled = false;
+    deadlineRef.current = parsedDeadline;
+    setTimeLeft(Math.max(0, Math.round((parsedDeadline - Date.now()) / 1000)));
+
+    const restoreAttempt = async () => {
+      try {
+        const data = await startAssessmentAttempt(assessmentId);
+        if (cancelled) return;
+        setAttemptData(data);
+        setStarted(true);
+        setRulesModal(false);
+        setFullscreenRequired(true);
+        document.documentElement.requestFullscreen().catch(() => {
+          // Fullscreen denied - warning handling will enforce it.
+        });
+      } catch {
+        if (cancelled) return;
+        sessionStorage.removeItem(`assessment_deadline_${assessmentId}`);
+      }
+    };
+
+    void restoreAttempt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assessmentId]);
 
   // Track fullscreen state
   useEffect(() => {
@@ -65,6 +101,16 @@ const AssessmentAttempt = () => {
       setStarted(true);
       setRulesModal(false);
       setFullscreenRequired(true);
+      const existingDeadline = assessmentId ? sessionStorage.getItem(`assessment_deadline_${assessmentId}`) : null;
+      const parsedExisting = Number(existingDeadline);
+      const deadline = Number.isFinite(parsedExisting) && parsedExisting > Date.now()
+        ? parsedExisting
+        : Date.now() + TOTAL_TIME * 1000;
+      deadlineRef.current = deadline;
+      if (assessmentId) {
+        sessionStorage.setItem(`assessment_deadline_${assessmentId}`, String(deadline));
+      }
+      setTimeLeft(Math.max(0, Math.round((deadline - Date.now()) / 1000)));
       showToast("info", "Assessment Started", "Good luck!");
       // Request fullscreen to prevent tab switching
       document.documentElement.requestFullscreen().catch(() => {
@@ -85,19 +131,31 @@ const AssessmentAttempt = () => {
         questionId,
         selectedOptionIds,
       }));
+      console.log("Submitting assessment answers", {
+        assessmentId,
+        submissionId: attemptData.submission_id,
+        answers: payload,
+      });
 
       await saveAssessmentAnswers(attemptData.submission_id, payload);
       const result = await submitAssessmentAttempt(assessmentId, attemptData.submission_id);
+      if (assessmentId) {
+        sessionStorage.removeItem(`assessment_deadline_${assessmentId}`);
+      }
 
-      navigate("/assessments/results", {
-        state: {
-          assessmentId,
-          assessmentTitle: attemptData.title,
-          result,
-          answers,
-          questions: attemptData.questions,
+      navigate(
+        `/assessments/results?submissionId=${encodeURIComponent(attemptData.submission_id)}`,
+        {
+          replace: true,
+          state: {
+            assessmentId,
+            assessmentTitle: attemptData.title,
+            result,
+            answers,
+            questions: attemptData.questions,
+          },
         },
-      });
+      );
     } catch (error: unknown) {
       showToast("error", "Submission failed", error instanceof Error ? error.message : "Please retry.");
     } finally {
@@ -106,22 +164,21 @@ const AssessmentAttempt = () => {
     }
   }, [assessmentId, attemptData, answers, isSubmitting, navigate, showToast]);
 
-  // Stable timer logic
   useEffect(() => {
-    if (!started || isSubmitting) return;
-    
-    const interval = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(interval);
-          setAutoSubmitting(true);
-          return 0;
-        }
-        return t - 1;
-      });
+    if (!started || isSubmitting || !deadlineRef.current) return;
+
+    const id = window.setInterval(() => {
+      const nextTimeLeft = Math.max(0, Math.round((deadlineRef.current! - Date.now()) / 1000));
+      setTimeLeft(nextTimeLeft);
+      if (nextTimeLeft === 0) {
+        window.clearInterval(id);
+        setAutoSubmitting(true);
+      }
     }, 1000);
-    
-    return () => clearInterval(interval);
+
+    setTimeLeft(Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000)));
+
+    return () => window.clearInterval(id);
   }, [started, isSubmitting]);
 
   useEffect(() => {

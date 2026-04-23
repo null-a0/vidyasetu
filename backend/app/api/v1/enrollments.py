@@ -5,8 +5,10 @@ from app.api.deps import (PaginationParams, get_current_user, get_db,
 from app.crud import (create_enrollment, delete_enrollment, get_enrollment,
                       get_enrollments_by_student, get_enrollments_by_workshop,
                       update_enrollment)
+from app.crud.crud_misc import create_notification
 from app.models import User, UserRole
 from app.schemas.base import Page
+from app.schemas.misc import NotificationCreate
 from app.schemas.workshop import (EnrollmentCreate, EnrollmentResponse,
                                   EnrollmentUpdate)
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -41,6 +43,15 @@ async def enrol(
                 detail="Students may only enrol themselves.",
             )
     enrollment = await create_enrollment(db, payload)
+    await create_notification(
+        db,
+        NotificationCreate(
+            user_id=payload.student_id,
+            title="Enrollment confirmed",
+            message=f"You are enrolled in workshop {payload.workshop_id}",
+            notification_type="success",
+        ),
+    )
     return EnrollmentResponse.model_validate(enrollment)
 
 

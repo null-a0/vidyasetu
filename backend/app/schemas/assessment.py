@@ -204,11 +204,40 @@ class TestStartResponse(BaseModel):
 class GradeResult(BaseModel):
     """Returned by POST /tests/{id}/submit."""
     submission_id: str
-    score: int
-    total_marks: int
-    percentage: float
+    score: float
+    correct_count: int
+    total: int
     pass_fail: bool
-    per_question: list[dict]  # [{question_id, earned, max}]
+    per_question: list["PerQuestionResultItem"] = []
+
+
+class PerQuestionOption(BaseModel):
+    id: str
+    text: str
+
+
+class PerQuestionResultItem(BaseModel):
+    question_id: str
+    question_text: str
+    options: list[PerQuestionOption] = []
+    student_answer_ids: list[str] = []  # For MSQ: can have multiple
+    correct_answer_ids: list[str] = []  # For MSQ: can have multiple
+    is_correct: bool
+    explanation: Optional[str] = None
+    # Legacy single-ID fields for backward compatibility
+    student_answer_id: Optional[str] = None
+    correct_answer_id: Optional[str] = None
+
+
+class SubmissionResultResponse(BaseModel):
+    submission_id: str
+    assessment_id: str
+    student_id: str
+    score: float
+    correct_count: int
+    total: int
+    pass_fail: bool
+    per_question: list[PerQuestionResultItem] = []
 
 
 class SubmissionReviewQuestion(BaseModel):
@@ -232,3 +261,6 @@ class SubmissionReviewResponse(BaseModel):
     percentage: float
     pass_fail: bool
     questions: list[SubmissionReviewQuestion] = []
+
+
+GradeResult.model_rebuild()

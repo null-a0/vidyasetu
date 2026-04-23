@@ -256,7 +256,10 @@ def test_student_attempt_start_save_submit_flow(client_and_state):
     submit = client.post(
         f"/api/v1/tests/assessment-1/submit?submission_id={submission_id}")
     assert submit.status_code == 200
-    assert submit.json()["score"] == 20
+    assert submit.json()["score"] == 100.0
+    assert submit.json()["correct_count"] == 2
+    assert submit.json()["total"] == 2
+    assert len(submit.json()["per_question"]) == 2
     assert submit.json()["pass_fail"] is True
 
     re_submit = client.post(
@@ -312,8 +315,8 @@ def test_student_certificates_notifications_and_profile(client_and_state):
     certificate_download = client.get(
         "/api/v1/certificates/certificate-1/download")
     assert certificate_download.status_code == 200
-    assert "/media/certificates/certificate-1.pdf" in certificate_download.json()[
-        "download_url"]
+    assert certificate_download.headers["content-type"].startswith("application/pdf")
+    assert certificate_download.content.startswith(b"%PDF-")
 
 
 def test_student_forbidden_from_other_student_data(client_and_state):
