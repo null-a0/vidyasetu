@@ -103,7 +103,7 @@ const SupportConsole = () => {
       showToast("success", "Re-run queued", data.message);
     },
     onError: (error: unknown) => {
-      showToast("destructive", "Re-run failed", error instanceof Error ? error.message : "Unable to re-run job.");
+      showToast("error", "Re-run failed", error instanceof Error ? error.message : "Unable to re-run job.");
     },
   });
 
@@ -137,8 +137,8 @@ const SupportConsole = () => {
           { key: "jobs", label: "Jobs" },
           { key: "audit", label: "Audit Logs" },
           { key: "rate_limits", label: "Rate Limits" },
-          { key: "cache", label: "Cache Stats" },
-          { key: "config", label: "Config" },
+          // { key: "cache", label: "Cache Stats" },
+          // { key: "config", label: "Config" },
         ].map((t) => (
           <VButton
             key={t.key}
@@ -327,7 +327,7 @@ const SupportConsole = () => {
         </VCard>
       )}
 
-      {activeTab === "cache" && (
+      {/* {activeTab === "cache" && (
         <VCard className="p-5">
           <h3 className="text-base font-semibold text-foreground mb-4">Cache / Queue Stats</h3>
           {cacheQuery.isLoading && <p className="text-sm text-muted-foreground">Loading stats...</p>}
@@ -348,9 +348,9 @@ const SupportConsole = () => {
             </div>
           )}
         </VCard>
-      )}
+      )} */}
 
-      {activeTab === "config" && (
+      {/* {activeTab === "config" && (
         <VCard className="p-5">
           <h3 className="text-base font-semibold text-foreground mb-4">Config (sanitized)</h3>
           {configQuery.isLoading && <p className="text-sm text-muted-foreground">Loading config...</p>}
@@ -364,7 +364,7 @@ const SupportConsole = () => {
             </div>
           )}
         </VCard>
-      )}
+      )} */}
     </DashboardLayout>
   );
 };
