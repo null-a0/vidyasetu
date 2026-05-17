@@ -17,18 +17,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # 1. Institutions
-    op.create_table(
-        'institutions',
-        sa.Column('id', sa.String(), nullable=False),
-        sa.Column('name', sa.String(), nullable=False),
-        sa.Column('address', sa.Text(), nullable=True),
-        sa.Column('admin_id', sa.String(), nullable=True),
-        sa.ForeignKeyConstraint(['admin_id'], ['users.id'], name='fk_institution_admin_id'),
-        sa.PrimaryKeyConstraint('id')
-    )
-
-    # 2. Users (Role Enum first)
+    # 1. Users first (no institution_id FK yet — institutions doesn't exist yet)
     user_role_enum = sa.Enum('ADMIN', 'INSTITUTION_ADMIN', 'EDUCATOR', 'STUDENT', 'TECHNICAL_SUPPORT', name='userrole')
     op.create_table(
         'users',
@@ -49,12 +38,29 @@ def upgrade() -> None:
         sa.Column('institution_admin_code', sa.String(), nullable=True),
         sa.Column('theme', sa.String(), server_default='light', nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
-        sa.ForeignKeyConstraint(['institution_id'], ['institutions.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
 
-    # 3. Workshops
+    # 2. Institutions (can now FK to users)
+    op.create_table(
+        'institutions',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('address', sa.Text(), nullable=True),
+        sa.Column('admin_id', sa.String(), nullable=True),
+        sa.ForeignKeyConstraint(['admin_id'], ['users.id'], name='fk_institution_admin_id'),
+        sa.PrimaryKeyConstraint('id')
+    )
+
+    # 3. Now add institution_id FK to users (both tables exist now)
+    op.create_foreign_key(
+        'fk_users_institution_id',
+        'users', 'institutions',
+        ['institution_id'], ['id']
+    )
+
+    # 4. Workshops
     op.create_table(
         'workshops',
         sa.Column('id', sa.String(), nullable=False),
@@ -67,7 +73,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 4. Modules
+    # 5. Modules
     op.create_table(
         'modules',
         sa.Column('id', sa.String(), nullable=False),
@@ -79,7 +85,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 5. Enrollments
+    # 6. Enrollments
     enrollment_status_enum = sa.Enum('ACTIVE', 'COMPLETED', 'DROPPED', name='enrollmentstatus')
     op.create_table(
         'enrollments',
@@ -93,7 +99,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 6. Sessions
+    # 7. Sessions
     op.create_table(
         'sessions',
         sa.Column('id', sa.String(), nullable=False),
@@ -105,7 +111,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 7. Attendance
+    # 8. Attendance
     op.create_table(
         'attendance',
         sa.Column('id', sa.String(), nullable=False),
@@ -117,7 +123,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 8. Assessments
+    # 9. Assessments
     op.create_table(
         'assessments',
         sa.Column('id', sa.String(), nullable=False),
@@ -131,7 +137,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 9. Questions
+    # 10. Questions
     question_type_enum = sa.Enum('MCQ', 'MSQ', name='questiontype')
     op.create_table(
         'questions',
@@ -145,7 +151,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 10. Submissions
+    # 11. Submissions
     op.create_table(
         'submissions',
         sa.Column('id', sa.String(), nullable=False),
@@ -161,7 +167,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 11. Certificates
+    # 12. Certificates
     op.create_table(
         'certificates',
         sa.Column('id', sa.String(), nullable=False),
@@ -175,7 +181,7 @@ def upgrade() -> None:
         sa.UniqueConstraint('verification_code')
     )
 
-    # 12. Fee Plans
+    # 13. Fee Plans
     op.create_table(
         'fee_plans',
         sa.Column('id', sa.String(), nullable=False),
@@ -185,7 +191,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 13. Student Fees
+    # 14. Student Fees
     op.create_table(
         'student_fees',
         sa.Column('id', sa.String(), nullable=False),
@@ -197,7 +203,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 14. Payments
+    # 15. Payments
     op.create_table(
         'payments',
         sa.Column('id', sa.String(), nullable=False),
@@ -210,7 +216,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 15. Notifications
+    # 16. Notifications
     notification_status_enum = sa.Enum('UNREAD', 'READ', name='notificationstatus')
     notification_type_enum = sa.Enum('GENERAL', 'TEST', 'FEES', 'ATTENDANCE', 'CERTIFICATE', name='notificationtype')
     op.create_table(
@@ -225,7 +231,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 16. Approval Requests
+    # 17. Approval Requests
     approval_request_type_enum = sa.Enum('DELETE_STUDENT', 'DELETE_EDUCATOR', 'DELETE_WORKSHOP', name='approvalrequesttype')
     approval_request_status_enum = sa.Enum('PENDING', 'APPROVED', 'REJECTED', name='approvalrequeststatus')
     op.create_table(
@@ -241,7 +247,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    # 17. Salary Payments
+    # 18. Salary Payments
     salary_payment_status_enum = sa.Enum('PAID', 'UNPAID', name='salarypaymentstatus')
     op.create_table(
         'salary_payments',
@@ -272,9 +278,10 @@ def downgrade() -> None:
     op.drop_table('enrollments')
     op.drop_table('modules')
     op.drop_table('workshops')
-    op.drop_table('users')
+    op.drop_foreign_key('fk_users_institution_id', 'users')
     op.drop_table('institutions')
-    
+    op.drop_table('users')
+
     # Drop Enums
     sa.Enum(name='salarypaymentstatus').drop(op.get_bind())
     sa.Enum(name='approvalrequeststatus').drop(op.get_bind())
