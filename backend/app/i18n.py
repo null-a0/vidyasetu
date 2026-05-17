@@ -15,7 +15,11 @@ LOCALES_ROOT = Path(__file__).resolve().parents[2] / "locales"
 
 
 def _load_locale(name: str) -> dict[str, Any]:
-    return json.loads((LOCALES_ROOT / f"{name}.json").read_text(encoding="utf-8"))
+    path = LOCALES_ROOT / f"{name}.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
 
 
 LOCALE_DATA = {
