@@ -101,6 +101,28 @@ AI_RATE_LIMIT_BACKEND = database
 4. Click "Deploy"
 5. **Wait 5-10 minutes** for build & deployment
 
+### 2.7 Database Initialization (CRITICAL! ⚠️)
+
+**The Dockerfile now automatically:**
+- Runs database migrations (schema creation)
+- Seeds default users and institution on first deployment
+
+✅ **Default login credentials (created automatically):**
+- **Email**: `admin@vidyasetu.edu`
+- **Password**: `admin123`
+- **Role**: Admin
+
+Other seeded users:
+- Institution Admin: `institution.admin@vidyasetu.edu` / `institution123`
+- Educator: `educator@vidyasetu.edu` / `educator123`
+- Student: `student@vidyasetu.edu` / `student123`
+
+**If seeding fails or you need to reseed manually:**
+```bash
+# SSH into Render container and run:
+python -m scripts.init_db
+```
+
 ✅ Backend will be running at: `https://vidyasetu-backend.onrender.com`
 
 ---

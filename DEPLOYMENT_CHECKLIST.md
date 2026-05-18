@@ -48,6 +48,12 @@
 - [ ] Check Logs for errors
 - [ ] Verify: https://vidyasetu-backend.onrender.com/docs
 
+### Database Initialization ✅ (Automatic)
+- [ ] Database migrations run automatically (Alembic)
+- [ ] Default users seeded automatically (via `scripts/init_db.py`)
+- [ ] Admin user created: `admin@vidyasetu.edu` / `admin123`
+- [ ] Other demo users created: institution admin, educator, student
+
 ## Frontend Deployment (Netlify) ✓
 
 ### Account & Repository
