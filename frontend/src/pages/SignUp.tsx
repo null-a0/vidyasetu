@@ -5,9 +5,7 @@ import { GraduationCap, ArrowRight, ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import VButton from "@/components/ui-custom/VButton";
 import VInput from "@/components/ui-custom/VInput";
-import VSelect from "@/components/ui-custom/VSelect";
 import { useVToast } from "@/components/ui-custom/VToast";
-import type { UserRole } from "@/mock/mockData";
 import { registerUser } from "@/services/api";
 
 const SignUp = () => {
@@ -15,16 +13,10 @@ const SignUp = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("student");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useVToast();
-  const roleOptions = [
-    { value: "student", label: t("roles.student") },
-    { value: "educator", label: t("roles.educator") },
-    { value: "institution_admin", label: t("roles.institution_admin") },
-  ];
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,11 +26,11 @@ const SignUp = () => {
     }
     setIsLoading(true);
     try {
-      await registerUser({ name, email, password, role });
+      await registerUser({ name, email, password });
       showToast("success", t("auth.errors.accountCreatedTitle"), t("auth.errors.accountCreatedBody"));
       navigate("/login");
     } catch (err: unknown) {
-      showToast("destructive", t("auth.errors.registrationFailedTitle"), err instanceof Error ? err.message : t("auth.errors.registrationFailedBody"));
+      showToast("error", t("auth.errors.registrationFailedTitle"), err instanceof Error ? err.message : t("auth.errors.registrationFailedBody"));
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +95,7 @@ const SignUp = () => {
             <VInput id="name" label={t("auth.fields.name")} placeholder={t("auth.fields.namePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
             <VInput id="email" label={t("auth.fields.email")} type="email" placeholder={t("auth.fields.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
             <VInput id="password" label={t("auth.fields.password")} type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <VSelect id="role" label={t("auth.signup.roleLabel")} options={roleOptions} value={role} onChange={(e) => setRole(e.target.value as UserRole)} />
+            <p className="text-xs text-muted-foreground">{t("auth.signup.studentOnlyNote")}</p>
 
             <VButton type="submit" isLoading={isLoading} className="w-full" size="lg">
               {t("auth.signup.button")}

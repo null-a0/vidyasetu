@@ -45,6 +45,30 @@ class UserCreate(BaseModel):
     institution_admin_code: Optional[str] = None
 
 
+class RegisterRequest(BaseModel):
+    """Public self-registration payload. Role is always student; institution_id is never accepted."""
+
+    name: str
+    email: EmailStr
+    password: str
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    parent_name: Optional[str] = None
+    parent_email: Optional[EmailStr] = None
+
+    def to_user_create(self) -> "UserCreate":
+        return UserCreate(
+            name=self.name,
+            email=self.email,
+            password=self.password,
+            role=UserRole.STUDENT,
+            phone=self.phone,
+            bio=self.bio,
+            parent_name=self.parent_name,
+            parent_email=self.parent_email,
+        )
+
+
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -129,7 +153,7 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    email: EmailStr
+    token: str
     new_password: str
 
 
