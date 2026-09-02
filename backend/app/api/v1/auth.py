@@ -181,7 +181,7 @@ async def forgot_password(
         token = create_password_reset_token(subject=user.id, password_hash=user.password)
         frontend_origin = settings.frontend_origins[0] if settings.frontend_origins else settings.BASE_URL
         reset_link = f"{frontend_origin.rstrip('/')}/reset-password#token={token}"
-        if settings.DEBUG and not settings.SMTP_HOST:
+        if settings.DEBUG and (not settings.SMTP_HOST.strip() or not settings.SMTP_FROM_EMAIL.strip()):
             logger.warning("SMTP not configured; password reset link for %s: %s", user.email, reset_link)
         background_tasks.add_task(
             _send_reset_email,
