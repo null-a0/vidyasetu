@@ -86,7 +86,8 @@
       "loginLink": "Sign in",
       "welcomeTitle": "Join VidyaSetu",
       "welcomeText": "Start your journey in modern skill development. Sign up to access workshops, assessments, and certifications.",
-      "roleLabel": "I am a"
+      "roleLabel": "I am a",
+      "studentOnlyNote": "Sign up creates a student account. Educators and institution admins are added by an administrator."
     },
     "fields": {
       "name": "Full Name",

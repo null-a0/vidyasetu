@@ -795,7 +795,6 @@ export const registerUser = async (payload: {
     name: string;
     email: string;
     password: string;
-    role: string;
 }) => {
     return apiPost<BackendUser>("/auth/register", payload);
 };

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -101,4 +102,45 @@ def decode_refresh_token(token: str) -> dict[str, Any]:
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     if payload.get("typ") != "refresh":
         raise JWTError("Invalid token type for refresh token")
+    return payload
+
+
+# ---------------------------------------------------------------------------
+# Password reset tokens
+# ---------------------------------------------------------------------------
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
+def create_password_reset_token(subject: str, password_hash: str) -> str:
+    """Create a single-use reset token bound to the user's current password hash.
+
+    Because the token embeds a fingerprint of the current hash, it becomes
+    invalid as soon as the password changes, so it cannot be replayed.
+    """
+    expire = datetime.now(tz=timezone.utc) + timedelta(
+        minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "typ": "reset",
+        "pwd": _password_fingerprint(password_hash),
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_password_reset_token(token: str, password_hash: str) -> dict[str, Any]:
+    """Decode a reset token and verify it matches the user's current password hash.
+
+    Raises:
+        jose.JWTError: If the token is invalid, expired, or already used.
+    """
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    if payload.get("typ") != "reset":
+        raise JWTError("Invalid token type for password reset token")
+    if payload.get("pwd") != _password_fingerprint(password_hash):
+        raise JWTError("Password reset token is no longer valid")
     return payload
