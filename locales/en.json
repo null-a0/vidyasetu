@@ -76,7 +76,8 @@
       "demo": "Demo: Use seeded credentials from backend",
       "welcomeTitle": "Welcome to VidyaSetu",
       "welcomeText": "Empowering institutions, educators, and students with modern skill development tools.",
-      "roleLabel": "Sign in as"
+      "roleLabel": "Sign in as",
+      "forgotPassword": "Forgot password?"
     },
     "signup": {
       "title": "Create Account",
@@ -105,6 +106,29 @@
       "accountCreatedBody": "Your account has been created. Please sign in.",
       "registrationFailedTitle": "Registration Failed",
       "registrationFailedBody": "Unable to register at this time."
+    },
+    "forgot": {
+      "title": "Forgot password",
+      "subtitle": "Enter your email and we'll send you a link to reset your password",
+      "button": "Send reset link",
+      "backToLogin": "Back to sign in",
+      "sentBody": "If an account exists for that email, a password reset link has been sent. Check your inbox.",
+      "failedTitle": "Request failed",
+      "failedBody": "Unable to start a password reset right now."
+    },
+    "reset": {
+      "title": "Reset password",
+      "subtitle": "Choose a new password for your account",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm new password",
+      "button": "Reset password",
+      "tooShort": "Password must be at least {{count}} characters.",
+      "mismatch": "Passwords do not match.",
+      "missingToken": "This reset link is missing or incomplete. Please request a new one.",
+      "requestNewLink": "Request a new link",
+      "successTitle": "Password updated",
+      "successBody": "Your password has been reset. You can now sign in with your new password.",
+      "failedBody": "Invalid or expired password reset link."
     }
   },
   "supportDashboard": {

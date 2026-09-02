@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "@/pages/Login";
 import SignUp from "@/pages/SignUp";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import LandingPage from "@/pages/LandingPage";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import InstitutionDashboard from "@/pages/dashboard/InstitutionDashboard";
@@ -35,6 +37,8 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/signup" element={<SignUp />} />
+    <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/verify-certificate" element={<VerifyCertificate />} />
 
     {/* Role-based dashboards */}

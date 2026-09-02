@@ -799,6 +799,17 @@ export const registerUser = async (payload: {
     return apiPost<BackendUser>("/auth/register", payload);
 };
 
+export const forgotPassword = async (email: string) => {
+    return apiPost<{ message: string }>("/auth/forgot-password", { email });
+};
+
+export const resetPassword = async (token: string, newPassword: string) => {
+    return apiPost<{ message: string }>("/auth/reset-password", {
+        token,
+        new_password: newPassword,
+    });
+};
+
 export const updateUser = async (
     userId: string,
     payload: {

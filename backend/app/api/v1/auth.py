@@ -86,6 +86,11 @@ async def create_user_with_role(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Institution admins can only create students and educators.",
             )
+        if not current_user.institution_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Institution admin is not linked to any institution.",
+            )
         payload.institution_id = current_user.institution_id
 
     existing = await get_user_by_email(db, payload.email)
@@ -175,7 +180,9 @@ async def forgot_password(
     if user:
         token = create_password_reset_token(subject=user.id, password_hash=user.password)
         frontend_origin = settings.frontend_origins[0] if settings.frontend_origins else settings.BASE_URL
-        reset_link = f"{frontend_origin.rstrip('/')}/reset-password?token={token}"
+        reset_link = f"{frontend_origin.rstrip('/')}/reset-password#token={token}"
+        if settings.DEBUG and not settings.SMTP_HOST:
+            logger.warning("SMTP not configured; password reset link for %s: %s", user.email, reset_link)
         background_tasks.add_task(
             _send_reset_email,
             to_email=user.email,

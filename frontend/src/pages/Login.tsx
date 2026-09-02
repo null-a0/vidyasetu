@@ -106,6 +106,12 @@ const Login = () => {
             <VInput id="password" label={t("auth.fields.password")} type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
             <VSelect id="role" label={t("auth.login.roleLabel")} options={roleOptions} value={role} onChange={(e) => setRole(e.target.value as UserRole)} />
 
+            <div className="text-right">
+              <button type="button" onClick={() => navigate("/forgot-password")} className="text-sm text-primary font-semibold hover:underline">
+                {t("auth.login.forgotPassword")}
+              </button>
+            </div>
+
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
             <VButton type="submit" isLoading={isLoading} className="w-full" size="lg">

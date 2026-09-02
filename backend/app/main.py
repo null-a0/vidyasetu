@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 from fastapi.responses import Response
 import yaml
 import uvicorn
@@ -25,6 +26,11 @@ from fastapi.staticfiles import StaticFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
+    if settings.SECRET_KEY == "change-me-in-production":
+        logging.getLogger(__name__).warning(
+            "SECRET_KEY is the insecure default; auth and reset tokens can be forged. "
+            "Set SECRET_KEY in the environment before deploying."
+        )
     Path("media").mkdir(exist_ok=True)
     if settings.DATABASE_URL.startswith("sqlite+"):
         async with engine.begin() as connection:
